@@ -16,7 +16,7 @@ class ConexionBD:
         return cls._instance
 
 
-    def __init__(self, db_url="sqlite:///mi_base_de_datos.db"):
+    def __init__(self, db_url="sqlite:///DataBase.db"):
         """
         Inicializa la conexión a la base de datos.
         :param db_url: URL de la base de datos (por defecto usa SQLite)

@@ -1,0 +1,5 @@
+# Carpeta con los entornos virtuales
+env/
+
+# Archivo de la base de datos
+*.db
