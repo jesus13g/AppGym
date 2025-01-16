@@ -83,7 +83,6 @@ class WidgetFactory:
         rutinas = conexion.selectAll_rutinas()
 
         if not rutinas:
-            print("No tienes rutinas :(")
             return self.label_simpleText("No tienes rutinas :(")
 
         buttons = [
@@ -104,7 +103,6 @@ class WidgetFactory:
         ejercicios = conexion.selectAll_ejerciciosRutina(id_rutina)    
 
         if not ejercicios:
-            print("No tienes ejercicios :(")
             return self.label_simpleText("No tienes ejercicios :(")
         buttons = [
             ft.ElevatedButton(
@@ -320,7 +318,6 @@ class WidgetFactory:
         conexion = ConexionBD()
 
         if rutinas is None:
-            print("No tienes rutinas :(")
             return self.label_simpleText("No tienes rutinas :(")
         else:
             for r in rutinas:

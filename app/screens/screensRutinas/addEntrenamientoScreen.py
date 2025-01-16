@@ -39,7 +39,6 @@ class AddEntrenamientoScreen:
         app.mostrar()
 
     def go_addEntrenamiento(self, e):
-        print(self.slider_values)
         self.conexion.insert_newEntrenamiento(id_rutina=self.id_rutina,
                                                 fecha=datetime.now(),
                                                 series=self.slider_values) 
