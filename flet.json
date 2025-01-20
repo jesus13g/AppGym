@@ -1,0 +1,7 @@
+{
+    "name": "AppGym",
+    "description": "Mi aplicación hecha con Flet",
+    "entry": "main.py",
+    "type": "python"
+  }
+  

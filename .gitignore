@@ -1,5 +1,6 @@
 # Carpeta con los entornos virtuales
 env/
+build/
 
 # Archivo de la base de datos
 *.db
