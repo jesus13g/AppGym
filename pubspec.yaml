@@ -1,0 +1,61 @@
+name: appgym
+description: "Gestión y revisión de rutinas de gimnasio"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Traduce los textos que pone el propio framework (menú de selección de texto,
+  # gesto de volver, formatos de fecha…).
+  flutter_localizations:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # Base de datos: drift arrastra sqlite3, las librerías nativas y path_provider,
+  # así que no hay que declararlos aparte.
+  drift: ^2.34.3
+  drift_flutter: ^0.3.1
+
+  # Estado. Se usan providers declarados a mano en vez de riverpod_generator:
+  # su generador y el de drift no coinciden en la versión de analyzer que admite
+  # el flutter_test de este SDK, y para esta app el codegen no aporta nada.
+  flutter_riverpod: ^3.4.2
+
+  # Descarga de las imágenes y GIFs de los ejercicios
+  http: ^1.6.0
+
+  # Dónde se guardan la base de datos y la media (en Android e iOS el directorio
+  # de trabajo no es escribible). Viene con drift_flutter, pero se declara porque
+  # media.dart lo importa directamente.
+  path_provider: ^2.1.6
+
+  # Gráfico de evolución del peso
+  fl_chart: ^1.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+  # Generación de código de drift y Riverpod.
+  # build_runner se deja abierto a propósito: las versiones >=2.15.2 arrastran un
+  # analyzer que exige meta ^1.18.3, y flutter_test del SDK fija meta 1.18.0.
+  # drift_dev se deja abierto por el mismo motivo: a partir de 2.34.1 exige
+  # analyzer ^13, que choca con el analyzer que admite flutter_test.
+  build_runner: ^2.4.0
+  drift_dev: ^2.30.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    # Catálogo de 1.324 ejercicios (datos MIT de hasaneyldrm/exercises-dataset).
+    # Las imágenes y GIFs NO se empaquetan: son © Gym visual y se descargan.
+    - assets/ejercicios.es.json
