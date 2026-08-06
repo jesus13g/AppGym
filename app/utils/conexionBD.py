@@ -3,6 +3,7 @@ from sqlalchemy.orm import sessionmaker, joinedload
 from sqlalchemy.exc import SQLAlchemyError
 from app.utils.modelo import Base, Rutina, Entrenamiento, Ejercicio, EjercicioCatalogo, Serie
 from app.utils.i18n import normalizar
+from app.utils import almacenamiento
 import threading
 
 # Paleta de colores iOS que se reparte entre las rutinas para el calendario.
@@ -29,14 +30,15 @@ class ConexionBD:
                     cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self, db_url="sqlite:///DataBase.db"):
+    def __init__(self, db_url=None):
         """
         Inicializa la conexión a la base de datos.
-        :param db_url: URL de la base de datos (por defecto usa SQLite)
+        :param db_url: URL de la base de datos; por defecto, un SQLite en el
+                       almacenamiento de la app (ver app/utils/almacenamiento.py)
         """
         if getattr(self, "initialized", False):
             return
-        self.db_url = db_url
+        self.db_url = db_url or almacenamiento.ruta_base_datos()
         self.engine = create_engine(self.db_url, connect_args={"check_same_thread": False})
         self.Session = sessionmaker(bind=self.engine)
         self.initialized = True

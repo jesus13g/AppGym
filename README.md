@@ -18,6 +18,21 @@ y una animación de cada movimiento.
 
 La interfaz sigue el tema del sistema: se ve en claro u oscuro automáticamente.
 
+## Probarla en el móvil (Android)
+
+Cada push a una rama `claude/**` compila un APK en GitHub Actions y lo publica en la
+release **[`apk-preview`](../../releases/tag/apk-preview)**. Desde el móvil:
+
+1. Abre la release y descarga `AppGym.apk`.
+2. Ábrelo. Android pedirá permiso para instalar apps de origen desconocido la
+   primera vez (*Ajustes → Instalar apps desconocidas → Chrome*).
+3. En el primer arranque, pulsa **«Ahora no»** en la descarga de imágenes si estás con
+   datos móviles: la app funciona igual y carga cada imagen cuando la necesita.
+
+También se puede lanzar a mano desde la pestaña *Actions* → *Construir APK* → *Run
+workflow*. Para iOS haría falta un Mac y una cuenta de desarrollador de Apple, así que
+por ahí no hay atajo.
+
 ## Instalación
 
 ```bash
@@ -45,6 +60,10 @@ python tools/fetch_media.py
 La base de datos (`DataBase.db`) y la carpeta `media/` no se versionan. Una base de
 datos de una versión anterior de la app se migra sola al arrancar, conservando rutinas,
 ejercicios e histórico.
+
+En desarrollo ambos viven junto al proyecto; en la app empaquetada (Android, iOS o un
+ejecutable de escritorio) van al almacenamiento privado que asigna el sistema, porque
+el directorio de trabajo no es escribible. Lo resuelve `app/utils/almacenamiento.py`.
 
 ## Estructura
 

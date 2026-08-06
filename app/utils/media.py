@@ -12,14 +12,15 @@ Ver https://gymvisual.com/content/3-terms-and-conditions-of-use
 
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
 
 import requests
+
+from app.utils import almacenamiento
 
 BASE_REMOTA = "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/"
 ATRIBUCION = "© Gym visual — https://gymvisual.com/"
 
-DIRECTORIO = Path.cwd() / "media"
+DIRECTORIO = almacenamiento.directorio_media()
 MARCA_COMPLETA = DIRECTORIO / ".complete"
 
 _TIEMPO_ESPERA = 30
