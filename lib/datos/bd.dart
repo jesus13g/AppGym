@@ -196,6 +196,19 @@ class ResumenSesionEjercicio {
   final double mejor1RM;
 }
 
+/// Una sesión vista desde el calendario.
+class SesionDelDia {
+  const SesionDelDia({
+    required this.id,
+    required this.idRutina,
+    required this.fecha,
+  });
+
+  final int id;
+  final int idRutina;
+  final DateTime fecha;
+}
+
 /// Una sesión en la lista del historial, con sus cifras ya calculadas.
 class ResumenSesion {
   const ResumenSesion({
@@ -959,17 +972,38 @@ class AppBD extends _$AppBD {
     return consulta.map((f) => f.read(cuenta) ?? 0).getSingle();
   }
 
-  /// Día -> id de rutina, con todos los entrenamientos.
+  /// Sesiones de cada día dentro del rango pedido, en orden.
   ///
-  /// Si un día tiene varios, se queda el más reciente, que es el que colorea la
-  /// celda del calendario.
-  Future<Map<DateTime, int>> entrenamientosPorDia() async {
-    final filas = await (select(
-      entrenamientos,
-    )..orderBy([(e) => OrderingTerm(expression: e.fecha)])).get();
-    return {
-      for (final e in filas)
-        DateTime(e.fecha.year, e.fecha.month, e.fecha.day): e.idRutina,
-    };
+  /// Un día puede tener varias, de la misma rutina o de rutinas distintas: la
+  /// versión anterior devolvía `Map<DateTime, int>` y la segunda sesión del día
+  /// pisaba a la primera, de modo que el calendario solo pintaba una.
+  ///
+  /// El rango no es un adorno: antes se cargaban en memoria todos los
+  /// entrenamientos de la historia para pintar un solo mes.
+  Future<Map<DateTime, List<SesionDelDia>>> entrenamientosPorDia({
+    required DateTime desde,
+    required DateTime hasta,
+  }) async {
+    final filas =
+        await (select(entrenamientos)
+              ..where(
+                (e) =>
+                    e.fecha.isBiggerOrEqualValue(desde) &
+                    e.fecha.isSmallerThanValue(hasta),
+              )
+              ..orderBy([
+                (e) => OrderingTerm(expression: e.fecha),
+                (e) => OrderingTerm(expression: e.id),
+              ]))
+            .get();
+
+    final porDia = <DateTime, List<SesionDelDia>>{};
+    for (final e in filas) {
+      final dia = DateTime(e.fecha.year, e.fecha.month, e.fecha.day);
+      (porDia[dia] ??= []).add(
+        SesionDelDia(id: e.id, idRutina: e.idRutina, fecha: e.fecha),
+      );
+    }
+    return porDia;
   }
 }

@@ -116,9 +116,23 @@ final resumenSesionesEjercicioProvider =
           .resumenSesionesEjercicio(clave.idRutina, clave.idEjercicio),
     );
 
-final entrenamientosPorDiaProvider = FutureProvider<Map<DateTime, int>>(
-  (ref) => ref.watch(bdProvider).entrenamientosPorDia(),
-);
+/// Sesiones del mes visible del calendario, día a día.
+///
+/// Recibe el mes como parámetro —igual que `seriesConFechaProvider` recibe su
+/// [ClaveSeries]— para que pintar un mes no consulte los demás.
+final entrenamientosPorDiaProvider =
+    FutureProvider.family<Map<DateTime, List<SesionDelDia>>, DateTime>((
+      ref,
+      mes,
+    ) {
+      final desde = DateTime(mes.year, mes.month);
+      return ref
+          .watch(bdProvider)
+          .entrenamientosPorDia(
+            desde: desde,
+            hasta: DateTime(mes.year, mes.month + 1),
+          );
+    });
 
 // ── Sesiones ─────────────────────────────────────────────────────────────────
 

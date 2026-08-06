@@ -349,23 +349,61 @@ void main() {
       expect(resumen[1].ultimaFecha, isNull);
     });
 
-    test(
-      'entrenamientosPorDia se queda con el más reciente de cada día',
-      () async {
-        await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 5, 9), {
-          idEjercicio: const [ValoresSerie(repeticiones: 1, peso: 10)],
-        });
-        final otra = (await bd.insertarRutina('Pierna'))!;
-        await bd.insertarEjercicio(otra, 'Sentadilla');
-        final otroEjercicio = (await bd.ejerciciosDeRutina(otra)).single.id;
-        await bd.insertarEntrenamiento(otra, DateTime(2026, 3, 5, 19), {
-          otroEjercicio: const [ValoresSerie(repeticiones: 1, peso: 10)],
-        });
+    group('entrenamientosPorDia', () {
+      /// Un entrenamiento cualquiera, que aquí solo importa por su fecha.
+      Future<void> entrenar(int rutina, int ejercicio, DateTime fecha) =>
+          bd.insertarEntrenamiento(rutina, fecha, {
+            ejercicio: const [ValoresSerie(repeticiones: 1, peso: 10)],
+          });
 
-        final porDia = await bd.entrenamientosPorDia();
-        expect(porDia[DateTime(2026, 3, 5)], otra);
-      },
-    );
+      Future<int> otraRutina(String nombre) async {
+        final id = (await bd.insertarRutina(nombre))!;
+        await bd.insertarEjercicio(id, 'Sentadilla');
+        return id;
+      }
+
+      test('un día con dos rutinas distintas devuelve las dos', () async {
+        final otra = await otraRutina('Pierna');
+        final otroEjercicio = (await bd.ejerciciosDeRutina(otra)).single.id;
+
+        await entrenar(idRutina, idEjercicio, DateTime(2026, 3, 5, 9));
+        await entrenar(otra, otroEjercicio, DateTime(2026, 3, 5, 19));
+
+        final porDia = await bd.entrenamientosPorDia(
+          desde: DateTime(2026, 3),
+          hasta: DateTime(2026, 4),
+        );
+        final dia = porDia[DateTime(2026, 3, 5)]!;
+        // La segunda ya no pisa a la primera, que es lo que hacía que el
+        // calendario pintara una sola.
+        expect(dia.map((s) => s.idRutina), [idRutina, otra]);
+      });
+
+      test('dos sesiones de la misma rutina son una sola rutina', () async {
+        await entrenar(idRutina, idEjercicio, DateTime(2026, 3, 5, 9));
+        await entrenar(idRutina, idEjercicio, DateTime(2026, 3, 5, 19));
+
+        final porDia = await bd.entrenamientosPorDia(
+          desde: DateTime(2026, 3),
+          hasta: DateTime(2026, 4),
+        );
+        final dia = porDia[DateTime(2026, 3, 5)]!;
+        expect(dia, hasLength(2));
+        expect({for (final s in dia) s.idRutina}, {idRutina});
+      });
+
+      test('el rango acota: pintar un mes no trae los demás', () async {
+        await entrenar(idRutina, idEjercicio, DateTime(2026, 2, 27));
+        await entrenar(idRutina, idEjercicio, DateTime(2026, 3, 5));
+        await entrenar(idRutina, idEjercicio, DateTime(2026, 4, 1));
+
+        final marzo = await bd.entrenamientosPorDia(
+          desde: DateTime(2026, 3),
+          hasta: DateTime(2026, 4),
+        );
+        expect(marzo.keys, [DateTime(2026, 3, 5)]);
+      });
+    });
 
     test('actualizar una sesión reemplaza sus series en bloque', () async {
       await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {

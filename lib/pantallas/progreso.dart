@@ -158,7 +158,7 @@ class _Calendario extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final entrenamientos =
-        ref.watch(entrenamientosPorDiaProvider).value ?? const {};
+        ref.watch(entrenamientosPorDiaProvider(mes)).value ?? const {};
     final colores = ref.watch(coloresRutinasProvider).value ?? const {};
     final ahora = DateTime.now();
     final hoy = DateTime(ahora.year, ahora.month, ahora.day);
@@ -166,7 +166,18 @@ class _Calendario extends ConsumerWidget {
     final dias = _dias;
     // Lunes = 1 en Dart, así que weekday - 1 da los huecos iniciales.
     final huecos = dias.first.weekday - 1;
-    final rutinasDelMes = {for (final d in dias) ?entrenamientos[d]};
+    final rutinasDelMes = {
+      for (final sesiones in entrenamientos.values)
+        for (final s in sesiones) s.idRutina,
+    };
+
+    /// Colores de las rutinas distintas entrenadas ese día, sin repetir.
+    List<Color> coloresDe(DateTime dia) => [
+      for (final id in {
+        for (final s in entrenamientos[dia] ?? const []) s.idRutina,
+      })
+        colorDesdeHex(colores[id]?.$2, context.acento),
+    ];
 
     return Column(
       children: [
@@ -237,13 +248,7 @@ class _Calendario extends ConsumerWidget {
                       _Celda(
                         dia: dia,
                         esHoy: dia == hoy,
-                        color: switch (entrenamientos[dia]) {
-                          final id? => colorDesdeHex(
-                            colores[id]?.$2,
-                            context.acento,
-                          ),
-                          _ => null,
-                        },
+                        colores: coloresDe(dia),
                       ),
                   ],
                 ),
@@ -296,38 +301,87 @@ class _Calendario extends ConsumerWidget {
 }
 
 class _Celda extends StatelessWidget {
-  const _Celda({required this.dia, required this.esHoy, required this.color});
+  const _Celda({required this.dia, required this.esHoy, required this.colores});
 
   final DateTime dia;
   final bool esHoy;
 
-  /// Color de la rutina entrenada ese día, o null si no se entrenó.
-  final Color? color;
+  /// Un color por rutina distinta entrenada ese día; vacío si no se entrenó.
+  final List<Color> colores;
 
   @override
   Widget build(BuildContext context) {
-    final entrenado = color != null;
+    final entrenado = colores.isNotEmpty;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: color,
+        // Con una sola rutina basta el relleno de siempre; con varias hay que
+        // pintar los sectores, y entonces el fondo lo pone el pintor.
+        color: colores.length == 1 ? colores.single : null,
         shape: BoxShape.circle,
         border: esHoy && !entrenado
             ? Border.all(color: context.acento, width: 1.5)
             : null,
       ),
-      child: Center(
-        child: Text(
-          '${dia.day}',
-          style: ui.estilo(
-            context,
-            size: t.subhead,
-            weight: entrenado || esHoy ? t.semibold : null,
-            color: entrenado
-                ? CupertinoColors.white
-                : (esHoy ? context.acento : context.texto),
+      child: CustomPaint(
+        painter: colores.length > 1 ? _Sectores(colores) : null,
+        child: Center(
+          child: Text(
+            '${dia.day}',
+            style: ui.estilo(
+              context,
+              size: t.subhead,
+              weight: entrenado || esHoy ? t.semibold : null,
+              color: entrenado
+                  ? CupertinoColors.white
+                  : (esHoy ? context.acento : context.texto),
+            ),
           ),
         ),
       ),
     );
   }
+}
+
+/// Reparte la celda en sectores, uno por rutina distinta entrenada ese día.
+///
+/// A partir de cuatro rutinas se pintan tres sectores y un punto de «hay más»,
+/// porque más porciones en un círculo de 30 px no se distinguen.
+class _Sectores extends CustomPainter {
+  const _Sectores(this.colores);
+
+  static const _maxSectores = 3;
+
+  final List<Color> colores;
+
+  List<Color> get _visibles => colores.length > _maxSectores
+      ? colores.take(_maxSectores).toList()
+      : colores;
+
+  @override
+  void paint(Canvas lienzo, Size tamano) {
+    final caja = Rect.fromLTWH(0, 0, tamano.width, tamano.height);
+    final visibles = _visibles;
+    final porcion = 2 * 3.1415926535897932 / visibles.length;
+
+    for (final (indice, color) in visibles.indexed) {
+      lienzo.drawArc(
+        caja,
+        // Desde arriba, para que el corte quede vertical con dos rutinas.
+        -3.1415926535897932 / 2 + porcion * indice,
+        porcion,
+        true,
+        Paint()..color = color,
+      );
+    }
+
+    if (colores.length <= _maxSectores) return;
+    lienzo.drawCircle(
+      Offset(tamano.width / 2, tamano.height - 2),
+      2,
+      Paint()..color = CupertinoColors.white,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_Sectores anterior) => anterior.colores != colores;
 }
