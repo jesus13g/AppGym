@@ -69,6 +69,7 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
   int _desplazamiento = 0;
   bool _hayMas = true;
   bool _cargando = false;
+  int _generacion = 0;
   Timer? _temporizador;
 
   final _resultados = <FichaCatalogo>[];
@@ -104,13 +105,20 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
   }
 
   Future<void> _cargar({bool reiniciar = false}) async {
-    if (_cargando) return;
-    _cargando = true;
+    // Una búsqueda o un cambio de filtro siempre mandan. Si se descartaran por
+    // haber una página en vuelo, escribir rápido perdería la última consulta y
+    // la lista se quedaría con los resultados del texto anterior.
+    if (_cargando && !reiniciar) return;
+
     if (reiniciar) {
       _desplazamiento = 0;
       _hayMas = true;
       _resultados.clear();
     }
+    // Cada tanda lleva su número: si vuelve una consulta que ya ha quedado
+    // obsoleta, se tira en vez de mezclarla con los resultados buenos.
+    final generacion = ++_generacion;
+    _cargando = true;
 
     final fichas = await ref
         .read(bdProvider)
@@ -121,7 +129,7 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
           limite: _pagina,
           desplazamiento: _desplazamiento,
         );
-    if (!mounted) return;
+    if (!mounted || generacion != _generacion) return;
 
     setState(() {
       _resultados.addAll(fichas);

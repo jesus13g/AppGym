@@ -136,6 +136,27 @@ void main() {
       expect(find.text('barbell bench press'), findsNothing);
     });
 
+    testWidgets('la última búsqueda manda aunque encadene consultas', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_app(bd, const PantallaCatalogo()));
+      await tester.pumpAndSettle();
+
+      // Dos búsquedas seguidas: la segunda no puede perderse por tener la
+      // primera en vuelo.
+      await tester.enterText(find.byType(CupertinoSearchTextField), 'barbell');
+      await tester.pump(const Duration(milliseconds: 260));
+      await tester.enterText(
+        find.byType(CupertinoSearchTextField),
+        'mancuerna',
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+
+      expect(find.text('dumbbell curl'), findsOneWidget);
+      expect(find.text('barbell bench press'), findsNothing);
+    });
+
     testWidgets('filtra por zona del cuerpo al tocar una píldora', (
       tester,
     ) async {
