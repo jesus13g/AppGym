@@ -25,6 +25,11 @@ dependencies:
   # Descarga de las imágenes y GIFs de los ejercicios
   http: ^1.6.0
 
+  # Dónde se guardan la base de datos y la media (en Android e iOS el directorio
+  # de trabajo no es escribible). Viene con drift_flutter, pero se declara porque
+  # media.dart lo importa directamente.
+  path_provider: ^2.1.6
+
   # Gráfico de evolución del peso
   fl_chart: ^1.2.0
 
