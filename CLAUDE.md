@@ -12,7 +12,7 @@ flutter pub get
 dart run build_runner build     # genera bd.g.dart; obligatorio tras clonar
 flutter run                     # app en un dispositivo o emulador
 flutter analyze                 # objetivo permanente: 0 issues
-flutter test                    # 27 tests: datos_test.dart y pantallas_test.dart
+flutter test                    # 66 tests: datos, pantallas y migraciones
 dart format lib test
 flutter build apk --release     # APK local (necesita SDK de Android y Java 17)
 ```
@@ -48,23 +48,26 @@ el estado. Interfaz **solo Cupertino**: no se importa `material.dart` en ningún
 ```
 lib/
 ├── main.dart          CupertinoApp, localización en español
-├── datos/             bd.dart · consultas · i18n · semilla · media · formato
+├── datos/             bd.dart · esquemas · respaldo · consultas · i18n · semilla · media · formato
 ├── estado/            providers.dart
 ├── tema/              tokens.dart · ui.dart
-└── pantallas/         raiz (las tres pestañas) + nueve pantallas
+└── pantallas/         raiz (las tres pestañas) + doce pantallas
 assets/                ejercicios.es.json, el catálogo
-test/                  datos_test.dart · pantallas_test.dart
+drift_schemas/         un JSON por versión del esquema, para los tests de migración
+test/                  datos · pantallas · migraciones · esquemas/ (generado)
 docs/                  especificaciones.md, el trabajo previsto
 ```
 
 `catalogo.dart` sirve dos destinos con la misma pantalla: la pestaña Ejercicios y el modal de
-añadir a una rutina (`abrirAnadirEjercicio`). Por eso hay nueve ficheros de pantalla y diez
+añadir a una rutina (`abrirAnadirEjercicio`). Por eso hay doce ficheros de pantalla y trece
 destinos navegables.
 
-**`docs/especificaciones.md`** recoge lo que está previsto construir: series independientes por
-ejercicio, edición de entrenamientos, temporizador de descanso, ajustes, copia de seguridad,
-métricas de 1RM y el mapa muscular. Antes de proponer una funcionalidad nueva, mira si ya está
-ahí especificada — incluye el esquema de datos final y el orden de las migraciones.
+**`docs/especificaciones.md`** recoge lo que está previsto construir. Su **bloque A (limitaciones
+del modelo de datos) ya está implementado**: series independientes por ejercicio, editar y borrar
+entrenamientos, elegir la fecha, ordenar los ejercicios, notas y RPE, y varias rutinas el mismo día.
+Queda pendiente el resto: temporizador de descanso, sesión viva, la pantalla de ajustes completa,
+copia de seguridad, métricas de 1RM y el mapa muscular. Antes de proponer una funcionalidad nueva,
+mira si ya está ahí especificada — incluye el esquema de datos final y el orden de las migraciones.
 
 ### Navegación: pestañas con pila propia
 
@@ -96,8 +99,13 @@ resuelve.
 
 ### Datos
 
-`datos/bd.dart` tiene las cinco tablas y todas las consultas. drift devuelve clases de datos planas,
+`datos/bd.dart` tiene las seis tablas y todas las consultas. drift devuelve clases de datos planas,
 así que —a diferencia de SQLAlchemy— una fila leída se puede pasar a la interfaz sin más.
+
+**`serie` guarda una fila por serie hecha.** Su columna `nSerie` es el **índice** de la serie dentro
+del ejercicio, no el recuento: hasta el esquema v1 era lo contrario y el nombre se conservó para no
+reescribir las consultas. Las series de calentamiento se guardan pero no cuentan en volumen, máximos
+ni 1RM, así que las agregaciones las excluyen.
 
 Aun así se conservan las consultas preagregadas (`resumenRutinas`, `seriesConFecha`,
 `coloresRutinas`, `ejerciciosDeRutina` con su join a la ficha): ahorran una consulta por fila en las
@@ -107,8 +115,33 @@ resueltos.**
 `PRAGMA foreign_keys = ON` se activa en `beforeOpen`. Sin él SQLite ignora los `ON DELETE CASCADE` y
 borrar una rutina dejaría sus series huérfanas.
 
-**Migraciones:** `schemaVersion` va por 1. Todo cambio de esquema exige subirlo y añadir el paso en
-`MigrationStrategy`, o las bases de datos existentes se romperán.
+**Migraciones:** `schemaVersion` va por 4. Todo cambio de esquema exige subirlo y añadir el paso en
+`MigrationStrategy`, o las bases de datos existentes se romperán. El flujo completo, tras tocar una
+tabla:
+
+```bash
+dart run build_runner build
+dart run drift_dev schema dump lib/datos/bd.dart drift_schemas/       # el esquema nuevo
+dart run drift_dev schema steps drift_schemas/ lib/datos/esquemas.dart   # tipos de stepByStep
+dart run drift_dev schema generate drift_schemas/ test/esquemas/         # ayudantes de test
+dart format lib test
+```
+
+Los tres ficheros generados **se versionan** (no son `*.g.dart`) y hay que formatearlos, porque CI
+comprueba el formato de `lib` y `test`. Los pasos se escriben contra el esquema *de su versión*
+(`Schema2`, `Schema3`…), no contra las tablas de `bd.dart`: así una migración vieja no se rompe
+cuando el modelo actual cambie.
+
+`test/migraciones_test.dart` monta una base de una versión anterior **de verdad**, le mete datos y
+la migra hasta la actual, comparando además el esquema resultante con el volcado. Es lo que caza una
+columna que se añadió al modelo y no a la migración.
+
+**Antes de la v2 se respalda el fichero** (`datos/respaldo.dart`): es la única migración que
+transforma datos. La copia se hace con la base todavía cerrada, desde el callback `databasePath` de
+`drift_flutter`, porque con la conexión abierta el WAL dejaría el duplicado a medias.
+
+Las preferencias viven en la tabla `ajustes`, de clave/valor, para que entren en la misma copia de
+seguridad que el resto de los datos.
 
 ### Catálogo de ejercicios
 
@@ -158,13 +191,19 @@ encapsulado en la extensión `Paleta`, así que en las pantallas se escribe `con
 literales salvo en `coloresRutina`, que identifica rutinas y debe ser estable en ambos temas.
 
 En `ui.dart` solo está lo que Flutter no trae. El inventario completo es `estilo`, `TituloGrande`,
-`Grupo`, `Pildora`, `PuntoColor`, `Miniatura`, `BotonPrincipal`, `SelectorNumerico`, `EstadoVacio`,
-`Cargando`, `BarraProgreso`, `DeslizarParaBorrar`, `barra`, `dialogoTexto`, `dialogoConfirmar` y
-`aviso`. Para lo demás usa el widget del framework: `CupertinoListSection.insetGrouped` (envuelto en
+`Grupo`, `Pildora`, `PuntoColor`, `Miniatura`, `BotonPrincipal`, `SelectorEnLinea`, `EstadoVacio`,
+`Cargando`, `BarraProgreso`, `DeslizarParaBorrar`, `barra`, `selectorFecha`, `dialogoTexto`,
+`dialogoConfirmar` y `aviso`. Para lo demás usa el widget del framework: `CupertinoListSection.insetGrouped` (envuelto en
 `ui.Grupo`), `CupertinoListTile`, `CupertinoSearchTextField`, `CupertinoSlidingSegmentedControl`.
 
 **No importes `material.dart`.** Si necesitas algo que solo existe en Material (`BarraProgreso` nació
-así, sustituyendo a `LinearProgressIndicator`), compónlo en `ui.dart`.
+así, sustituyendo a `LinearProgressIndicator`; `ReorderableListView` se sustituye por
+`SliverReorderableList` de `widgets.dart`), compónlo en `ui.dart`.
+
+**Cuidado con el ancho de un móvil.** Los tests de widget que montan la pantalla de registro y el
+detalle de rutina fijan la ventana a 375 px con `_comoUnMovil`, y ahí han saltado ya dos
+desbordamientos reales que a 800 px no se veían. Al pintar una fila con varios controles, hazla
+flexible.
 
 ### Empaquetado
 
