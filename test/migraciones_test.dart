@@ -25,6 +25,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'esquemas/schema.dart';
 import 'esquemas/schema_v1.dart' as v1;
 import 'esquemas/schema_v2.dart' as v2;
+import 'esquemas/schema_v3.dart' as v3;
 
 /// Segundos desde época, que es como drift guarda las fechas aquí.
 int _epoca(DateTime fecha) => fecha.millisecondsSinceEpoch ~/ 1000;
@@ -34,7 +35,7 @@ void main() {
 
   setUpAll(() => verificador = SchemaVerifier(GeneratedHelper()));
 
-  test('v1 → v2: cada fila agregada se expande en una fila por serie', () async {
+  test('v1 → última: cada fila agregada se expande en una fila por serie', () async {
     final esquema = await verificador.schemaAt(1);
 
     // Una base tal y como la dejaría la app antes de esta iteración: una única
@@ -59,9 +60,11 @@ void main() {
     await vieja.close();
 
     final bd = AppBD(esquema.newConnection());
-    // Además de migrar, compara el esquema resultante con el volcado de la v2:
-    // es lo que caza una columna que se añadió al modelo y no a la migración.
-    await verificador.migrateAndValidate(bd, 2);
+    // Se migra hasta la versión actual —que es lo que le pasará a quien tenga
+    // la app instalada desde entonces— y de paso se compara el esquema
+    // resultante con el volcado de esa versión: es lo que caza una columna que
+    // se añadió al modelo y no a la migración.
+    await verificador.migrateAndValidate(bd, bd.schemaVersion);
 
     // Las rutinas y los ejercicios siguen ahí.
     final rutinas = await bd.resumenRutinas();
@@ -95,7 +98,7 @@ void main() {
     await bd.close();
   });
 
-  test('v1 → v2: una base sin entrenamientos migra igual', () async {
+  test('v1 → última: una base sin entrenamientos migra igual', () async {
     final esquema = await verificador.schemaAt(1);
 
     final vieja = v1.DatabaseAtV1(esquema.newConnection());
@@ -105,7 +108,7 @@ void main() {
     await vieja.close();
 
     final bd = AppBD(esquema.newConnection());
-    await verificador.migrateAndValidate(bd, 2);
+    await verificador.migrateAndValidate(bd, bd.schemaVersion);
 
     expect((await bd.resumenRutinas()).single.nombre, 'Pierna');
     expect(await bd.seriesConFecha(1, 1), isEmpty);
@@ -113,7 +116,7 @@ void main() {
     await bd.close();
   });
 
-  test('v2 → v3: los ejercicios conservan su orden de inserción', () async {
+  test('v2 → última: los ejercicios conservan su orden de inserción', () async {
     final esquema = await verificador.schemaAt(2);
 
     final vieja = v2.DatabaseAtV2(esquema.newConnection());
@@ -129,7 +132,7 @@ void main() {
     await vieja.close();
 
     final bd = AppBD(esquema.newConnection());
-    await verificador.migrateAndValidate(bd, 3);
+    await verificador.migrateAndValidate(bd, bd.schemaVersion);
 
     // Cada rutina numera desde 0, siguiendo el id, que era el orden que tenía.
     expect((await bd.ejerciciosDeRutina(1)).map((e) => e.nombre), [
@@ -146,6 +149,44 @@ void main() {
       0,
       1,
     ]);
+
+    await bd.close();
+  });
+
+  test('v3 → última: llegan las notas, el RPE y los ajustes', () async {
+    final esquema = await verificador.schemaAt(3);
+
+    final vieja = v3.DatabaseAtV3(esquema.newConnection());
+    await vieja.customStatement(
+      "INSERT INTO rutinas (id, nombre, color) VALUES (1, 'Empuje', '#0A84FF')",
+    );
+    await vieja.customStatement(
+      "INSERT INTO ejercicios (id, id_rutina, nombre, orden) "
+      "VALUES (1, 1, 'Press banca', 0)",
+    );
+    await vieja.customStatement(
+      'INSERT INTO entrenamientos (id, id_rutina, fecha) '
+      'VALUES (1, 1, ${_epoca(DateTime(2026, 3, 1))})',
+    );
+    await vieja.customStatement(
+      'INSERT INTO serie (id_entrenamiento, id_ejercicio, n_serie, '
+      'repeticiones, peso, calentamiento) VALUES (1, 1, 1, 10, 60.0, 0)',
+    );
+    await vieja.close();
+
+    final bd = AppBD(esquema.newConnection());
+    await verificador.migrateAndValidate(bd, bd.schemaVersion);
+
+    // Lo de antes sigue ahí, sin nota ni esfuerzo.
+    final sesion = (await bd.sesion(1))!;
+    expect(sesion.nota, isNull);
+    expect(sesion.ejercicios.single.series.single.rpe, isNull);
+    expect(sesion.ejercicios.single.series.single.repeticiones, 10);
+
+    // Y la tabla de ajustes existe, con sus valores por defecto.
+    final ajustes = await bd.ajustes();
+    expect(ajustes.esfuerzoActivo, isFalse);
+    expect(ajustes.escala, EscalaEsfuerzo.rpe);
 
     await bd.close();
   });

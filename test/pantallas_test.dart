@@ -13,6 +13,7 @@ import 'package:appgym/pantallas/entrenar.dart';
 import 'package:appgym/pantallas/historial.dart';
 import 'package:appgym/pantallas/rutina.dart';
 import 'package:appgym/pantallas/rutinas.dart';
+import 'package:appgym/pantallas/sesion.dart';
 import 'package:appgym/tema/ui.dart' as ui;
 import 'package:drift/native.dart';
 import 'package:flutter/cupertino.dart';
@@ -262,6 +263,98 @@ void main() {
       expect(series.first.repeticiones, 11);
       expect(series.skip(1).map((s) => s.repeticiones), everyElement(10));
       expect(series.map((s) => s.peso), everyElement(20));
+    });
+  });
+
+  group('notas y esfuerzo', () {
+    late int idRutina;
+    late int idEjercicio;
+
+    setUp(() async {
+      idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarEjercicio(idRutina, 'Press banca');
+      idEjercicio = (await bd.ejerciciosDeRutina(idRutina)).single.id;
+    });
+
+    testWidgets('con el esfuerzo desactivado el registro no lo enseña', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      expect(find.text('RPE'), findsNothing);
+      expect(find.text('RIR'), findsNothing);
+      // La nota de sesión sí está siempre.
+      expect(find.text('Nota de la sesión'), findsOneWidget);
+    });
+
+    testWidgets('activado en Ajustes, se elige y se guarda como RPE', (
+      tester,
+    ) async {
+      await bd.fijarAjuste(AppBD.claveEsfuerzoActivo, '1');
+      await bd.fijarAjuste(AppBD.claveEsfuerzoEscala, 'rir');
+
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      // Con la escala en RIR se rotulan las repeticiones en recámara.
+      expect(find.text('RIR'), findsNWidgets(4));
+
+      // RIR 2 en la primera serie, que se guarda como RPE 8.
+      await tester.tap(find.text('2').first);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Guardar entrenamiento'));
+      await tester.pumpAndSettle();
+
+      final sesion = (await bd.sesion(1))!;
+      expect(sesion.ejercicios.single.series.first.rpe, 8);
+      expect(sesion.ejercicios.single.series[1].rpe, isNull);
+      expect(await bd.seriesConFecha(idRutina, idEjercicio), hasLength(4));
+    });
+
+    testWidgets('la nota de la sesión se guarda y se ve al abrirla', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byType(CupertinoTextField),
+        'Me dolía el hombro',
+      );
+      await tester.tap(find.text('Guardar entrenamiento'));
+      await tester.pumpAndSettle();
+
+      expect((await bd.sesion(1))!.nota, 'Me dolía el hombro');
+    });
+
+    testWidgets('el detalle enseña la nota y el esfuerzo de cada serie', (
+      tester,
+    ) async {
+      await bd.fijarAjuste(AppBD.claveEsfuerzoActivo, '1');
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [
+          ValoresSerie(
+            repeticiones: 8,
+            peso: 65,
+            rpe: 9,
+            nota: 'Fallo en la última',
+          ),
+        ],
+      }, nota: 'Me dolía el hombro');
+
+      _comoUnMovil(tester);
+      await tester.pumpWidget(
+        _app(bd, const PantallaSesion(idEntrenamiento: 1)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Me dolía el hombro'), findsOneWidget);
+      expect(find.text('RPE 9 · Fallo en la última'), findsOneWidget);
     });
   });
 

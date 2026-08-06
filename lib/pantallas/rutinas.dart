@@ -10,6 +10,7 @@ import '../estado/providers.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
+import 'ajustes.dart';
 import 'rutina.dart';
 
 class PantallaRutinas extends ConsumerWidget {
@@ -52,11 +53,23 @@ class PantallaRutinas extends ConsumerWidget {
           CupertinoSliverNavigationBar(
             largeTitle: const Text('Rutinas'),
             backgroundColor: context.barra,
-            trailing: CupertinoButton(
-              padding: EdgeInsets.zero,
-              minimumSize: Size.zero,
-              onPressed: () => _crear(context, ref),
-              child: const Icon(CupertinoIcons.add, size: 22),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  onPressed: () => abrirAjustes(context),
+                  child: const Icon(CupertinoIcons.settings, size: 20),
+                ),
+                const SizedBox(width: t.m),
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  onPressed: () => _crear(context, ref),
+                  child: const Icon(CupertinoIcons.add, size: 22),
+                ),
+              ],
             ),
           ),
           SliverFillRemaining(

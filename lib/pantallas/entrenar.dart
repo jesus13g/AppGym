@@ -67,6 +67,7 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
   List<EjercicioConFicha>? _ejercicios;
   bool _guardando = false;
   DateTime _fecha = DateTime.now();
+  final _nota = TextEditingController();
 
   bool get _editando => widget.idEntrenamiento != null;
 
@@ -78,6 +79,12 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
     _cargar();
   }
 
+  @override
+  void dispose() {
+    _nota.dispose();
+    super.dispose();
+  }
+
   Future<void> _cargar() async {
     final bd = ref.read(bdProvider);
     final ejercicios = await bd.ejerciciosDeRutina(widget.idRutina);
@@ -86,7 +93,10 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
     // rutina que no se hicieron aparecen vacíos, por si faltó anotar alguno.
     final sesion = _editando ? await bd.sesion(widget.idEntrenamiento!) : null;
     final guardadas = sesion?.series ?? const {};
-    if (sesion != null) _fecha = sesion.fecha;
+    if (sesion != null) {
+      _fecha = sesion.fecha;
+      _nota.text = sesion.nota ?? '';
+    }
 
     for (final ejercicio in ejercicios) {
       // Se precargan las series de la última sesión —cuántas fueron incluido—,
@@ -143,8 +153,14 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
             widget.idEntrenamiento!,
             _fecha,
             _series,
+            nota: _nota.text,
           )
-        : await bd.insertarEntrenamiento(widget.idRutina, _fecha, _series);
+        : await bd.insertarEntrenamiento(
+            widget.idRutina,
+            _fecha,
+            _series,
+            nota: _nota.text,
+          );
     if (!mounted) return;
 
     if (!bien) {
@@ -159,6 +175,7 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
   @override
   Widget build(BuildContext context) {
     final rutina = ref.watch(rutinaProvider(widget.idRutina)).value;
+    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
     final ejercicios = _ejercicios;
 
     if (ejercicios != null && ejercicios.isEmpty) {
@@ -254,10 +271,32 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
                         ejercicio: ejercicio,
                         ultimas: _ultimas[ejercicio.id] ?? const [],
                         series: _series[ejercicio.id] ?? const [],
+                        ajustes: ajustes,
                         onSeries: (valor) =>
                             setState(() => _series[ejercicio.id] = valor),
                       ),
                     ),
+                  ui.Grupo(
+                    cabecera: 'Notas',
+                    pie:
+                        'Lo que explique este entrenamiento dentro de tres '
+                        'semanas: molestias, cinturón, mal día.',
+                    filas: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: t.m,
+                          vertical: t.s,
+                        ),
+                        child: CupertinoTextField.borderless(
+                          controller: _nota,
+                          placeholder: 'Nota de la sesión',
+                          maxLines: null,
+                          minLines: 2,
+                          style: ui.estilo(context),
+                        ),
+                      ),
+                    ],
+                  ),
                   Padding(
                     padding: const EdgeInsets.all(t.l),
                     child: ui.BotonPrincipal(
@@ -292,6 +331,7 @@ class TarjetaEjercicio extends StatelessWidget {
     required this.ultimas,
     required this.series,
     required this.onSeries,
+    this.ajustes = const Ajustes(),
   });
 
   final EjercicioConFicha ejercicio;
@@ -301,6 +341,9 @@ class TarjetaEjercicio extends StatelessWidget {
 
   final List<ValoresSerie> series;
   final ValueChanged<List<ValoresSerie>> onSeries;
+
+  /// De aquí sale si se pide el esfuerzo y en qué escala se muestra.
+  final Ajustes ajustes;
 
   void _cambiar(int indice, ValoresSerie valores) {
     final nuevas = List.of(series)..[indice] = valores;
@@ -313,6 +356,25 @@ class TarjetaEjercicio extends StatelessWidget {
   void _anadir() => onSeries(
     List.of(series)..add(series.isEmpty ? _serieNueva : series.last),
   );
+
+  Future<void> _nota(BuildContext context, int indice) async {
+    final serie = series[indice];
+    final texto = await ui.dialogoTexto(
+      context,
+      titulo: 'Nota de la serie ${indice + 1}',
+      marcador: 'Fallo en la última, con ayuda…',
+      valor: serie.nota ?? '',
+      permitirVacio: true,
+    );
+    if (texto == null) return;
+
+    _cambiar(
+      indice,
+      texto.trim().isEmpty
+          ? serie.copiar(sinNota: true)
+          : serie.copiar(nota: texto.trim()),
+    );
+  }
 
   Future<void> _menu(BuildContext context, int indice) async {
     final serie = series[indice];
@@ -334,6 +396,13 @@ class TarjetaEjercicio extends StatelessWidget {
                   ? 'Quitar el calentamiento'
                   : 'Marcar como calentamiento',
             ),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(hoja);
+              _nota(context, indice);
+            },
+            child: Text(serie.nota == null ? 'Añadir nota' : 'Editar la nota'),
           ),
           CupertinoActionSheetAction(
             isDestructiveAction: true,
@@ -431,6 +500,7 @@ class TarjetaEjercicio extends StatelessWidget {
                 child: _FilaSerie(
                   numero: indice + 1,
                   serie: serie,
+                  ajustes: ajustes,
                   onSerie: (valores) => _cambiar(indice, valores),
                   onMenu: () => _menu(context, indice),
                 ),
@@ -466,72 +536,164 @@ class _FilaSerie extends StatelessWidget {
   const _FilaSerie({
     required this.numero,
     required this.serie,
+    required this.ajustes,
     required this.onSerie,
     required this.onMenu,
   });
 
   final int numero;
   final ValoresSerie serie;
+  final Ajustes ajustes;
   final ValueChanged<ValoresSerie> onSerie;
   final VoidCallback onMenu;
 
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(horizontal: t.m, vertical: t.xs),
-    child: Row(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          width: 26,
-          child: serie.calentamiento
-              ? Icon(CupertinoIcons.flame, size: 16, color: context.textoTer)
-              : Text(
-                  '$numero',
-                  textAlign: TextAlign.center,
-                  style: ui.estilo(
-                    context,
-                    size: t.subhead,
-                    color: context.textoSec,
-                  ),
-                ),
-        ),
-        // El reparto 2:3 no es decorativo: el peso lleva decimales y unidad, y
-        // con las repeticiones a la mitad de ancho la fila desbordaba en un
-        // móvil estrecho. Hay un test que lo fija.
-        Expanded(
-          flex: 2,
-          child: ui.SelectorEnLinea(
-            semantica: 'Repeticiones',
-            valor: serie.repeticiones.toDouble(),
-            minimo: 1,
-            maximo: 50,
-            onChanged: (v) => onSerie(serie.copiar(repeticiones: v.round())),
+        _principal(context),
+        if (ajustes.esfuerzoActivo)
+          _Esfuerzo(
+            valor: serie.rpe,
+            escala: ajustes.escala,
+            onValor: (valor) => onSerie(
+              valor == null
+                  ? serie.copiar(sinRpe: true)
+                  : serie.copiar(rpe: valor),
+            ),
           ),
-        ),
-        const SizedBox(width: t.s),
-        Expanded(
-          flex: 3,
-          child: ui.SelectorEnLinea(
-            semantica: 'Peso',
-            valor: serie.peso,
-            minimo: 0,
-            maximo: 400,
-            paso: 2.5,
-            unidad: 'kg',
-            decimales: 1,
-            onChanged: (v) => onSerie(serie.copiar(peso: v)),
+        if (serie.nota case final nota?)
+          Padding(
+            padding: const EdgeInsets.only(left: 26, bottom: t.xs),
+            child: Text(
+              nota,
+              style: ui.estilo(
+                context,
+                size: t.caption,
+                color: context.textoSec,
+              ),
+            ),
           ),
-        ),
-        CupertinoButton(
-          onPressed: onMenu,
-          padding: const EdgeInsets.symmetric(horizontal: t.s, vertical: t.s),
-          minimumSize: Size.zero,
-          child: Icon(
-            CupertinoIcons.ellipsis,
-            size: 18,
-            color: context.textoSec,
-          ),
-        ),
       ],
+    ),
+  );
+
+  Widget _principal(BuildContext context) => Row(
+    children: [
+      SizedBox(
+        width: 26,
+        child: serie.calentamiento
+            ? Icon(CupertinoIcons.flame, size: 16, color: context.textoTer)
+            : Text(
+                '$numero',
+                textAlign: TextAlign.center,
+                style: ui.estilo(
+                  context,
+                  size: t.subhead,
+                  color: context.textoSec,
+                ),
+              ),
+      ),
+      // El reparto 2:3 no es decorativo: el peso lleva decimales y unidad, y
+      // con las repeticiones a la mitad de ancho la fila desbordaba en un
+      // móvil estrecho. Hay un test que lo fija.
+      Expanded(
+        flex: 2,
+        child: ui.SelectorEnLinea(
+          semantica: 'Repeticiones',
+          valor: serie.repeticiones.toDouble(),
+          minimo: 1,
+          maximo: 50,
+          onChanged: (v) => onSerie(serie.copiar(repeticiones: v.round())),
+        ),
+      ),
+      const SizedBox(width: t.s),
+      Expanded(
+        flex: 3,
+        child: ui.SelectorEnLinea(
+          semantica: 'Peso',
+          valor: serie.peso,
+          minimo: 0,
+          maximo: 400,
+          paso: 2.5,
+          unidad: 'kg',
+          decimales: 1,
+          onChanged: (v) => onSerie(serie.copiar(peso: v)),
+        ),
+      ),
+      CupertinoButton(
+        onPressed: onMenu,
+        padding: const EdgeInsets.symmetric(horizontal: t.s, vertical: t.s),
+        minimumSize: Size.zero,
+        child: Icon(CupertinoIcons.ellipsis, size: 18, color: context.textoSec),
+      ),
+    ],
+  );
+}
+
+/// Esfuerzo percibido de una serie, en la escala elegida en Ajustes.
+///
+/// Son nueve valores (de 6 a 10 en medios puntos) más el «—» de quitarlo: un
+/// `CupertinoSlidingSegmentedControl` con diez segmentos no cabe en un móvil,
+/// así que van como píldoras en una fila que se desplaza.
+class _Esfuerzo extends StatelessWidget {
+  const _Esfuerzo({
+    required this.valor,
+    required this.escala,
+    required this.onValor,
+  });
+
+  /// Siempre en escala RPE, aunque se muestre como RIR.
+  final double? valor;
+
+  final EscalaEsfuerzo escala;
+  final ValueChanged<double?> onValor;
+
+  static const _valores = [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0];
+
+  String _etiqueta(double rpe) => switch (escala) {
+    EscalaEsfuerzo.rpe => formato.numero(rpe),
+    EscalaEsfuerzo.rir => formato.numero(10 - rpe),
+  };
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(left: 26, bottom: t.xs),
+    child: SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          Text(
+            escala == EscalaEsfuerzo.rir ? 'RIR' : 'RPE',
+            style: ui.estilo(context, size: t.caption, color: context.textoSec),
+          ),
+          const SizedBox(width: t.s),
+          _pildora(context, '—', valor == null, () => onValor(null)),
+          for (final v in _valores)
+            _pildora(context, _etiqueta(v), valor == v, () => onValor(v)),
+        ],
+      ),
+    ),
+  );
+
+  Widget _pildora(
+    BuildContext context,
+    String etiqueta,
+    bool elegida,
+    VoidCallback onTap,
+  ) => Padding(
+    padding: const EdgeInsets.only(right: t.xs),
+    child: CupertinoButton(
+      onPressed: onTap,
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      child: ui.Pildora(
+        etiqueta,
+        relleno: elegida ? context.acento : context.relleno,
+        color: elegida ? CupertinoColors.white : context.textoSec,
+      ),
     ),
   );
 }

@@ -86,6 +86,15 @@ List<String> listaJson(String? valor) {
   }
 }
 
+/// El esfuerzo guardado (siempre RPE) escrito en la escala elegida.
+///
+/// `RIR = 10 − RPE`: son la misma información contada al revés, así que cambiar
+/// de escala reinterpreta lo guardado y no hace falta migrar nada.
+String esfuerzo(double valorRpe, EscalaEsfuerzo escala) => switch (escala) {
+  EscalaEsfuerzo.rpe => 'RPE ${numero(valorRpe)}',
+  EscalaEsfuerzo.rir => 'RIR ${numero(10 - valorRpe)}',
+};
+
 // ── Ejercicios ───────────────────────────────────────────────────────────────
 
 /// 'Pectorales · Mancuerna' para una ficha del catálogo.

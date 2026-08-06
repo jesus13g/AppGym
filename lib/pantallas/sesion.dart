@@ -49,6 +49,7 @@ class PantallaSesion extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sesion = ref.watch(sesionProvider(idEntrenamiento));
+    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
 
     return CupertinoPageScaffold(
       backgroundColor: context.fondo,
@@ -82,6 +83,7 @@ class PantallaSesion extends ConsumerWidget {
                 )
               : _Contenido(
                   sesion: datos,
+                  escala: ajustes.escala,
                   onEliminar: () => _eliminar(context, ref, datos),
                 ),
         ),
@@ -91,9 +93,17 @@ class PantallaSesion extends ConsumerWidget {
 }
 
 class _Contenido extends StatelessWidget {
-  const _Contenido({required this.sesion, required this.onEliminar});
+  const _Contenido({
+    required this.sesion,
+    required this.escala,
+    required this.onEliminar,
+  });
 
   final SesionCompleta sesion;
+
+  /// Escala con la que se escribe el esfuerzo guardado.
+  final EscalaEsfuerzo escala;
+
   final VoidCallback onEliminar;
 
   @override
@@ -136,6 +146,19 @@ class _Contenido extends StatelessWidget {
             ],
           ),
         ),
+        if (sesion.nota case final nota?)
+          ui.Grupo(
+            cabecera: 'Notas',
+            filas: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: t.m,
+                  vertical: t.m,
+                ),
+                child: Text(nota, style: ui.estilo(context)),
+              ),
+            ],
+          ),
         for (final ejercicio in sesion.ejercicios)
           ui.Grupo(
             cabecera: ejercicio.ejercicio.nombre,
@@ -162,6 +185,21 @@ class _Contenido extends StatelessWidget {
                     '${serie.repeticiones} repeticiones',
                     style: ui.estilo(context),
                   ),
+                  subtitle: switch ((serie.rpe, serie.nota)) {
+                    (null, null) => null,
+                    final valores => Text(
+                      [
+                        if (valores.$1 case final rpe?)
+                          formato.esfuerzo(rpe, escala),
+                        ?valores.$2,
+                      ].join(' · '),
+                      style: ui.estilo(
+                        context,
+                        size: t.footnote,
+                        color: context.textoSec,
+                      ),
+                    ),
+                  },
                   additionalInfo: Text(
                     '${formato.numero(serie.peso)} kg',
                     style: ui.estilo(context, color: context.textoSec),

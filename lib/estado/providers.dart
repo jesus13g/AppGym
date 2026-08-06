@@ -144,6 +144,12 @@ final sesionProvider = FutureProvider.family<SesionCompleta?, int>(
   (ref, idEntrenamiento) => ref.watch(bdProvider).sesion(idEntrenamiento),
 );
 
+// ── Ajustes ──────────────────────────────────────────────────────────────────
+
+final ajustesProvider = FutureProvider<Ajustes>(
+  (ref) => ref.watch(bdProvider).ajustes(),
+);
+
 // ── Invalidación ─────────────────────────────────────────────────────────────
 
 /// Refresca todo lo que depende de la lista de rutinas.
@@ -174,3 +180,6 @@ void invalidarEntrenamientos(WidgetRef ref, int idRutina) {
   ref.invalidate(estadisticasRutinaProvider(idRutina));
   invalidarRutinas(ref);
 }
+
+/// Refresca lo que depende de las preferencias.
+void invalidarAjustes(WidgetRef ref) => ref.invalidate(ajustesProvider);

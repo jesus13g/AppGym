@@ -535,6 +535,7 @@ Future<String?> dialogoTexto(
   String valor = '',
   String? mensaje,
   String etiquetaAceptar = 'Guardar',
+  bool permitirVacio = false,
 }) {
   final controlador = TextEditingController(text: valor);
 
@@ -543,7 +544,9 @@ Future<String?> dialogoTexto(
     builder: (dialogo) {
       void aceptar() {
         final actual = controlador.text.trim();
-        if (actual.isEmpty) return;
+        // Un nombre de rutina en blanco no vale; una nota vaciada sí, que es
+        // como se borra.
+        if (actual.isEmpty && !permitirVacio) return;
         Navigator.pop(dialogo, actual);
       }
 

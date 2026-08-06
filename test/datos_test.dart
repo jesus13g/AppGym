@@ -250,6 +250,35 @@ void main() {
     });
   });
 
+  group('ajustes', () {
+    test(
+      'por defecto el esfuerzo está desactivado y la escala es RPE',
+      () async {
+        final ajustes = await bd.ajustes();
+        expect(ajustes.esfuerzoActivo, isFalse);
+        expect(ajustes.escala, EscalaEsfuerzo.rpe);
+      },
+    );
+
+    test('se guardan y se sobrescriben por clave', () async {
+      await bd.fijarAjuste(AppBD.claveEsfuerzoActivo, '1');
+      await bd.fijarAjuste(AppBD.claveEsfuerzoEscala, 'rir');
+      expect((await bd.ajustes()).esfuerzoActivo, isTrue);
+      expect((await bd.ajustes()).escala, EscalaEsfuerzo.rir);
+
+      await bd.fijarAjuste(AppBD.claveEsfuerzoEscala, 'rpe');
+      expect((await bd.ajustes()).escala, EscalaEsfuerzo.rpe);
+    });
+
+    test('cambiar de escala reinterpreta lo guardado, no lo migra', () async {
+      // El valor vive en la base siempre como RPE; RIR = 10 − RPE.
+      expect(esfuerzo(8, EscalaEsfuerzo.rpe), 'RPE 8');
+      expect(esfuerzo(8, EscalaEsfuerzo.rir), 'RIR 2');
+      expect(esfuerzo(9.5, EscalaEsfuerzo.rpe), 'RPE 9,5');
+      expect(esfuerzo(9.5, EscalaEsfuerzo.rir), 'RIR 0,5');
+    });
+  });
+
   group('catálogo', () {
     setUp(() => sembrarCatalogo(bd, datos: _catalogoFalso));
 
@@ -609,6 +638,47 @@ void main() {
         expect(sesion.series[idEjercicio], hasLength(3));
       },
     );
+
+    test('guarda la nota de la sesión y la de cada serie', () async {
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [
+          ValoresSerie(repeticiones: 10, peso: 60, rpe: 8),
+          ValoresSerie(
+            repeticiones: 8,
+            peso: 65,
+            rpe: 9.5,
+            nota: 'Fallo en la última',
+          ),
+        ],
+      }, nota: 'Me dolía el hombro');
+
+      final sesion = (await bd.sesion(1))!;
+      expect(sesion.nota, 'Me dolía el hombro');
+      expect(sesion.ejercicios.single.series, const [
+        ValoresSerie(repeticiones: 10, peso: 60, rpe: 8),
+        ValoresSerie(
+          repeticiones: 8,
+          peso: 65,
+          rpe: 9.5,
+          nota: 'Fallo en la última',
+        ),
+      ]);
+      // Y el historial marca que esa sesión tiene algo escrito.
+      expect((await bd.historialRutina(idRutina)).single.tieneNota, isTrue);
+    });
+
+    test('una nota en blanco es no tener nota', () async {
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [
+          ValoresSerie(repeticiones: 10, peso: 60, nota: '   '),
+        ],
+      }, nota: '  ');
+
+      final sesion = (await bd.sesion(1))!;
+      expect(sesion.nota, isNull);
+      expect(sesion.ejercicios.single.series.single.nota, isNull);
+      expect((await bd.historialRutina(idRutina)).single.tieneNota, isFalse);
+    });
 
     test('borrar un ejercicio se lleva sus series', () async {
       await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 5), {

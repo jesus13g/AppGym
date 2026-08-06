@@ -519,9 +519,210 @@ i1.GeneratedColumn<int> _column_24(String aliasedName) =>
       $customConstraints: 'NOT NULL DEFAULT 0',
       defaultValue: const i1.CustomExpression('0'),
     );
+
+final class Schema4 extends i0.VersionedSchema {
+  Schema4({required super.database}) : super(version: 4);
+  @override
+  late final List<i1.DatabaseSchemaEntity> entities = [
+    rutinas,
+    entrenamientos,
+    catalogoEjercicios,
+    ejercicios,
+    serie,
+    ajustes,
+    idxCatalogoBusqueda,
+    idxCatalogoBodyPart,
+    idxCatalogoEquipment,
+  ];
+  late final Shape0 rutinas = Shape0(
+    source: i0.VersionedTable(
+      entityName: 'rutinas',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [_column_0, _column_1, _column_2],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape6 entrenamientos = Shape6(
+    source: i0.VersionedTable(
+      entityName: 'entrenamientos',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [_column_0, _column_3, _column_4, _column_25],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape2 catalogoEjercicios = Shape2(
+    source: i0.VersionedTable(
+      entityName: 'catalogo_ejercicios',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [
+        _column_5,
+        _column_6,
+        _column_7,
+        _column_8,
+        _column_9,
+        _column_10,
+        _column_11,
+        _column_12,
+        _column_13,
+        _column_14,
+        _column_15,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape5 ejercicios = Shape5(
+    source: i0.VersionedTable(
+      entityName: 'ejercicios',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [
+        _column_0,
+        _column_3,
+        _column_16,
+        _column_6,
+        _column_17,
+        _column_24,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape7 serie = Shape7(
+    source: i0.VersionedTable(
+      entityName: 'serie',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [
+        _column_0,
+        _column_18,
+        _column_19,
+        _column_20,
+        _column_21,
+        _column_22,
+        _column_23,
+        _column_26,
+        _column_25,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape8 ajustes = Shape8(
+    source: i0.VersionedTable(
+      entityName: 'ajustes',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(clave)'],
+      columns: [_column_27, _column_28],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  final i1.Index idxCatalogoBusqueda = i1.Index(
+    'idx_catalogo_busqueda',
+    'CREATE INDEX idx_catalogo_busqueda ON catalogo_ejercicios (busqueda)',
+  );
+  final i1.Index idxCatalogoBodyPart = i1.Index(
+    'idx_catalogo_body_part',
+    'CREATE INDEX idx_catalogo_body_part ON catalogo_ejercicios (body_part)',
+  );
+  final i1.Index idxCatalogoEquipment = i1.Index(
+    'idx_catalogo_equipment',
+    'CREATE INDEX idx_catalogo_equipment ON catalogo_ejercicios (equipment)',
+  );
+}
+
+class Shape6 extends i0.VersionedTable {
+  Shape6({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<int> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get idRutina =>
+      columnsByName['id_rutina']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get fecha =>
+      columnsByName['fecha']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<String> get nota =>
+      columnsByName['nota']! as i1.GeneratedColumn<String>;
+}
+
+i1.GeneratedColumn<String> _column_25(String aliasedName) =>
+    i1.GeneratedColumn<String>(
+      'nota',
+      aliasedName,
+      true,
+      type: i1.DriftSqlType.string,
+      $customConstraints: 'NULL',
+    );
+
+class Shape7 extends i0.VersionedTable {
+  Shape7({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<int> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get idEntrenamiento =>
+      columnsByName['id_entrenamiento']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get idEjercicio =>
+      columnsByName['id_ejercicio']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get nSerie =>
+      columnsByName['n_serie']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get repeticiones =>
+      columnsByName['repeticiones']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<double> get peso =>
+      columnsByName['peso']! as i1.GeneratedColumn<double>;
+  i1.GeneratedColumn<int> get calentamiento =>
+      columnsByName['calentamiento']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<double> get rpe =>
+      columnsByName['rpe']! as i1.GeneratedColumn<double>;
+  i1.GeneratedColumn<String> get nota =>
+      columnsByName['nota']! as i1.GeneratedColumn<String>;
+}
+
+i1.GeneratedColumn<double> _column_26(String aliasedName) =>
+    i1.GeneratedColumn<double>(
+      'rpe',
+      aliasedName,
+      true,
+      type: i1.DriftSqlType.double,
+      $customConstraints: 'NULL',
+    );
+
+class Shape8 extends i0.VersionedTable {
+  Shape8({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<String> get clave =>
+      columnsByName['clave']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get valor =>
+      columnsByName['valor']! as i1.GeneratedColumn<String>;
+}
+
+i1.GeneratedColumn<String> _column_27(String aliasedName) =>
+    i1.GeneratedColumn<String>(
+      'clave',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.string,
+      $customConstraints: 'NOT NULL',
+    );
+i1.GeneratedColumn<String> _column_28(String aliasedName) =>
+    i1.GeneratedColumn<String>(
+      'valor',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.string,
+      $customConstraints: 'NOT NULL',
+    );
 i0.MigrationStepWithVersion migrationSteps({
   required Future<void> Function(i1.Migrator m, Schema2 schema) from1To2,
   required Future<void> Function(i1.Migrator m, Schema3 schema) from2To3,
+  required Future<void> Function(i1.Migrator m, Schema4 schema) from3To4,
 }) {
   return (currentVersion, database) async {
     switch (currentVersion) {
@@ -535,6 +736,11 @@ i0.MigrationStepWithVersion migrationSteps({
         final migrator = i1.Migrator(database, schema);
         await from2To3(migrator, schema);
         return 3;
+      case 3:
+        final schema = Schema4(database: database);
+        final migrator = i1.Migrator(database, schema);
+        await from3To4(migrator, schema);
+        return 4;
       default:
         throw ArgumentError.value('Unknown migration from $currentVersion');
     }
@@ -544,6 +750,11 @@ i0.MigrationStepWithVersion migrationSteps({
 i1.OnUpgrade stepByStep({
   required Future<void> Function(i1.Migrator m, Schema2 schema) from1To2,
   required Future<void> Function(i1.Migrator m, Schema3 schema) from2To3,
+  required Future<void> Function(i1.Migrator m, Schema4 schema) from3To4,
 }) => i0.VersionedSchema.stepByStepHelper(
-  step: migrationSteps(from1To2: from1To2, from2To3: from2To3),
+  step: migrationSteps(
+    from1To2: from1To2,
+    from2To3: from2To3,
+    from3To4: from3To4,
+  ),
 );

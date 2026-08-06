@@ -49,6 +49,27 @@ class Entrenamientos extends Table {
   IntColumn get idRutina =>
       integer().references(Rutinas, #id, onDelete: KeyAction.cascade)();
   DateTimeColumn get fecha => dateTime()();
+
+  /// Texto libre de la sesión: «me dolía el hombro», «con cinturón».
+  ///
+  /// Es la información que explica un bajón en el gráfico tres semanas después.
+  TextColumn get nota => text().nullable()();
+}
+
+/// Preferencias de la app, en clave/valor.
+///
+/// Una tabla de dos columnas en vez de un fichero aparte: entra en la misma
+/// copia de seguridad y en la misma transacción que el resto de los datos.
+@DataClassName('Ajuste')
+class AjustesTabla extends Table {
+  @override
+  String get tableName => 'ajustes';
+
+  TextColumn get clave => text()();
+  TextColumn get valor => text()();
+
+  @override
+  Set<Column> get primaryKey => {clave};
 }
 
 /// Ejercicio del catálogo, sembrado desde assets/ejercicios.es.json.
@@ -136,6 +157,16 @@ class SeriesTabla extends Table {
   /// máximos y del 1RM estimado.
   BoolColumn get calentamiento =>
       boolean().withDefault(const Constant(false))();
+
+  /// Esfuerzo percibido, de 6 a 10 en medios puntos.
+  ///
+  /// Se guarda **siempre en escala RPE**, aunque el usuario haya elegido ver
+  /// RIR en los ajustes: así cambiar de escala reinterpreta lo guardado en vez
+  /// de migrarlo.
+  RealColumn get rpe => real().nullable()();
+
+  /// Frase corta sobre esta serie: «fallo en la última», «con ayuda».
+  TextColumn get nota => text().nullable()();
 }
 
 // ── Resultados de las consultas preagregadas ─────────────────────────────────
@@ -224,6 +255,7 @@ class ResumenSesion {
     required this.nEjercicios,
     required this.nSeries,
     required this.volumen,
+    required this.tieneNota,
   });
 
   final int id;
@@ -233,6 +265,9 @@ class ResumenSesion {
 
   /// Sin contar el calentamiento.
   final double volumen;
+
+  /// La sesión, o alguna de sus series, tiene algo escrito.
+  final bool tieneNota;
 }
 
 /// Un ejercicio dentro de una sesión, con las series que se le hicieron.
@@ -257,6 +292,7 @@ class SesionCompleta {
   int get id => entrenamiento.id;
   int get idRutina => entrenamiento.idRutina;
   DateTime get fecha => entrenamiento.fecha;
+  String? get nota => entrenamiento.nota;
 
   double get volumen => ejercicios.fold(0, (suma, e) => suma + e.volumen);
 
@@ -290,33 +326,80 @@ class ValoresSerie {
     required this.repeticiones,
     required this.peso,
     this.calentamiento = false,
+    this.rpe,
+    this.nota,
   });
 
   final int repeticiones;
   final double peso;
   final bool calentamiento;
 
-  ValoresSerie copiar({int? repeticiones, double? peso, bool? calentamiento}) =>
-      ValoresSerie(
-        repeticiones: repeticiones ?? this.repeticiones,
-        peso: peso ?? this.peso,
-        calentamiento: calentamiento ?? this.calentamiento,
-      );
+  /// Siempre en escala RPE (6–10), aunque se muestre como RIR.
+  final double? rpe;
+
+  final String? nota;
+
+  /// Copia cambiando algún valor. Para vaciar el RPE o la nota, [sinRpe] y
+  /// [sinNota]: un `null` en los parámetros significa «déjalo como está».
+  ValoresSerie copiar({
+    int? repeticiones,
+    double? peso,
+    bool? calentamiento,
+    double? rpe,
+    String? nota,
+    bool sinRpe = false,
+    bool sinNota = false,
+  }) => ValoresSerie(
+    repeticiones: repeticiones ?? this.repeticiones,
+    peso: peso ?? this.peso,
+    calentamiento: calentamiento ?? this.calentamiento,
+    rpe: sinRpe ? null : (rpe ?? this.rpe),
+    nota: sinNota ? null : (nota ?? this.nota),
+  );
 
   @override
   bool operator ==(Object other) =>
       other is ValoresSerie &&
       other.repeticiones == repeticiones &&
       other.peso == peso &&
-      other.calentamiento == calentamiento;
+      other.calentamiento == calentamiento &&
+      other.rpe == rpe &&
+      other.nota == nota;
 
   @override
-  int get hashCode => Object.hash(repeticiones, peso, calentamiento);
+  int get hashCode => Object.hash(repeticiones, peso, calentamiento, rpe, nota);
 
   @override
   String toString() =>
       'ValoresSerie($repeticiones × $peso kg'
-      '${calentamiento ? ', calentamiento' : ''})';
+      '${calentamiento ? ', calentamiento' : ''}'
+      '${rpe == null ? '' : ', RPE $rpe'}'
+      '${nota == null ? '' : ', «$nota»'})';
+}
+
+/// Escala con la que se pide el esfuerzo al registrar.
+///
+/// Solo cambia cómo se muestra: en la base siempre se guarda RPE.
+enum EscalaEsfuerzo {
+  /// 6–10, donde 10 es el fallo.
+  rpe,
+
+  /// Repeticiones en recámara: `RIR = 10 − RPE`, así que 0 es el fallo.
+  rir,
+}
+
+/// Preferencias de la app, ya interpretadas.
+class Ajustes {
+  const Ajustes({
+    this.esfuerzoActivo = false,
+    this.escala = EscalaEsfuerzo.rpe,
+  });
+
+  /// Por defecto desactivado: quien no use el RPE no debe verlo estorbando en
+  /// el registro.
+  final bool esfuerzoActivo;
+
+  final EscalaEsfuerzo escala;
 }
 
 @DriftDatabase(
@@ -326,6 +409,7 @@ class ValoresSerie {
     CatalogoEjercicios,
     Ejercicios,
     SeriesTabla,
+    AjustesTabla,
   ],
 )
 class AppBD extends _$AppBD {
@@ -346,7 +430,7 @@ class AppBD extends _$AppBD {
       );
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -354,7 +438,7 @@ class AppBD extends _$AppBD {
     // Los pasos se escriben contra el esquema *de esa versión* (`esquemas.dart`,
     // generado con `drift_dev schema steps`), no contra las tablas de arriba:
     // así una migración vieja no se rompe cuando el modelo actual cambie.
-    onUpgrade: stepByStep(from1To2: _de1A2, from2To3: _de2A3),
+    onUpgrade: stepByStep(from1To2: _de1A2, from2To3: _de2A3, from3To4: _de3A4),
     beforeOpen: (details) async {
       // Sin esto SQLite ignora las claves foráneas y los ON DELETE CASCADE
       // no llegan a ejecutarse.
@@ -392,6 +476,16 @@ class AppBD extends _$AppBD {
       ORDER BY v.id, i.i
     ''');
     await customStatement('DROP TABLE serie_v1');
+  }
+
+  /// v3 → v4: notas, RPE y la tabla de ajustes.
+  ///
+  /// Solo añade; no hay nada que transformar.
+  Future<void> _de3A4(Migrator m, Schema4 esquema) async {
+    await m.addColumn(esquema.entrenamientos, esquema.entrenamientos.nota);
+    await m.addColumn(esquema.serie, esquema.serie.rpe);
+    await m.addColumn(esquema.serie, esquema.serie.nota);
+    await m.createTable(esquema.ajustes);
   }
 
   /// v2 → v3: los ejercicios ganan su posición dentro de la rutina.
@@ -740,18 +834,30 @@ class AppBD extends _$AppBD {
   Future<bool> insertarEntrenamiento(
     int idRutina,
     DateTime fecha,
-    Map<int, List<ValoresSerie>> series,
-  ) async {
+    Map<int, List<ValoresSerie>> series, {
+    String? nota,
+  }) async {
     final conSeries = _soloConSeries(series);
     if (conSeries.isEmpty) return false;
 
     await transaction(() async {
       final idEntrenamiento = await into(entrenamientos).insert(
-        EntrenamientosCompanion.insert(idRutina: idRutina, fecha: fecha),
+        EntrenamientosCompanion.insert(
+          idRutina: idRutina,
+          fecha: fecha,
+          nota: Value(_limpiar(nota)),
+        ),
       );
       await _insertarSeries(idEntrenamiento, conSeries);
     });
     return true;
+  }
+
+  /// Una nota en blanco es no tener nota: así el icono del historial no
+  /// aparece por un espacio suelto.
+  String? _limpiar(String? texto) {
+    final limpio = texto?.trim();
+    return (limpio == null || limpio.isEmpty) ? null : limpio;
   }
 
   Map<int, List<ValoresSerie>> _soloConSeries(
@@ -770,8 +876,9 @@ class AppBD extends _$AppBD {
   Future<bool> actualizarEntrenamiento(
     int idEntrenamiento,
     DateTime fecha,
-    Map<int, List<ValoresSerie>> series,
-  ) async {
+    Map<int, List<ValoresSerie>> series, {
+    String? nota,
+  }) async {
     final conSeries = _soloConSeries(series);
     if (conSeries.isEmpty) return false;
 
@@ -781,8 +888,14 @@ class AppBD extends _$AppBD {
     if (existe == null) return false;
 
     await transaction(() async {
-      await (update(entrenamientos)..where((e) => e.id.equals(idEntrenamiento)))
-          .write(EntrenamientosCompanion(fecha: Value(fecha)));
+      await (update(
+        entrenamientos,
+      )..where((e) => e.id.equals(idEntrenamiento))).write(
+        EntrenamientosCompanion(
+          fecha: Value(fecha),
+          nota: Value(_limpiar(nota)),
+        ),
+      );
       await (delete(
         seriesTabla,
       )..where((s) => s.idEntrenamiento.equals(idEntrenamiento))).go();
@@ -809,6 +922,8 @@ class AppBD extends _$AppBD {
             repeticiones: valores.repeticiones,
             peso: valores.peso,
             calentamiento: Value(valores.calentamiento),
+            rpe: Value(valores.rpe),
+            nota: Value(_limpiar(valores.nota)),
           ),
     ]);
   });
@@ -938,6 +1053,8 @@ class AppBD extends _$AppBD {
           repeticiones: s.repeticiones,
           peso: s.peso,
           calentamiento: s.calentamiento,
+          rpe: s.rpe,
+          nota: s.nota,
         ),
     ];
   }
@@ -961,7 +1078,8 @@ class AppBD extends _$AppBD {
              COUNT(s.id)                   AS n_series,
              COALESCE(SUM(
                CASE WHEN s.calentamiento = 0 THEN s.peso * s.repeticiones ELSE 0 END
-             ), 0)                         AS volumen
+             ), 0)                         AS volumen,
+             (e.nota IS NOT NULL OR COUNT(s.nota) > 0) AS tiene_nota
       FROM entrenamientos e
       LEFT JOIN serie s ON s.id_entrenamiento = e.id
       WHERE e.id_rutina = ?
@@ -985,6 +1103,7 @@ class AppBD extends _$AppBD {
           nEjercicios: f.read<int>('n_ejercicios'),
           nSeries: f.read<int>('n_series'),
           volumen: f.read<double>('volumen'),
+          tieneNota: f.read<bool>('tiene_nota'),
         ),
     ];
   }
@@ -1047,6 +1166,8 @@ class AppBD extends _$AppBD {
                 repeticiones: s.repeticiones,
                 peso: s.peso,
                 calentamiento: s.calentamiento,
+                rpe: s.rpe,
+                nota: s.nota,
               ),
           ]),
       ],
@@ -1069,6 +1190,31 @@ class AppBD extends _$AppBD {
       ..where(entrenamientos.idRutina.equals(idRutina));
     return consulta.map((f) => f.read(cuenta) ?? 0).getSingle();
   }
+
+  // ── Ajustes ────────────────────────────────────────────────────────────────
+
+  /// Clave del interruptor de esfuerzo percibido.
+  static const claveEsfuerzoActivo = 'esfuerzo_activo';
+
+  /// Clave de la escala con la que se muestra el esfuerzo.
+  static const claveEsfuerzoEscala = 'esfuerzo_escala';
+
+  /// Las preferencias, ya interpretadas y con sus valores por defecto.
+  Future<Ajustes> ajustes() async {
+    final filas = await select(ajustesTabla).get();
+    final valores = {for (final f in filas) f.clave: f.valor};
+    return Ajustes(
+      esfuerzoActivo: valores[claveEsfuerzoActivo] == '1',
+      escala: valores[claveEsfuerzoEscala] == 'rir'
+          ? EscalaEsfuerzo.rir
+          : EscalaEsfuerzo.rpe,
+    );
+  }
+
+  Future<void> fijarAjuste(String clave, String valor) =>
+      into(ajustesTabla).insertOnConflictUpdate(
+        AjustesTablaCompanion.insert(clave: clave, valor: valor),
+      );
 
   /// Sesiones de cada día dentro del rango pedido, en orden.
   ///

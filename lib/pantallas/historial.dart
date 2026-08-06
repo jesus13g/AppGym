@@ -94,7 +94,23 @@ class PantallaHistorial extends ConsumerWidget {
                                   color: context.textoSec,
                                 ),
                               ),
-                              trailing: const CupertinoListTileChevron(),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (sesion.tieneNota)
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                        right: t.xs,
+                                      ),
+                                      child: Icon(
+                                        CupertinoIcons.text_bubble,
+                                        size: 16,
+                                        color: context.textoTer,
+                                      ),
+                                    ),
+                                  const CupertinoListTileChevron(),
+                                ],
+                              ),
                               onTap: () => abrirSesion(context, sesion.id),
                             ),
                           ),
