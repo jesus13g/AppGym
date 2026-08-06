@@ -11,6 +11,7 @@ import 'package:appgym/estado/providers.dart';
 import 'package:appgym/pantallas/catalogo.dart';
 import 'package:appgym/pantallas/entrenar.dart';
 import 'package:appgym/pantallas/historial.dart';
+import 'package:appgym/pantallas/rutina.dart';
 import 'package:appgym/pantallas/rutinas.dart';
 import 'package:appgym/tema/ui.dart' as ui;
 import 'package:drift/native.dart';
@@ -261,6 +262,76 @@ void main() {
       expect(series.first.repeticiones, 11);
       expect(series.skip(1).map((s) => s.repeticiones), everyElement(10));
       expect(series.map((s) => s.peso), everyElement(20));
+    });
+  });
+
+  group('orden de los ejercicios', () {
+    late int idRutina;
+
+    setUp(() async {
+      idRutina = (await bd.insertarRutina('Empuje'))!;
+      for (final nombre in ['Press banca', 'Aperturas', 'Fondos']) {
+        await bd.insertarEjercicio(idRutina, nombre);
+      }
+    });
+
+    testWidgets('arrastrar en modo edición cambia el orden guardado', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaRutina(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(CupertinoIcons.arrow_up_arrow_down));
+      await tester.pumpAndSettle();
+
+      final asas = find.byIcon(CupertinoIcons.line_horizontal_3);
+      expect(asas, findsNWidgets(3));
+
+      // Se agarra el press de banca y se baja una fila.
+      final gesto = await tester.startGesture(tester.getCenter(asas.first));
+      await tester.pump(const Duration(milliseconds: 100));
+      for (var i = 0; i < 7; i++) {
+        await gesto.moveBy(const Offset(0, 10));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await gesto.up();
+      await tester.pumpAndSettle();
+
+      expect((await bd.ejerciciosDeRutina(idRutina)).map((e) => e.nombre), [
+        'Aperturas',
+        'Press banca',
+        'Fondos',
+      ]);
+    });
+
+    testWidgets('mover un ejercicio a otra rutina lo saca de esta', (
+      tester,
+    ) async {
+      final destino = (await bd.insertarRutina('Full body'))!;
+
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaRutina(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(CupertinoIcons.arrow_up_arrow_down));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byIcon(CupertinoIcons.arrow_right_arrow_left).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Full body'));
+      await tester.pumpAndSettle();
+
+      expect((await bd.ejerciciosDeRutina(idRutina)).map((e) => e.nombre), [
+        'Aperturas',
+        'Fondos',
+      ]);
+      expect(
+        (await bd.ejerciciosDeRutina(destino)).single.nombre,
+        'Press banca',
+      );
     });
   });
 

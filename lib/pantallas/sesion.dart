@@ -125,11 +125,14 @@ class _Contenido extends StatelessWidget {
             borderRadius: BorderRadius.circular(t.radioL),
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _Dato('${sesion.ejercicios.length}', 'Ejercicios'),
-              _Dato('$nSeries', 'Series'),
-              _Dato('${formato.numero(sesion.volumen)} kg', 'Volumen'),
+              Expanded(
+                child: _Dato('${sesion.ejercicios.length}', 'Ejercicios'),
+              ),
+              Expanded(child: _Dato('$nSeries', 'Series')),
+              Expanded(
+                child: _Dato('${formato.numero(sesion.volumen)} kg', 'Volumen'),
+              ),
             ],
           ),
         ),

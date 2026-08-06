@@ -161,6 +161,85 @@ void main() {
       },
     );
 
+    test('se listan en el orden en que se añadieron', () async {
+      final id = (await bd.insertarRutina('Empuje'))!;
+      for (final nombre in ['Press banca', 'Aperturas', 'Fondos']) {
+        await bd.insertarEjercicio(id, nombre);
+      }
+
+      expect((await bd.ejerciciosDeRutina(id)).map((e) => e.nombre), [
+        'Press banca',
+        'Aperturas',
+        'Fondos',
+      ]);
+      expect((await bd.ejerciciosDeRutina(id)).map((e) => e.ejercicio.orden), [
+        0,
+        1,
+        2,
+      ]);
+    });
+
+    test('reordenar cambia el orden y persiste', () async {
+      final id = (await bd.insertarRutina('Empuje'))!;
+      for (final nombre in ['Press banca', 'Aperturas', 'Fondos']) {
+        await bd.insertarEjercicio(id, nombre);
+      }
+      final ids = [for (final e in await bd.ejerciciosDeRutina(id)) e.id];
+
+      // Las aperturas primero, el press al final.
+      await bd.reordenarEjercicios(id, [ids[1], ids[2], ids[0]]);
+
+      expect((await bd.ejerciciosDeRutina(id)).map((e) => e.nombre), [
+        'Aperturas',
+        'Fondos',
+        'Press banca',
+      ]);
+      // Y un ejercicio nuevo entra al final, no en medio.
+      await bd.insertarEjercicio(id, 'Press militar');
+      expect((await bd.ejerciciosDeRutina(id)).last.nombre, 'Press militar');
+    });
+
+    test('mover un ejercicio a otra rutina conserva sus series', () async {
+      final origen = (await bd.insertarRutina('Empuje'))!;
+      final destino = (await bd.insertarRutina('Full body'))!;
+      await bd.insertarEjercicio(origen, 'Press banca');
+      final ejercicio = (await bd.ejerciciosDeRutina(origen)).single.id;
+      await bd.insertarEntrenamiento(origen, DateTime(2026, 3, 1), {
+        ejercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
+      });
+
+      expect(await bd.moverEjercicio(ejercicio, destino), isTrue);
+
+      expect(await bd.ejerciciosDeRutina(origen), isEmpty);
+      expect((await bd.ejerciciosDeRutina(destino)).single.id, ejercicio);
+      // Las series siguen colgando de la sesión en la que se hicieron, que es
+      // de la rutina de origen, y la precarga del registro las encuentra.
+      expect(await bd.ultimasSeriesEjercicio(ejercicio), const [
+        ValoresSerie(repeticiones: 10, peso: 60),
+      ]);
+      expect(await bd.seriesConFecha(origen, ejercicio), hasLength(1));
+    });
+
+    test('mover a una rutina que ya lo tiene se rechaza', () async {
+      await sembrarCatalogo(bd, datos: _catalogoFalso);
+      final origen = (await bd.insertarRutina('Empuje'))!;
+      final destino = (await bd.insertarRutina('Full body'))!;
+      await bd.insertarEjercicio(
+        origen,
+        'barbell bench press',
+        idCatalogo: '0001',
+      );
+      await bd.insertarEjercicio(
+        destino,
+        'barbell bench press',
+        idCatalogo: '0001',
+      );
+      final ejercicio = (await bd.ejerciciosDeRutina(origen)).single.id;
+
+      expect(await bd.moverEjercicio(ejercicio, destino), isFalse);
+      expect(await bd.ejerciciosDeRutina(origen), hasLength(1));
+    });
+
     test('idsCatalogoEnRutina ignora los personalizados', () async {
       await sembrarCatalogo(bd, datos: _catalogoFalso);
       final id = (await bd.insertarRutina('Mixta'))!;

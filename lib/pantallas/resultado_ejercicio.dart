@@ -105,11 +105,17 @@ class _Contenido extends StatelessWidget {
               borderRadius: BorderRadius.circular(t.radioL),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _Dato('${formato.numero(ultimo.pesoMaximo)} kg', 'Último'),
-                _Dato('${formato.numero(maximo)} kg', 'Máximo'),
-                _Dato('${registros.length}', 'Sesiones'),
+                Expanded(
+                  child: _Dato(
+                    '${formato.numero(ultimo.pesoMaximo)} kg',
+                    'Último',
+                  ),
+                ),
+                Expanded(
+                  child: _Dato('${formato.numero(maximo)} kg', 'Máximo'),
+                ),
+                Expanded(child: _Dato('${registros.length}', 'Sesiones')),
               ],
             ),
           ),

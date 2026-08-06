@@ -24,6 +24,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'esquemas/schema.dart';
 import 'esquemas/schema_v1.dart' as v1;
+import 'esquemas/schema_v2.dart' as v2;
 
 /// Segundos desde época, que es como drift guarda las fechas aquí.
 int _epoca(DateTime fecha) => fecha.millisecondsSinceEpoch ~/ 1000;
@@ -108,6 +109,43 @@ void main() {
 
     expect((await bd.resumenRutinas()).single.nombre, 'Pierna');
     expect(await bd.seriesConFecha(1, 1), isEmpty);
+
+    await bd.close();
+  });
+
+  test('v2 → v3: los ejercicios conservan su orden de inserción', () async {
+    final esquema = await verificador.schemaAt(2);
+
+    final vieja = v2.DatabaseAtV2(esquema.newConnection());
+    await vieja.customStatement(
+      "INSERT INTO rutinas (id, nombre, color) VALUES (1, 'Empuje', '#0A84FF'), "
+      "(2, 'Pierna', '#30D158')",
+    );
+    await vieja.customStatement(
+      'INSERT INTO ejercicios (id, id_rutina, nombre) VALUES '
+      "(1, 1, 'Press banca'), (2, 1, 'Aperturas'), (3, 2, 'Sentadilla'), "
+      "(4, 1, 'Fondos'), (5, 2, 'Prensa')",
+    );
+    await vieja.close();
+
+    final bd = AppBD(esquema.newConnection());
+    await verificador.migrateAndValidate(bd, 3);
+
+    // Cada rutina numera desde 0, siguiendo el id, que era el orden que tenía.
+    expect((await bd.ejerciciosDeRutina(1)).map((e) => e.nombre), [
+      'Press banca',
+      'Aperturas',
+      'Fondos',
+    ]);
+    expect((await bd.ejerciciosDeRutina(1)).map((e) => e.ejercicio.orden), [
+      0,
+      1,
+      2,
+    ]);
+    expect((await bd.ejerciciosDeRutina(2)).map((e) => e.ejercicio.orden), [
+      0,
+      1,
+    ]);
 
     await bd.close();
   });

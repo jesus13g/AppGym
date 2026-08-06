@@ -99,6 +99,13 @@ class Ejercicios extends Table {
       text().nullable().references(CatalogoEjercicios, #id)();
   TextColumn get nombre => text()();
   TextColumn get descripcion => text().nullable()();
+
+  /// Posición dentro de la rutina, de 0 en adelante.
+  ///
+  /// En una rutina el orden **es** la rutina: no da igual hacer las aperturas
+  /// antes o después del press. Se desempata por `id` por si dos filas
+  /// comparten posición.
+  IntColumn get orden => integer().withDefault(const Constant(0))();
 }
 
 /// Una serie registrada: una fila por serie hecha.
@@ -339,7 +346,7 @@ class AppBD extends _$AppBD {
       );
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -347,7 +354,7 @@ class AppBD extends _$AppBD {
     // Los pasos se escriben contra el esquema *de esa versión* (`esquemas.dart`,
     // generado con `drift_dev schema steps`), no contra las tablas de arriba:
     // así una migración vieja no se rompe cuando el modelo actual cambie.
-    onUpgrade: stepByStep(from1To2: _de1A2),
+    onUpgrade: stepByStep(from1To2: _de1A2, from2To3: _de2A3),
     beforeOpen: (details) async {
       // Sin esto SQLite ignora las claves foráneas y los ON DELETE CASCADE
       // no llegan a ejecutarse.
@@ -385,6 +392,23 @@ class AppBD extends _$AppBD {
       ORDER BY v.id, i.i
     ''');
     await customStatement('DROP TABLE serie_v1');
+  }
+
+  /// v2 → v3: los ejercicios ganan su posición dentro de la rutina.
+  ///
+  /// Las rutinas existentes conservan el orden que tenían, que era el de
+  /// inserción: a cada ejercicio le toca el número de ejercicios de su rutina
+  /// con un `id` menor. Una subconsulta correlacionada basta y no depende de
+  /// que la versión de SQLite del móvil traiga funciones de ventana.
+  Future<void> _de2A3(Migrator m, Schema3 esquema) async {
+    await m.addColumn(esquema.ejercicios, esquema.ejercicios.orden);
+    await customStatement('''
+      UPDATE ejercicios SET orden = (
+        SELECT COUNT(*) FROM ejercicios AS previos
+        WHERE previos.id_rutina = ejercicios.id_rutina
+          AND previos.id < ejercicios.id
+      )
+    ''');
   }
 
   // ── Rutinas ────────────────────────────────────────────────────────────────
@@ -511,6 +535,68 @@ class AppBD extends _$AppBD {
         idCatalogo: Value(idCatalogo),
         nombre: nombre,
         descripcion: Value(descripcion),
+        orden: Value(await _siguienteOrden(idRutina)),
+      ),
+    );
+    return true;
+  }
+
+  /// Posición para un ejercicio nuevo: al final de su rutina.
+  Future<int> _siguienteOrden(int idRutina) async {
+    final maximo = ejercicios.orden.max();
+    final consulta = selectOnly(ejercicios)
+      ..addColumns([maximo])
+      ..where(ejercicios.idRutina.equals(idRutina));
+    final actual = await consulta.map((f) => f.read(maximo)).getSingle();
+    return actual == null ? 0 : actual + 1;
+  }
+
+  /// Fija el orden de los ejercicios de una rutina, en una transacción.
+  ///
+  /// [idsEnOrden] es la lista completa tal y como quedó tras arrastrar.
+  Future<void> reordenarEjercicios(int idRutina, List<int> idsEnOrden) =>
+      transaction(() async {
+        for (final (posicion, id) in idsEnOrden.indexed) {
+          await (update(ejercicios)
+                ..where((e) => e.id.equals(id) & e.idRutina.equals(idRutina)))
+              .write(EjerciciosCompanion(orden: Value(posicion)));
+        }
+      });
+
+  /// Mueve un ejercicio a otra rutina conservando su histórico de series.
+  ///
+  /// Las series no se tocan: siguen colgando de las sesiones en las que se
+  /// hicieron, que son las de la rutina de origen —es lo que de verdad pasó
+  /// aquel día—, así que ahí se siguen viendo. Lo que viaja con el ejercicio es
+  /// la precarga del registro ([ultimasSeriesEjercicio], que no mira la
+  /// rutina); el gráfico de la rutina de destino empieza de cero.
+  ///
+  /// Devuelve `false` si en la rutina de destino ya está ese ejercicio: es la
+  /// misma regla de duplicado que aplica [insertarEjercicio], solo que aquí el
+  /// choque se descubre al mover.
+  Future<bool> moverEjercicio(int idEjercicio, int idRutinaDestino) async {
+    final ejercicio = await (select(
+      ejercicios,
+    )..where((e) => e.id.equals(idEjercicio))).getSingleOrNull();
+    if (ejercicio == null) return false;
+    if (ejercicio.idRutina == idRutinaDestino) return false;
+
+    final consulta = select(ejercicios)
+      ..where((e) => e.idRutina.equals(idRutinaDestino))
+      ..limit(1);
+    if (ejercicio.idCatalogo case final idCatalogo?) {
+      consulta.where((e) => e.idCatalogo.equals(idCatalogo));
+    } else {
+      consulta.where(
+        (e) => e.idCatalogo.isNull() & e.nombre.equals(ejercicio.nombre),
+      );
+    }
+    if (await consulta.getSingleOrNull() != null) return false;
+
+    await (update(ejercicios)..where((e) => e.id.equals(idEjercicio))).write(
+      EjerciciosCompanion(
+        idRutina: Value(idRutinaDestino),
+        orden: Value(await _siguienteOrden(idRutinaDestino)),
       ),
     );
     return true;
@@ -543,7 +629,11 @@ class AppBD extends _$AppBD {
   Future<List<EjercicioConFicha>> ejerciciosDeRutina(int idRutina) async {
     final consulta = select(ejercicios)
       ..where((e) => e.idRutina.equals(idRutina))
-      ..orderBy([(e) => OrderingTerm(expression: e.id)]);
+      ..orderBy([
+        (e) => OrderingTerm(expression: e.orden),
+        // Desempate defensivo: si dos filas comparten posición, manda el id.
+        (e) => OrderingTerm(expression: e.id),
+      ]);
     final filas = await consulta.join([
       leftOuterJoin(
         catalogoEjercicios,
@@ -936,7 +1026,15 @@ class AppBD extends _$AppBD {
       (porEjercicio[ejercicio.id] ??= []).add(f.readTable(seriesTabla));
     }
 
-    final ordenados = fichas.keys.toList()..sort();
+    // El orden de la rutina, con el id de desempate, igual que en
+    // [ejerciciosDeRutina].
+    final ordenados = fichas.keys.toList()
+      ..sort((a, b) {
+        final porOrden = fichas[a]!.ejercicio.orden.compareTo(
+          fichas[b]!.ejercicio.orden,
+        );
+        return porOrden != 0 ? porOrden : a.compareTo(b);
+      });
     return SesionCompleta(
       entrenamiento: entrenamiento,
       ejercicios: [
