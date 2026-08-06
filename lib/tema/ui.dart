@@ -194,13 +194,19 @@ class BotonPrincipal extends StatelessWidget {
             Icon(icono, size: 18, color: CupertinoColors.white),
             const SizedBox(width: t.s),
           ],
-          Text(
-            etiqueta,
-            style: estilo(
-              context,
-              size: t.headline,
-              weight: t.semibold,
-              color: CupertinoColors.white,
+          // Flexible para que una etiqueta larga —o un tamaño de texto grande
+          // por accesibilidad— no desborde el ancho disponible.
+          Flexible(
+            child: Text(
+              etiqueta,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: estilo(
+                context,
+                size: t.headline,
+                weight: t.semibold,
+                color: CupertinoColors.white,
+              ),
             ),
           ),
         ],
