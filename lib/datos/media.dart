@@ -15,7 +15,8 @@ library;
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/widgets.dart' show ImageProvider, FileImage, NetworkImage;
+import 'package:flutter/widgets.dart'
+    show ImageProvider, FileImage, NetworkImage;
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
@@ -123,9 +124,12 @@ Future<bool> _descargarUno(String rutaRelativa, http.Client cliente) async {
   // ficheros truncados que luego se den por buenos.
   final parcial = File('${destino.path}.part');
   try {
-    final respuesta =
-        await cliente.get(Uri.parse(urlRemota(rutaRelativa))).timeout(_tiempoEspera);
-    if (respuesta.statusCode != 200) throw HttpException('${respuesta.statusCode}');
+    final respuesta = await cliente
+        .get(Uri.parse(urlRemota(rutaRelativa)))
+        .timeout(_tiempoEspera);
+    if (respuesta.statusCode != 200) {
+      throw HttpException('${respuesta.statusCode}');
+    }
     await parcial.writeAsBytes(respuesta.bodyBytes);
     await parcial.rename(destino.path);
     return true;

@@ -144,12 +144,32 @@ final _diacriticos = RegExp('[̀-ͯ]');
 /// de descomponer se sustituye directamente. Cubre lo que aparece en las
 /// traducciones de este fichero y lo que un usuario puede teclear.
 const _equivalencias = <String, String>{
-  'á': 'a', 'à': 'a', 'ä': 'a', 'â': 'a', 'ã': 'a', 'å': 'a',
-  'é': 'e', 'è': 'e', 'ë': 'e', 'ê': 'e',
-  'í': 'i', 'ì': 'i', 'ï': 'i', 'î': 'i',
-  'ó': 'o', 'ò': 'o', 'ö': 'o', 'ô': 'o', 'õ': 'o',
-  'ú': 'u', 'ù': 'u', 'ü': 'u', 'û': 'u',
-  'ñ': 'n', 'ç': 'c', 'ý': 'y',
+  'á': 'a',
+  'à': 'a',
+  'ä': 'a',
+  'â': 'a',
+  'ã': 'a',
+  'å': 'a',
+  'é': 'e',
+  'è': 'e',
+  'ë': 'e',
+  'ê': 'e',
+  'í': 'i',
+  'ì': 'i',
+  'ï': 'i',
+  'î': 'i',
+  'ó': 'o',
+  'ò': 'o',
+  'ö': 'o',
+  'ô': 'o',
+  'õ': 'o',
+  'ú': 'u',
+  'ù': 'u',
+  'ü': 'u',
+  'û': 'u',
+  'ñ': 'n',
+  'ç': 'c',
+  'ý': 'y',
 };
 
 /// Pasa a minúsculas y quita acentos, para búsquedas insensibles a tildes.
@@ -158,7 +178,8 @@ const _equivalencias = <String, String>{
 String normalizar(String? texto) {
   if (texto == null || texto.isEmpty) return '';
   final buffer = StringBuffer();
-  for (final caracter in texto.toLowerCase().replaceAll(_diacriticos, '').split('')) {
+  for (final caracter
+      in texto.toLowerCase().replaceAll(_diacriticos, '').split('')) {
     buffer.write(_equivalencias[caracter] ?? caracter);
   }
   return buffer.toString().trim();

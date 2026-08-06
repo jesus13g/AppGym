@@ -175,24 +175,30 @@ class UltimaSerie {
 }
 
 @DriftDatabase(
-  tables: [Rutinas, Entrenamientos, CatalogoEjercicios, Ejercicios, SeriesTabla],
+  tables: [
+    Rutinas,
+    Entrenamientos,
+    CatalogoEjercicios,
+    Ejercicios,
+    SeriesTabla,
+  ],
 )
 class AppBD extends _$AppBD {
   AppBD([QueryExecutor? executor])
-      : super(executor ?? driftDatabase(name: 'appgym'));
+    : super(executor ?? driftDatabase(name: 'appgym'));
 
   @override
   int get schemaVersion => 1;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-        onCreate: (m) => m.createAll(),
-        beforeOpen: (details) async {
-          // Sin esto SQLite ignora las claves foráneas y los ON DELETE CASCADE
-          // no llegan a ejecutarse.
-          await customStatement('PRAGMA foreign_keys = ON');
-        },
-      );
+    onCreate: (m) => m.createAll(),
+    beforeOpen: (details) async {
+      // Sin esto SQLite ignora las claves foráneas y los ON DELETE CASCADE
+      // no llegan a ejecutarse.
+      await customStatement('PRAGMA foreign_keys = ON');
+    },
+  );
 
   // ── Rutinas ────────────────────────────────────────────────────────────────
 
@@ -201,10 +207,11 @@ class AppBD extends _$AppBD {
   /// Devuelve el id de la rutina creada, o `null` si ya existía una con ese
   /// nombre.
   Future<int?> insertarRutina(String nombre) async {
-    final existente = await (select(rutinas)
-          ..where((r) => r.nombre.equals(nombre))
-          ..limit(1))
-        .getSingleOrNull();
+    final existente =
+        await (select(rutinas)
+              ..where((r) => r.nombre.equals(nombre))
+              ..limit(1))
+            .getSingleOrNull();
     if (existente != null) return null;
 
     final usadas = await rutinas.count().getSingle();
@@ -222,10 +229,13 @@ class AppBD extends _$AppBD {
 
   /// Renombra una rutina. Devuelve `false` si el nombre ya lo usa otra.
   Future<bool> renombrarRutina(int idRutina, String nombre) async {
-    final choca = await (select(rutinas)
-          ..where((r) => r.nombre.equals(nombre) & r.id.equals(idRutina).not())
-          ..limit(1))
-        .getSingleOrNull();
+    final choca =
+        await (select(rutinas)
+              ..where(
+                (r) => r.nombre.equals(nombre) & r.id.equals(idRutina).not(),
+              )
+              ..limit(1))
+            .getSingleOrNull();
     if (choca != null) return false;
 
     final filas = await (update(rutinas)..where((r) => r.id.equals(idRutina)))
@@ -320,21 +330,21 @@ class AppBD extends _$AppBD {
   }
 
   /// Quita un ejercicio de una rutina, con sus series (por el cascade).
-  Future<void> borrarEjercicio(int idRutina, int idEjercicio) =>
-      (delete(ejercicios)
-            ..where((e) => e.idRutina.equals(idRutina) & e.id.equals(idEjercicio)))
-          .go();
+  Future<void> borrarEjercicio(int idRutina, int idEjercicio) => (delete(
+    ejercicios,
+  )..where((e) => e.idRutina.equals(idRutina) & e.id.equals(idEjercicio))).go();
 
   /// Un ejercicio con su ficha de catálogo resuelta.
   Future<EjercicioConFicha?> ejercicio(int idEjercicio) async {
-    final filas = await (select(ejercicios)
-          ..where((e) => e.id.equals(idEjercicio)))
-        .join([
-      leftOuterJoin(
-        catalogoEjercicios,
-        catalogoEjercicios.id.equalsExp(ejercicios.idCatalogo),
-      ),
-    ]).get();
+    final filas =
+        await (select(
+          ejercicios,
+        )..where((e) => e.id.equals(idEjercicio))).join([
+          leftOuterJoin(
+            catalogoEjercicios,
+            catalogoEjercicios.id.equalsExp(ejercicios.idCatalogo),
+          ),
+        ]).get();
     if (filas.isEmpty) return null;
     return EjercicioConFicha(
       filas.first.readTable(ejercicios),
@@ -376,12 +386,12 @@ class AppBD extends _$AppBD {
   Future<Set<String>> idsCatalogoEnRutina(int idRutina) async {
     final consulta = selectOnly(ejercicios)
       ..addColumns([ejercicios.idCatalogo])
-      ..where(ejercicios.idRutina.equals(idRutina) &
-          ejercicios.idCatalogo.isNotNull());
+      ..where(
+        ejercicios.idRutina.equals(idRutina) &
+            ejercicios.idCatalogo.isNotNull(),
+      );
     final filas = await consulta.get();
-    return {
-      for (final f in filas) ?f.read(ejercicios.idCatalogo),
-    };
+    return {for (final f in filas) ?f.read(ejercicios.idCatalogo)};
   }
 
   // ── Catálogo ───────────────────────────────────────────────────────────────
@@ -419,9 +429,9 @@ class AppBD extends _$AppBD {
     return consulta.get();
   }
 
-  Future<FichaCatalogo?> ficha(String idCatalogo) =>
-      (select(catalogoEjercicios)..where((c) => c.id.equals(idCatalogo)))
-          .getSingleOrNull();
+  Future<FichaCatalogo?> ficha(String idCatalogo) => (select(
+    catalogoEjercicios,
+  )..where((c) => c.id.equals(idCatalogo))).getSingleOrNull();
 
   /// Lista ordenada de equipamientos presentes en el catálogo.
   Future<List<String>> equipamientosDisponibles() async {
@@ -483,15 +493,18 @@ class AppBD extends _$AppBD {
     int idRutina,
     int idEjercicio,
   ) async {
-    final consulta = select(seriesTabla).join([
-      innerJoin(
-        entrenamientos,
-        entrenamientos.id.equalsExp(seriesTabla.idEntrenamiento),
-      ),
-    ])
-      ..where(entrenamientos.idRutina.equals(idRutina) &
-          seriesTabla.idEjercicio.equals(idEjercicio))
-      ..orderBy([OrderingTerm(expression: entrenamientos.fecha)]);
+    final consulta =
+        select(seriesTabla).join([
+            innerJoin(
+              entrenamientos,
+              entrenamientos.id.equalsExp(seriesTabla.idEntrenamiento),
+            ),
+          ])
+          ..where(
+            entrenamientos.idRutina.equals(idRutina) &
+                seriesTabla.idEjercicio.equals(idEjercicio),
+          )
+          ..orderBy([OrderingTerm(expression: entrenamientos.fecha)]);
 
     return [
       for (final f in await consulta.get())
@@ -506,18 +519,22 @@ class AppBD extends _$AppBD {
 
   /// Valores del último registro de un ejercicio, o `null` si nunca se entrenó.
   Future<UltimaSerie?> ultimaSerieEjercicio(int idEjercicio) async {
-    final consulta = select(seriesTabla).join([
-      innerJoin(
-        entrenamientos,
-        entrenamientos.id.equalsExp(seriesTabla.idEntrenamiento),
-      ),
-    ])
-      ..where(seriesTabla.idEjercicio.equals(idEjercicio))
-      ..orderBy([
-        OrderingTerm(expression: entrenamientos.fecha, mode: OrderingMode.desc),
-        OrderingTerm(expression: seriesTabla.id, mode: OrderingMode.desc),
-      ])
-      ..limit(1);
+    final consulta =
+        select(seriesTabla).join([
+            innerJoin(
+              entrenamientos,
+              entrenamientos.id.equalsExp(seriesTabla.idEntrenamiento),
+            ),
+          ])
+          ..where(seriesTabla.idEjercicio.equals(idEjercicio))
+          ..orderBy([
+            OrderingTerm(
+              expression: entrenamientos.fecha,
+              mode: OrderingMode.desc,
+            ),
+            OrderingTerm(expression: seriesTabla.id, mode: OrderingMode.desc),
+          ])
+          ..limit(1);
 
     final fila = await consulta.getSingleOrNull();
     if (fila == null) return null;
@@ -551,9 +568,9 @@ class AppBD extends _$AppBD {
   /// Si un día tiene varios, se queda el más reciente, que es el que colorea la
   /// celda del calendario.
   Future<Map<DateTime, int>> entrenamientosPorDia() async {
-    final filas = await (select(entrenamientos)
-          ..orderBy([(e) => OrderingTerm(expression: e.fecha)]))
-        .get();
+    final filas = await (select(
+      entrenamientos,
+    )..orderBy([(e) => OrderingTerm(expression: e.fecha)])).get();
     return {
       for (final e in filas)
         DateTime(e.fecha.year, e.fecha.month, e.fecha.day): e.idRutina,

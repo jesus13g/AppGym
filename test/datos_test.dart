@@ -96,49 +96,70 @@ void main() {
   });
 
   group('ejercicios de una rutina', () {
-    test('el mismo ejercicio del catálogo puede estar en dos rutinas', () async {
-      await sembrarCatalogo(bd, datos: _catalogoFalso);
-      final a = (await bd.insertarRutina('Empuje'))!;
-      final b = (await bd.insertarRutina('Full body'))!;
+    test(
+      'el mismo ejercicio del catálogo puede estar en dos rutinas',
+      () async {
+        await sembrarCatalogo(bd, datos: _catalogoFalso);
+        final a = (await bd.insertarRutina('Empuje'))!;
+        final b = (await bd.insertarRutina('Full body'))!;
 
-      expect(
-        await bd.insertarEjercicio(a, 'barbell bench press', idCatalogo: '0001'),
-        isTrue,
-      );
-      // La regresión que importa: el duplicado se mira dentro de la rutina.
-      expect(
-        await bd.insertarEjercicio(b, 'barbell bench press', idCatalogo: '0001'),
-        isTrue,
-      );
-      // Pero repetirlo en la misma rutina sí se rechaza.
-      expect(
-        await bd.insertarEjercicio(a, 'barbell bench press', idCatalogo: '0001'),
-        isFalse,
-      );
-    });
+        expect(
+          await bd.insertarEjercicio(
+            a,
+            'barbell bench press',
+            idCatalogo: '0001',
+          ),
+          isTrue,
+        );
+        // La regresión que importa: el duplicado se mira dentro de la rutina.
+        expect(
+          await bd.insertarEjercicio(
+            b,
+            'barbell bench press',
+            idCatalogo: '0001',
+          ),
+          isTrue,
+        );
+        // Pero repetirlo en la misma rutina sí se rechaza.
+        expect(
+          await bd.insertarEjercicio(
+            a,
+            'barbell bench press',
+            idCatalogo: '0001',
+          ),
+          isFalse,
+        );
+      },
+    );
 
-    test('los personalizados se deduplican por nombre dentro de la rutina', () async {
-      final a = (await bd.insertarRutina('Empuje'))!;
-      final b = (await bd.insertarRutina('Tirón'))!;
+    test(
+      'los personalizados se deduplican por nombre dentro de la rutina',
+      () async {
+        final a = (await bd.insertarRutina('Empuje'))!;
+        final b = (await bd.insertarRutina('Tirón'))!;
 
-      expect(await bd.insertarEjercicio(a, 'Press militar'), isTrue);
-      expect(await bd.insertarEjercicio(a, 'Press militar'), isFalse);
-      expect(await bd.insertarEjercicio(b, 'Press militar'), isTrue);
-    });
+        expect(await bd.insertarEjercicio(a, 'Press militar'), isTrue);
+        expect(await bd.insertarEjercicio(a, 'Press militar'), isFalse);
+        expect(await bd.insertarEjercicio(b, 'Press militar'), isTrue);
+      },
+    );
 
-    test('trae la ficha de catálogo resuelta, y null si es personalizado', () async {
-      await sembrarCatalogo(bd, datos: _catalogoFalso);
-      final id = (await bd.insertarRutina('Mixta'))!;
-      await bd.insertarEjercicio(id, 'dumbbell curl', idCatalogo: '0002');
-      await bd.insertarEjercicio(id, 'Plancha', descripcion: 'Un minuto');
+    test(
+      'trae la ficha de catálogo resuelta, y null si es personalizado',
+      () async {
+        await sembrarCatalogo(bd, datos: _catalogoFalso);
+        final id = (await bd.insertarRutina('Mixta'))!;
+        await bd.insertarEjercicio(id, 'dumbbell curl', idCatalogo: '0002');
+        await bd.insertarEjercicio(id, 'Plancha', descripcion: 'Un minuto');
 
-      final lista = await bd.ejerciciosDeRutina(id);
-      expect(lista.length, 2);
-      expect(lista[0].ficha!.target, 'biceps');
-      expect(subtituloEjercicio(lista[0]), 'Bíceps · Mancuerna');
-      expect(lista[1].ficha, isNull);
-      expect(subtituloEjercicio(lista[1]), 'Un minuto');
-    });
+        final lista = await bd.ejerciciosDeRutina(id);
+        expect(lista.length, 2);
+        expect(lista[0].ficha!.target, 'biceps');
+        expect(subtituloEjercicio(lista[0]), 'Bíceps · Mancuerna');
+        expect(lista[1].ficha, isNull);
+        expect(subtituloEjercicio(lista[1]), 'Un minuto');
+      },
+    );
 
     test('idsCatalogoEnRutina ignora los personalizados', () async {
       await sembrarCatalogo(bd, datos: _catalogoFalso);
@@ -177,10 +198,7 @@ void main() {
     });
 
     test('los filtros se combinan con AND', () async {
-      expect(
-        (await bd.buscarCatalogo(bodyPart: 'chest')).single.id,
-        '0001',
-      );
+      expect((await bd.buscarCatalogo(bodyPart: 'chest')).single.id, '0001');
       expect(
         await bd.buscarCatalogo(bodyPart: 'chest', equipment: 'dumbbell'),
         isEmpty,
@@ -223,24 +241,34 @@ void main() {
     });
 
     test('un entrenamiento sin series no se guarda', () async {
-      expect(await bd.insertarEntrenamiento(idRutina, DateTime.now(), {}), isFalse);
+      expect(
+        await bd.insertarEntrenamiento(idRutina, DateTime.now(), {}),
+        isFalse,
+      );
       expect(await bd.contarEntrenamientosRutina(idRutina), 0);
     });
 
-    test('ultimaSerieEjercicio devuelve la del entrenamiento más reciente', () async {
-      expect(await bd.ultimaSerieEjercicio(idEjercicio), isNull);
+    test(
+      'ultimaSerieEjercicio devuelve la del entrenamiento más reciente',
+      () async {
+        expect(await bd.ultimaSerieEjercicio(idEjercicio), isNull);
 
-      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
-        idEjercicio: const UltimaSerie(series: 3, repeticiones: 10, peso: 50),
-      });
-      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 10), {
-        idEjercicio: const UltimaSerie(series: 4, repeticiones: 8, peso: 62.5),
-      });
+        await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+          idEjercicio: const UltimaSerie(series: 3, repeticiones: 10, peso: 50),
+        });
+        await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 10), {
+          idEjercicio: const UltimaSerie(
+            series: 4,
+            repeticiones: 8,
+            peso: 62.5,
+          ),
+        });
 
-      final ultima = await bd.ultimaSerieEjercicio(idEjercicio);
-      expect(ultima!.peso, 62.5);
-      expect(ultima.series, 4);
-    });
+        final ultima = await bd.ultimaSerieEjercicio(idEjercicio);
+        expect(ultima!.peso, 62.5);
+        expect(ultima.series, 4);
+      },
+    );
 
     test('resumenRutinas agrega conteo y última fecha de una vez', () async {
       final otra = (await bd.insertarRutina('Pierna'))!;
@@ -258,20 +286,27 @@ void main() {
       expect(resumen[1].ultimaFecha, isNull);
     });
 
-    test('entrenamientosPorDia se queda con el más reciente de cada día', () async {
-      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 5, 9), {
-        idEjercicio: const UltimaSerie(series: 1, repeticiones: 1, peso: 10),
-      });
-      final otra = (await bd.insertarRutina('Pierna'))!;
-      await bd.insertarEjercicio(otra, 'Sentadilla');
-      final otroEjercicio = (await bd.ejerciciosDeRutina(otra)).single.id;
-      await bd.insertarEntrenamiento(otra, DateTime(2026, 3, 5, 19), {
-        otroEjercicio: const UltimaSerie(series: 1, repeticiones: 1, peso: 10),
-      });
+    test(
+      'entrenamientosPorDia se queda con el más reciente de cada día',
+      () async {
+        await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 5, 9), {
+          idEjercicio: const UltimaSerie(series: 1, repeticiones: 1, peso: 10),
+        });
+        final otra = (await bd.insertarRutina('Pierna'))!;
+        await bd.insertarEjercicio(otra, 'Sentadilla');
+        final otroEjercicio = (await bd.ejerciciosDeRutina(otra)).single.id;
+        await bd.insertarEntrenamiento(otra, DateTime(2026, 3, 5, 19), {
+          otroEjercicio: const UltimaSerie(
+            series: 1,
+            repeticiones: 1,
+            peso: 10,
+          ),
+        });
 
-      final porDia = await bd.entrenamientosPorDia();
-      expect(porDia[DateTime(2026, 3, 5)], otra);
-    });
+        final porDia = await bd.entrenamientosPorDia();
+        expect(porDia[DateTime(2026, 3, 5)], otra);
+      },
+    );
 
     test('borrar un ejercicio se lleva sus series', () async {
       await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 5), {

@@ -10,8 +10,18 @@ import 'i18n.dart';
 import 'media.dart' as media;
 
 const meses = <String>[
-  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+  'Enero',
+  'Febrero',
+  'Marzo',
+  'Abril',
+  'Mayo',
+  'Junio',
+  'Julio',
+  'Agosto',
+  'Septiembre',
+  'Octubre',
+  'Noviembre',
+  'Diciembre',
 ];
 
 const diasSemana = <String>['L', 'M', 'X', 'J', 'V', 'S', 'D'];
@@ -35,9 +45,11 @@ String fechaLarga(DateTime? valor) {
 String hace(DateTime? valor) {
   if (valor == null) return 'Sin entrenar';
   final hoy = DateTime.now();
-  final dias = DateTime(hoy.year, hoy.month, hoy.day)
-      .difference(DateTime(valor.year, valor.month, valor.day))
-      .inDays;
+  final dias = DateTime(
+    hoy.year,
+    hoy.month,
+    hoy.day,
+  ).difference(DateTime(valor.year, valor.month, valor.day)).inDays;
 
   if (dias <= 0) return 'Hoy';
   if (dias == 1) return 'Ayer';
@@ -76,9 +88,10 @@ List<String> listaJson(String? valor) {
 /// 'Pectorales · Mancuerna' para una ficha del catálogo.
 String subtituloCatalogo(FichaCatalogo? ficha) {
   if (ficha == null) return '';
-  return [musculo(ficha.target), equipamiento(ficha.equipment)]
-      .where((p) => p.isNotEmpty)
-      .join(' · ');
+  return [
+    musculo(ficha.target),
+    equipamiento(ficha.equipment),
+  ].where((p) => p.isNotEmpty).join(' · ');
 }
 
 /// Subtítulo de un ejercicio de rutina: el del catálogo, o su descripción.

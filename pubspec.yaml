@@ -10,6 +10,11 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # Traduce los textos que pone el propio framework (menú de selección de texto,
+  # gesto de volver, formatos de fecha…).
+  flutter_localizations:
+    sdk: flutter
+
   cupertino_icons: ^1.0.8
 
   # Base de datos: drift arrastra sqlite3, las librerías nativas y path_provider,

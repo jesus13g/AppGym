@@ -31,17 +31,17 @@ class EjercicioJson {
   });
 
   factory EjercicioJson.desdeMapa(Map<String, dynamic> m) => EjercicioJson(
-        id: m['id'] as String,
-        nombre: m['nombre'] as String? ?? '',
-        bodyPart: m['body_part'] as String? ?? '',
-        equipment: m['equipment'] as String? ?? '',
-        target: m['target'] as String? ?? '',
-        muscleGroup: m['muscle_group'] as String? ?? '',
-        secondaryMuscles: _listaTexto(m['secondary_muscles']),
-        pasos: _listaTexto(m['pasos']),
-        image: m['image'] as String? ?? '',
-        gif: m['gif'] as String? ?? '',
-      );
+    id: m['id'] as String,
+    nombre: m['nombre'] as String? ?? '',
+    bodyPart: m['body_part'] as String? ?? '',
+    equipment: m['equipment'] as String? ?? '',
+    target: m['target'] as String? ?? '',
+    muscleGroup: m['muscle_group'] as String? ?? '',
+    secondaryMuscles: _listaTexto(m['secondary_muscles']),
+    pasos: _listaTexto(m['pasos']),
+    image: m['image'] as String? ?? '',
+    gif: m['gif'] as String? ?? '',
+  );
 
   final String id;
   final String nombre;
@@ -55,9 +55,9 @@ class EjercicioJson {
   final String gif;
 
   static List<String> _listaTexto(Object? valor) => switch (valor) {
-        final List<dynamic> l => [for (final v in l) '$v'],
-        _ => const [],
-      };
+    final List<dynamic> l => [for (final v in l) '$v'],
+    _ => const [],
+  };
 
   /// Índice de búsqueda: nombre en inglés más todas las traducciones.
   ///
@@ -81,18 +81,18 @@ class EjercicioJson {
   }
 
   CatalogoEjerciciosCompanion get fila => CatalogoEjerciciosCompanion.insert(
-        id: id,
-        nombre: nombre,
-        bodyPart: bodyPart,
-        equipment: equipment,
-        target: target,
-        muscleGroup: muscleGroup,
-        secondaryMuscles: jsonEncode(secondaryMuscles),
-        instrucciones: jsonEncode(pasos),
-        image: image,
-        gif: gif,
-        busqueda: textoBusqueda,
-      );
+    id: id,
+    nombre: nombre,
+    bodyPart: bodyPart,
+    equipment: equipment,
+    target: target,
+    muscleGroup: muscleGroup,
+    secondaryMuscles: jsonEncode(secondaryMuscles),
+    instrucciones: jsonEncode(pasos),
+    image: image,
+    gif: gif,
+    busqueda: textoBusqueda,
+  );
 }
 
 /// Parsea el JSON del catálogo. Pesa 1 MB, así que se llama desde un isolate.
