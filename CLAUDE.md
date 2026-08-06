@@ -12,7 +12,7 @@ flutter pub get
 dart run build_runner build     # genera bd.g.dart; obligatorio tras clonar
 flutter run                     # app en un dispositivo o emulador
 flutter analyze                 # objetivo permanente: 0 issues
-flutter test                    # 26 tests
+flutter test                    # 27 tests: datos_test.dart y pantallas_test.dart
 dart format lib test
 flutter build apk --release     # APK local (necesita SDK de Android y Java 17)
 ```
@@ -156,3 +156,8 @@ así, sustituyendo a `LinearProgressIndicator`), compónlo en `ui.dart`.
 `pubspec.yaml` es la única fuente de dependencias. El permiso de **INTERNET va en
 `android/app/src/main/AndroidManifest.xml`**: Flutter solo lo declara en los manifiestos de debug y
 profile, así que sin esa línea el APK de release no puede descargar la media.
+
+CI construye un APK **universal**, que pesa unos 55 MB porque lleva dentro las librerías nativas de
+las tres arquitecturas. Se eligió así para que sea un único fichero que instalar a mano desde el
+móvil. Con `--split-per-abi`, o compilando solo `arm64-v8a`, baja a unos 20 MB a cambio de dejar
+fuera los móviles de 32 bits.
