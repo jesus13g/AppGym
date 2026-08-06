@@ -2,5 +2,12 @@
 env/
 build/
 
+# Caché de Python
+__pycache__/
+*.py[cod]
+
 # Archivo de la base de datos
 *.db
+
+# Imágenes y GIFs de los ejercicios (© Gym visual, se descargan en el primer arranque)
+media/
