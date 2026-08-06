@@ -196,6 +196,57 @@ class ResumenSesionEjercicio {
   final double mejor1RM;
 }
 
+/// Una sesión en la lista del historial, con sus cifras ya calculadas.
+class ResumenSesion {
+  const ResumenSesion({
+    required this.id,
+    required this.fecha,
+    required this.nEjercicios,
+    required this.nSeries,
+    required this.volumen,
+  });
+
+  final int id;
+  final DateTime fecha;
+  final int nEjercicios;
+  final int nSeries;
+
+  /// Sin contar el calentamiento.
+  final double volumen;
+}
+
+/// Un ejercicio dentro de una sesión, con las series que se le hicieron.
+class EjercicioDeSesion {
+  const EjercicioDeSesion(this.ejercicio, this.series);
+
+  final EjercicioConFicha ejercicio;
+  final List<ValoresSerie> series;
+
+  double get volumen => series
+      .where((s) => !s.calentamiento)
+      .fold(0, (suma, s) => suma + s.peso * s.repeticiones);
+}
+
+/// Una sesión con todo lo necesario para pintarla o para reeditarla.
+class SesionCompleta {
+  const SesionCompleta({required this.entrenamiento, required this.ejercicios});
+
+  final Entrenamiento entrenamiento;
+  final List<EjercicioDeSesion> ejercicios;
+
+  int get id => entrenamiento.id;
+  int get idRutina => entrenamiento.idRutina;
+  DateTime get fecha => entrenamiento.fecha;
+
+  double get volumen => ejercicios.fold(0, (suma, e) => suma + e.volumen);
+
+  /// Las series por id de ejercicio, tal y como las espera
+  /// [AppBD.actualizarEntrenamiento].
+  Map<int, List<ValoresSerie>> get series => {
+    for (final e in ejercicios) e.ejercicio.id: e.series,
+  };
+}
+
 /// Un ejercicio de rutina con su ficha de catálogo ya resuelta.
 ///
 /// Equivale al `joinedload(Ejercicio.catalogo)` de SQLAlchemy: evita que la
@@ -607,6 +658,40 @@ class AppBD extends _$AppBD {
       if (entrada.value.isNotEmpty) entrada.key: entrada.value,
   };
 
+  /// Reemplaza en bloque la fecha y las series de una sesión ya guardada.
+  ///
+  /// Borra las series y las reinserta en vez de calcular la diferencia: para
+  /// este tamaño de datos el *diff* no aporta nada y sí complica el código.
+  /// Devuelve `false` si la sesión no existe o si se queda sin ninguna serie,
+  /// en cuyo caso no se toca nada.
+  Future<bool> actualizarEntrenamiento(
+    int idEntrenamiento,
+    DateTime fecha,
+    Map<int, List<ValoresSerie>> series,
+  ) async {
+    final conSeries = _soloConSeries(series);
+    if (conSeries.isEmpty) return false;
+
+    final existe = await (select(
+      entrenamientos,
+    )..where((e) => e.id.equals(idEntrenamiento))).getSingleOrNull();
+    if (existe == null) return false;
+
+    await transaction(() async {
+      await (update(entrenamientos)..where((e) => e.id.equals(idEntrenamiento)))
+          .write(EntrenamientosCompanion(fecha: Value(fecha)));
+      await (delete(
+        seriesTabla,
+      )..where((s) => s.idEntrenamiento.equals(idEntrenamiento))).go();
+      await _insertarSeries(idEntrenamiento, conSeries);
+    });
+    return true;
+  }
+
+  /// Borra una sesión con sus series (por el cascade).
+  Future<void> borrarEntrenamiento(int idEntrenamiento) =>
+      (delete(entrenamientos)..where((e) => e.id.equals(idEntrenamiento))).go();
+
   Future<void> _insertarSeries(
     int idEntrenamiento,
     Map<int, List<ValoresSerie>> series,
@@ -752,6 +837,109 @@ class AppBD extends _$AppBD {
           calentamiento: s.calentamiento,
         ),
     ];
+  }
+
+  /// Sesiones de una rutina, de la más reciente a la más antigua.
+  ///
+  /// Trae las tres cifras que pinta la lista —ejercicios, series y volumen— ya
+  /// agregadas, para no consultar una vez por fila. Las sesiones sin ninguna
+  /// serie (que no deberían existir, pero podrían) también aparecen: si no, no
+  /// habría forma de borrarlas desde la app.
+  Future<List<ResumenSesion>> historialRutina(
+    int idRutina, {
+    int limite = 50,
+    int desplazamiento = 0,
+  }) async {
+    final filas = await customSelect(
+      '''
+      SELECT e.id                          AS id,
+             e.fecha                       AS fecha,
+             COUNT(DISTINCT s.id_ejercicio) AS n_ejercicios,
+             COUNT(s.id)                   AS n_series,
+             COALESCE(SUM(
+               CASE WHEN s.calentamiento = 0 THEN s.peso * s.repeticiones ELSE 0 END
+             ), 0)                         AS volumen
+      FROM entrenamientos e
+      LEFT JOIN serie s ON s.id_entrenamiento = e.id
+      WHERE e.id_rutina = ?
+      GROUP BY e.id
+      ORDER BY e.fecha DESC, e.id DESC
+      LIMIT ? OFFSET ?
+      ''',
+      variables: [
+        Variable.withInt(idRutina),
+        Variable.withInt(limite),
+        Variable.withInt(desplazamiento),
+      ],
+      readsFrom: {entrenamientos, seriesTabla},
+    ).get();
+
+    return [
+      for (final f in filas)
+        ResumenSesion(
+          id: f.read<int>('id'),
+          fecha: f.read<DateTime>('fecha'),
+          nEjercicios: f.read<int>('n_ejercicios'),
+          nSeries: f.read<int>('n_series'),
+          volumen: f.read<double>('volumen'),
+        ),
+    ];
+  }
+
+  /// Una sesión con sus ejercicios y series, o `null` si ya no existe.
+  ///
+  /// Es lo que pinta el detalle y lo que precarga la edición, así que resuelve
+  /// también la ficha de catálogo de cada ejercicio.
+  Future<SesionCompleta?> sesion(int idEntrenamiento) async {
+    final entrenamiento = await (select(
+      entrenamientos,
+    )..where((e) => e.id.equals(idEntrenamiento))).getSingleOrNull();
+    if (entrenamiento == null) return null;
+
+    final filas =
+        await (select(
+          seriesTabla,
+        )..where((s) => s.idEntrenamiento.equals(idEntrenamiento))).join([
+          innerJoin(
+            ejercicios,
+            ejercicios.id.equalsExp(seriesTabla.idEjercicio),
+          ),
+          leftOuterJoin(
+            catalogoEjercicios,
+            catalogoEjercicios.id.equalsExp(ejercicios.idCatalogo),
+          ),
+        ]).get();
+
+    // Se agrupa en memoria manteniendo el orden de la rutina y, dentro de cada
+    // ejercicio, el de las series.
+    final porEjercicio = <int, List<Serie>>{};
+    final fichas = <int, EjercicioConFicha>{};
+    for (final f in filas) {
+      final ejercicio = f.readTable(ejercicios);
+      fichas[ejercicio.id] = EjercicioConFicha(
+        ejercicio,
+        f.readTableOrNull(catalogoEjercicios),
+      );
+      (porEjercicio[ejercicio.id] ??= []).add(f.readTable(seriesTabla));
+    }
+
+    final ordenados = fichas.keys.toList()..sort();
+    return SesionCompleta(
+      entrenamiento: entrenamiento,
+      ejercicios: [
+        for (final id in ordenados)
+          EjercicioDeSesion(fichas[id]!, [
+            for (final s
+                in porEjercicio[id]!
+                  ..sort((a, b) => a.nSerie.compareTo(b.nSerie)))
+              ValoresSerie(
+                repeticiones: s.repeticiones,
+                peso: s.peso,
+                calentamiento: s.calentamiento,
+              ),
+          ]),
+      ],
+    );
   }
 
   /// Fecha del último entrenamiento de una rutina.

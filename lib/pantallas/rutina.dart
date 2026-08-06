@@ -13,6 +13,7 @@ import '../tema/ui.dart' as ui;
 import 'catalogo.dart';
 import 'entrenar.dart';
 import 'ficha.dart';
+import 'historial.dart';
 
 Future<void> abrirRutina(BuildContext context, int idRutina) =>
     Navigator.of(context).push(
@@ -107,6 +108,7 @@ class PantallaRutina extends ConsumerWidget {
             child: _Estadisticas(
               datos: estadisticas.value,
               nEjercicios: lista.length,
+              onSesiones: () => abrirHistorial(context, idRutina),
             ),
           ),
           SliverToBoxAdapter(
@@ -196,10 +198,17 @@ class PantallaRutina extends ConsumerWidget {
 }
 
 class _Estadisticas extends StatelessWidget {
-  const _Estadisticas({required this.datos, required this.nEjercicios});
+  const _Estadisticas({
+    required this.datos,
+    required this.nEjercicios,
+    required this.onSesiones,
+  });
 
   final EstadisticasRutina? datos;
   final int nEjercicios;
+
+  /// «Sesiones» lleva al historial, que es desde donde se corrigen y borran.
+  final VoidCallback onSesiones;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -213,7 +222,11 @@ class _Estadisticas extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
         _Dato('$nEjercicios', 'Ejercicios'),
-        _Dato('${datos?.nEntrenamientos ?? 0}', 'Sesiones'),
+        _Dato(
+          '${datos?.nEntrenamientos ?? 0}',
+          'Sesiones',
+          onTap: (datos?.nEntrenamientos ?? 0) == 0 ? null : onSesiones,
+        ),
         _Dato(formato.hace(datos?.ultima), 'Última'),
       ],
     ),
@@ -221,26 +234,42 @@ class _Estadisticas extends StatelessWidget {
 }
 
 class _Dato extends StatelessWidget {
-  const _Dato(this.valor, this.etiqueta);
+  const _Dato(this.valor, this.etiqueta, {this.onTap});
 
   final String valor;
   final String etiqueta;
+  final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) => Column(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Text(
-        valor,
-        textAlign: TextAlign.center,
-        style: ui.estilo(context, size: t.title3, weight: t.semibold),
-      ),
-      const SizedBox(height: 2),
-      Text(
-        etiqueta,
-        textAlign: TextAlign.center,
-        style: ui.estilo(context, size: t.caption, color: context.textoSec),
-      ),
-    ],
-  );
+  Widget build(BuildContext context) {
+    final columna = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          valor,
+          textAlign: TextAlign.center,
+          style: ui.estilo(
+            context,
+            size: t.title3,
+            weight: t.semibold,
+            color: onTap == null ? null : context.acento,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          etiqueta,
+          textAlign: TextAlign.center,
+          style: ui.estilo(context, size: t.caption, color: context.textoSec),
+        ),
+      ],
+    );
+
+    if (onTap == null) return columna;
+    return CupertinoButton(
+      onPressed: onTap,
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      child: columna,
+    );
+  }
 }

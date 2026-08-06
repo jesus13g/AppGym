@@ -28,10 +28,30 @@ Future<void> abrirEntrenar(BuildContext context, int idRutina) =>
       ),
     );
 
+/// Reabre una sesión ya guardada para corregirla.
+Future<void> abrirEditarEntrenamiento(
+  BuildContext context,
+  int idRutina,
+  int idEntrenamiento,
+) => Navigator.of(context, rootNavigator: true).push(
+  CupertinoPageRoute<void>(
+    fullscreenDialog: true,
+    builder: (_) =>
+        PantallaEntrenar(idRutina: idRutina, idEntrenamiento: idEntrenamiento),
+  ),
+);
+
 class PantallaEntrenar extends ConsumerStatefulWidget {
-  const PantallaEntrenar({super.key, required this.idRutina});
+  const PantallaEntrenar({
+    super.key,
+    required this.idRutina,
+    this.idEntrenamiento,
+  });
 
   final int idRutina;
+
+  /// Si viene informado se edita esa sesión en vez de crear una nueva.
+  final int? idEntrenamiento;
 
   @override
   ConsumerState<PantallaEntrenar> createState() => _PantallaEntrenarState();
@@ -46,6 +66,11 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
 
   List<EjercicioConFicha>? _ejercicios;
   bool _guardando = false;
+  DateTime _fecha = DateTime.now();
+
+  bool get _editando => widget.idEntrenamiento != null;
+
+  String get _titulo => _editando ? 'Editar entrenamiento' : 'Entrenamiento';
 
   @override
   void initState() {
@@ -57,14 +82,25 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
     final bd = ref.read(bdProvider);
     final ejercicios = await bd.ejerciciosDeRutina(widget.idRutina);
 
+    // Al editar se parte de lo que se guardó aquel día; los ejercicios de la
+    // rutina que no se hicieron aparecen vacíos, por si faltó anotar alguno.
+    final sesion = _editando ? await bd.sesion(widget.idEntrenamiento!) : null;
+    final guardadas = sesion?.series ?? const {};
+    if (sesion != null) _fecha = sesion.fecha;
+
     for (final ejercicio in ejercicios) {
       // Se precargan las series de la última sesión —cuántas fueron incluido—,
       // que casi siempre es lo que se repite.
       final ultimas = await bd.ultimasSeriesEjercicio(ejercicio.id);
       _ultimas[ejercicio.id] = ultimas;
-      _series[ejercicio.id] = ultimas.isEmpty
-          ? List.filled(_seriesPorDefecto, _serieNueva)
-          : List.of(ultimas);
+      _series[ejercicio.id] = switch (guardadas[ejercicio.id]) {
+        final serie? => List.of(serie),
+        _ when _editando => const [],
+        _ =>
+          ultimas.isEmpty
+              ? List.filled(_seriesPorDefecto, _serieNueva)
+              : List.of(ultimas),
+      };
     }
 
     if (mounted) setState(() => _ejercicios = ejercicios);
@@ -74,9 +110,14 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
     if (_guardando) return;
 
     setState(() => _guardando = true);
-    final bien = await ref
-        .read(bdProvider)
-        .insertarEntrenamiento(widget.idRutina, DateTime.now(), _series);
+    final bd = ref.read(bdProvider);
+    final bien = _editando
+        ? await bd.actualizarEntrenamiento(
+            widget.idEntrenamiento!,
+            _fecha,
+            _series,
+          )
+        : await bd.insertarEntrenamiento(widget.idRutina, _fecha, _series);
     if (!mounted) return;
 
     if (!bien) {
@@ -98,7 +139,7 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
         backgroundColor: context.fondo,
         navigationBar: ui.barra(
           context,
-          titulo: 'Entrenamiento',
+          titulo: _titulo,
           izquierda: _botonCancelar(context),
         ),
         child: const ui.EstadoVacio(
@@ -112,7 +153,7 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
       backgroundColor: context.fondo,
       navigationBar: ui.barra(
         context,
-        titulo: 'Entrenamiento',
+        titulo: _titulo,
         izquierda: _botonCancelar(context),
         derecha: CupertinoButton(
           padding: EdgeInsets.zero,
@@ -153,7 +194,7 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          formato.fechaLarga(DateTime.now()),
+                          formato.fechaLarga(_fecha),
                           style: ui.estilo(
                             context,
                             size: t.subhead,

@@ -367,6 +367,132 @@ void main() {
       },
     );
 
+    test('actualizar una sesión reemplaza sus series en bloque', () async {
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [
+          ValoresSerie(repeticiones: 10, peso: 60),
+          ValoresSerie(repeticiones: 10, peso: 60),
+        ],
+      });
+      final sesion = (await bd.historialRutina(idRutina)).single;
+
+      // Se corrige el peso de la segunda serie y se añade una tercera.
+      final bien = await bd.actualizarEntrenamiento(sesion.id, sesion.fecha, {
+        idEjercicio: const [
+          ValoresSerie(repeticiones: 10, peso: 60),
+          ValoresSerie(repeticiones: 10, peso: 55),
+          ValoresSerie(repeticiones: 8, peso: 55),
+        ],
+      });
+
+      expect(bien, isTrue);
+      final series = await bd.seriesConFecha(idRutina, idEjercicio);
+      expect(series.map((s) => s.peso), [60, 55, 55]);
+      expect(series.map((s) => s.nSerie), [1, 2, 3]);
+      // La fecha no cambia si no se cambia, y no aparece una sesión de más.
+      expect(await bd.contarEntrenamientosRutina(idRutina), 1);
+      expect((await bd.sesion(sesion.id))!.fecha, DateTime(2026, 3, 1));
+    });
+
+    test(
+      'actualizar sin series o sobre una sesión que no existe no hace nada',
+      () async {
+        await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+          idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
+        });
+        final sesion = (await bd.historialRutina(idRutina)).single;
+
+        expect(
+          await bd.actualizarEntrenamiento(sesion.id, sesion.fecha, {
+            idEjercicio: const [],
+          }),
+          isFalse,
+        );
+        expect(
+          await bd.actualizarEntrenamiento(9999, DateTime.now(), {
+            idEjercicio: const [ValoresSerie(repeticiones: 1, peso: 1)],
+          }),
+          isFalse,
+        );
+        expect(await bd.seriesConFecha(idRutina, idEjercicio), hasLength(1));
+      },
+    );
+
+    test(
+      'borrar una sesión se lleva sus series y la saca del historial',
+      () async {
+        await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+          idEjercicio: const [
+            ValoresSerie(repeticiones: 10, peso: 60),
+            ValoresSerie(repeticiones: 10, peso: 60),
+          ],
+        });
+        await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 8), {
+          idEjercicio: const [ValoresSerie(repeticiones: 8, peso: 65)],
+        });
+
+        final historial = await bd.historialRutina(idRutina);
+        expect(historial.map((s) => s.fecha), [
+          DateTime(2026, 3, 8),
+          DateTime(2026, 3, 1),
+        ]);
+
+        await bd.borrarEntrenamiento(historial.first.id);
+
+        expect(await bd.historialRutina(idRutina), hasLength(1));
+        expect(await bd.contarEntrenamientosRutina(idRutina), 1);
+        // El cascade se lleva las series de esa sesión y solo esas.
+        final series = await bd.seriesConFecha(idRutina, idEjercicio);
+        expect(series, hasLength(2));
+        expect(series.map((s) => s.peso), [60, 60]);
+        expect(await bd.sesion(historial.first.id), isNull);
+      },
+    );
+
+    test('el historial trae las cifras de cada sesión ya agregadas', () async {
+      await bd.insertarEjercicio(idRutina, 'Fondos');
+      final otro = (await bd.ejerciciosDeRutina(idRutina)).last.id;
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [
+          ValoresSerie(repeticiones: 20, peso: 20, calentamiento: true),
+          ValoresSerie(repeticiones: 10, peso: 60),
+        ],
+        otro: const [ValoresSerie(repeticiones: 12, peso: 10)],
+      });
+
+      final sesion = (await bd.historialRutina(idRutina)).single;
+      expect(sesion.nEjercicios, 2);
+      expect(sesion.nSeries, 3);
+      // El calentamiento cuenta como serie, pero no suma volumen.
+      expect(sesion.volumen, 10 * 60 + 12 * 10);
+    });
+
+    test(
+      'la sesión trae sus ejercicios con la ficha y las series en orden',
+      () async {
+        await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+          idEjercicio: const [
+            ValoresSerie(repeticiones: 12, peso: 40, calentamiento: true),
+            ValoresSerie(repeticiones: 10, peso: 60),
+            ValoresSerie(repeticiones: 8, peso: 65),
+          ],
+        });
+        final id = (await bd.historialRutina(idRutina)).single.id;
+
+        final sesion = (await bd.sesion(id))!;
+        expect(sesion.idRutina, idRutina);
+        expect(sesion.ejercicios.single.ejercicio.nombre, 'Press banca');
+        expect(sesion.ejercicios.single.series, const [
+          ValoresSerie(repeticiones: 12, peso: 40, calentamiento: true),
+          ValoresSerie(repeticiones: 10, peso: 60),
+          ValoresSerie(repeticiones: 8, peso: 65),
+        ]);
+        expect(sesion.volumen, 10 * 60 + 8 * 65);
+        // Y sale en el formato que espera actualizarEntrenamiento.
+        expect(sesion.series[idEjercicio], hasLength(3));
+      },
+    );
+
     test('borrar un ejercicio se lleva sus series', () async {
       await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 5), {
         idEjercicio: const [ValoresSerie(repeticiones: 8, peso: 60)],

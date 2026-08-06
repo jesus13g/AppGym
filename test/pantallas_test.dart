@@ -9,6 +9,7 @@ import 'package:appgym/datos/semilla.dart';
 import 'package:appgym/estado/providers.dart';
 import 'package:appgym/pantallas/catalogo.dart';
 import 'package:appgym/pantallas/entrenar.dart';
+import 'package:appgym/pantallas/historial.dart';
 import 'package:appgym/pantallas/rutinas.dart';
 import 'package:appgym/tema/ui.dart' as ui;
 import 'package:drift/native.dart';
@@ -259,6 +260,80 @@ void main() {
       expect(series.first.repeticiones, 11);
       expect(series.skip(1).map((s) => s.repeticiones), everyElement(10));
       expect(series.map((s) => s.peso), everyElement(20));
+    });
+  });
+
+  group('historial de sesiones', () {
+    late int idRutina;
+    late int idEjercicio;
+
+    setUp(() async {
+      idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarEjercicio(idRutina, 'Press banca');
+      idEjercicio = (await bd.ejerciciosDeRutina(idRutina)).single.id;
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [
+          ValoresSerie(repeticiones: 10, peso: 60),
+          ValoresSerie(repeticiones: 8, peso: 65),
+        ],
+      });
+    });
+
+    testWidgets('lista las sesiones con sus cifras', (tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaHistorial(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      expect(find.text('1 de marzo de 2026'), findsOneWidget);
+      expect(find.text('1 ejercicio · 2 series · 1120 kg'), findsOneWidget);
+    });
+
+    testWidgets('editar una sesión desde el historial repinta la lista', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaHistorial(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('1 de marzo de 2026'));
+      await tester.pumpAndSettle();
+      expect(find.text('10 repeticiones'), findsOneWidget);
+
+      await tester.tap(find.text('Editar'));
+      await tester.pumpAndSettle();
+      expect(find.text('Editar entrenamiento'), findsOneWidget);
+
+      // Una serie más y a guardar: la lista de detrás tiene que enterarse.
+      await tester.tap(find.text('Añadir serie'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Guardar entrenamiento'));
+      await tester.pumpAndSettle();
+
+      expect(await bd.seriesConFecha(idRutina, idEjercicio), hasLength(3));
+      // Se edita, no se duplica.
+      expect(await bd.contarEntrenamientosRutina(idRutina), 1);
+
+      // Al volver, la lista de detrás está al día sin reiniciar la app.
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('1 ejercicio · 3 series · 1640 kg'), findsOneWidget);
+    });
+
+    testWidgets('eliminar una sesión la saca de la lista', (tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaHistorial(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('1 de marzo de 2026'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Eliminar sesión'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Eliminar').last);
+      await tester.pumpAndSettle();
+
+      expect(await bd.contarEntrenamientosRutina(idRutina), 0);
+      expect(find.text('Todavía no hay sesiones'), findsOneWidget);
     });
   });
 }

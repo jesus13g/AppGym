@@ -120,6 +120,16 @@ final entrenamientosPorDiaProvider = FutureProvider<Map<DateTime, int>>(
   (ref) => ref.watch(bdProvider).entrenamientosPorDia(),
 );
 
+// ── Sesiones ─────────────────────────────────────────────────────────────────
+
+final historialRutinaProvider = FutureProvider.family<List<ResumenSesion>, int>(
+  (ref, idRutina) => ref.watch(bdProvider).historialRutina(idRutina),
+);
+
+final sesionProvider = FutureProvider.family<SesionCompleta?, int>(
+  (ref, idEntrenamiento) => ref.watch(bdProvider).sesion(idEntrenamiento),
+);
+
 // ── Invalidación ─────────────────────────────────────────────────────────────
 
 /// Refresca todo lo que depende de la lista de rutinas.
@@ -143,6 +153,10 @@ void invalidarEntrenamientos(WidgetRef ref, int idRutina) {
   ref.invalidate(seriesConFechaProvider);
   ref.invalidate(resumenSesionesEjercicioProvider);
   ref.invalidate(ultimasSeriesProvider);
+  // El historial y el detalle de sesión son fáciles de olvidar aquí, y dejarlos
+  // fuera se nota enseguida: una pantalla mostrando lo que ya no está.
+  ref.invalidate(historialRutinaProvider(idRutina));
+  ref.invalidate(sesionProvider);
   ref.invalidate(estadisticasRutinaProvider(idRutina));
   invalidarRutinas(ref);
 }
