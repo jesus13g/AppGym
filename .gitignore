@@ -1,12 +1,38 @@
-# Carpeta con los entornos virtuales
-env/
+# Ficheros generados por Dart y Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
 build/
+.pub-cache/
+.pub/
 
-# Caché de Python
-__pycache__/
-*.py[cod]
+# Código generado por build_runner (drift y Riverpod); se regenera con
+#   dart run build_runner build --delete-conflicting-outputs
+*.g.dart
 
-# Archivo de la base de datos
+# Android
+android/.gradle/
+android/local.properties
+android/key.properties
+android/app/debug
+android/app/profile
+android/app/release
+*.jks
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/ephemeral/
+
+# Editores
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# Base de datos local
 *.db
 
 # Imágenes y GIFs de los ejercicios (© Gym visual, se descargan en el primer arranque)
