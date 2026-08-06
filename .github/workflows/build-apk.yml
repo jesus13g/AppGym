@@ -1,7 +1,7 @@
 name: Construir APK
 
-# Genera un APK instalable en Android y lo publica como release,
-# para poder probar la app sin tener un ordenador delante.
+# Comprueba el proyecto y genera un APK instalable en Android, para poder
+# probar la app sin tener un ordenador delante.
 on:
   workflow_dispatch:
   push:
@@ -14,9 +14,44 @@ on:
 permissions:
   contents: write
 
+env:
+  # Debe coincidir con la versión con la que se desarrolla; ver CLAUDE.md.
+  FLUTTER_VERSION: "3.44.8"
+
 jobs:
+  # Análisis y tests van en su propio job: son rápidos y no necesitan el SDK de
+  # Android, así que dan el veredicto mucho antes que la compilación del APK.
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Instalar dependencias
+        run: flutter pub get
+
+      # Los *.g.dart no se versionan (ver .gitignore), así que aquí hay que
+      # generarlos antes de analizar o no compilaría nada.
+      - name: Generar el código de drift
+        run: dart run build_runner build
+
+      - name: Comprobar el formato
+        run: dart format --set-exit-if-changed lib test
+
+      - name: Analizar
+        run: flutter analyze
+
+      - name: Tests
+        run: flutter test
+
   apk:
     runs-on: ubuntu-latest
+    needs: verificar
     steps:
       - uses: actions/checkout@v4
 
@@ -27,26 +62,28 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.24.5"
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+      - name: Instalar dependencias
+        run: flutter pub get
 
-      - name: Instalar flet-cli
-        run: pip install flet-cli==0.25.2
+      - name: Generar el código de drift
+        run: dart run build_runner build
 
       # --split-per-abi generaría varios APK; uno universal es más simple de
       # instalar a mano aunque pese algo más.
       - name: Construir APK
-        run: flet build apk --verbose --build-version "1.0.$GITHUB_RUN_NUMBER" --build-number "$GITHUB_RUN_NUMBER"
+        run: |
+          flutter build apk --release \
+            --build-name "1.0.$GITHUB_RUN_NUMBER" \
+            --build-number "$GITHUB_RUN_NUMBER"
 
       - name: Renombrar el APK
         run: |
           mkdir -p dist
-          find build/apk -name '*.apk' -exec cp {} dist/AppGym.apk \;
+          cp build/app/outputs/flutter-apk/app-release.apk dist/AppGym.apk
           ls -lh dist/
 
       - uses: actions/upload-artifact@v4

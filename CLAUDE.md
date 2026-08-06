@@ -8,145 +8,151 @@ al añadir código.
 ## Comandos
 
 ```bash
-python -m venv env && ./env/bin/pip install -r requirements.txt
-
-./env/bin/python main.py                       # ventana nativa
-APPGYM_WEB=1 ./env/bin/python main.py          # navegador (puerto 8550, o APPGYM_PORT)
-./env/bin/python tools/fetch_media.py          # descargar imágenes y GIFs sin abrir la app
-./env/bin/flet build apk                       # APK local (necesita Flutter ≥3.24 y Java 17)
+flutter pub get
+dart run build_runner build     # genera bd.g.dart; obligatorio tras clonar
+flutter run                     # app en un dispositivo o emulador
+flutter analyze                 # objetivo permanente: 0 issues
+flutter test                    # 26 tests
+dart format lib test
+flutter build apk --release     # APK local (necesita SDK de Android y Java 17)
 ```
 
-No hay tests, ni linter, ni formateador configurados. El APK se compila en
-`.github/workflows/build-apk.yml` con cada push a `claude/**` y se publica en la release
-`apk-preview`.
+Se desarrolla con **Flutter 3.44.8 / Dart 3.12.2**. La versión está fijada en
+`.github/workflows/build-apk.yml`; si la subes, súbela también ahí.
 
-### Cómo verificar cambios sin interfaz
+**Los `*.g.dart` no se versionan** (ver `.gitignore`). Sin `build_runner build` no compila nada, ni
+en local ni en CI.
 
-No hay suite de tests, pero las pantallas se pueden construir y validar en proceso. Es la
-forma más rápida de detectar una regresión, y `before_update()` es donde Flet valida
-propiedades y enums:
+### Cómo verificar cambios
 
-```python
-from types import SimpleNamespace
-import flet as ft
-from app.utils.conexionBD import ConexionBD
-from app.router import Router, Destino
+A diferencia de la versión Flet de este proyecto, **aquí sí se puede comprobar todo sin interfaz**:
 
-ft.Control.update = lambda self: None   # no hay frontend al que enviar
-page = SimpleNamespace(views=[], route=None, update=lambda *a, **k: None,
-                       on_view_pop=None, open=lambda d: None,
-                       close=lambda d: None, run_thread=lambda f: f())
-router = Router.__new__(Router)
-router.page, router.conexion, router.pila = page, ConexionBD(), []
-vista = router._construir(Destino("rutinas"))
-```
+- `flutter analyze` valida tipos y API antes de arrancar nada.
+- `flutter test` monta las pantallas de verdad contra una `NativeDatabase.memory()`, sobrescribiendo
+  `bdProvider`. Los tests de widget son rápidos y ya han pillado un desbordamiento de layout real,
+  así que **añade uno al tocar una pantalla**.
 
-Con eso se pueden invocar los manejadores directamente (`fila.on_click(SimpleNamespace(control=fila))`)
-para ejercitar búsqueda, altas, steppers o borrados. Ejecútalo siempre en un directorio
-temporal: la BD se crea en el directorio de trabajo.
+Dos avisos sobre el entorno de test: la fuente por defecto de `flutter test` no es la real y mide
+distinto, de forma que un `RenderFlex overflowed` en un test puede no darse en el móvil (pero suele
+señalar un widget que conviene hacer flexible igualmente); y las imágenes de red devuelven error, lo
+que ejercita el `errorBuilder` de `ui.Miniatura`.
 
-**Limitación conocida:** en sandboxes con proxy restrictivo, Flet Web no renderiza porque
-Flutter descarga CanvasKit de `gstatic.com`. El renderer HTML no está en el bundle de Flet
-0.25.2, así que no hay capturas de pantalla posibles: verifica por construcción y avisa de
-que el aspecto visual no está comprobado.
+Lo que **no** se puede comprobar aquí: el aspecto visual y el APK. El APK lo construye CI en cada
+push a `claude/**` y se publica en la release `apk-preview`.
 
 ## Arquitectura
 
-App de gimnasio en **Python + Flet 0.25.2** (UI Flutter dirigida desde Python) sobre
-**SQLite/SQLAlchemy**. Sin dependencias de UI de terceros.
+App de gimnasio en **Flutter/Dart** sobre **SQLite sin más**, con `drift` como ORM y `Riverpod` para
+el estado. Interfaz **solo Cupertino**: no se importa `material.dart` en ningún sitio.
 
-### Navegación: pila explícita, no rutas por string
+```
+lib/
+├── main.dart          CupertinoApp, localización en español
+├── datos/             bd.dart · consultas · i18n · semilla · media · formato
+├── estado/            providers.dart
+├── tema/              tokens.dart · ui.dart
+└── pantallas/         raiz + las diez pantallas
+```
 
-`app/router.py` mantiene `Router.pila`, una lista de `Destino(pantalla, **params)`. Cada
-pantalla es un módulo en `app/screens/` que exporta `vista(page, router, **params)` y
-**devuelve un `ft.View`** — nunca muta `page.controls`.
+### Navegación: pestañas con pila propia
 
-- `router.ir(...)` apila, `router.volver()` desapila, `router.reemplazar(...)` cambia de
-  pestaña, `router.refrescar()` repinta.
-- `_render()` **reconstruye la pila entera** en cada navegación. Es intencionado: al volver
-  atrás la pantalla anterior muestra datos frescos sin invalidación manual. La pila nunca
-  pasa de tres niveles.
-- Las pantallas en `MODALES` se presentan como `fullscreen_dialog` (suben desde abajo).
-- El estado local de una pantalla (texto de búsqueda, filtros, offset) vive en closures, así
-  que **`router.refrescar()` lo pierde**. Para cambios que deben conservarlo, muta
-  `router.pila[-1].params` y refresca (ver `progreso_screen.elegir`).
-- Añadir una pantalla = crear el módulo y registrarla en el dict `constructores` de
-  `Router._construir`. Los imports ahí son perezosos a propósito.
+`pantallas/raiz.dart` monta un `CupertinoTabScaffold` de tres pestañas (Rutinas · Ejercicios ·
+Progreso). Cada una vive en su `CupertinoTabView`, que trae **su propio `Navigator`**: de ahí salen
+gratis el botón atrás, las transiciones de empuje y el gesto de volver deslizando.
 
-### Acceso a datos: singleton con sesiones de vida corta
+- Se navega con `Navigator.push(CupertinoPageRoute(...))`. **No hay go_router**: no hay deep links
+  ni URLs que justifiquen la maquinaria.
+- Cada pantalla exporta su `abrirX(context, id)`, que es lo que llaman las demás. Así el import va
+  en una sola dirección y no hacen falta imports perezosos.
+- Los modales (`entrenar`, añadir ejercicio) se empujan con `fullscreenDialog: true` y
+  `rootNavigator: true`, para que suban por encima de la barra de pestañas.
 
-`ConexionBD` (`app/utils/conexionBD.py`) es un singleton que abre y **cierra una sesión por
-consulta**. Consecuencia importante: los objetos que devuelve están desasociados, así que
-navegar relaciones después (`serie.entrenamiento.fecha`) falla. Por eso existen consultas
-que preagregan lo que la vista necesita — `resumen_rutinas()`, `series_con_fecha()`,
-`colores_rutinas()` — y `selectAll_ejerciciosRutina()` usa `joinedload(Ejercicio.catalogo)`.
-**Al añadir una vista, añade la consulta que le dé los datos ya resueltos.**
+### Estado: invalidar, no reconstruir
 
-### Migraciones
+`estado/providers.dart` declara un provider por consulta de vista. Tras una escritura se llama a
+`invalidarRutinas` / `invalidarRutina` / `invalidarEntrenamientos`, y se repinta **solo** lo que
+dependía de eso.
 
-`create_all` crea tablas nuevas pero nunca modifica las existentes. `create_tablas()` llama
-a `_migrar_columnas()`, que lee `PRAGMA table_info` y hace `ALTER TABLE ... ADD COLUMN` solo
-de lo que falte. **Toda columna nueva en una tabla ya existente debe registrarse ahí**, o las
-bases de datos de usuarios anteriores se romperán.
+Esto sustituye al esquema anterior, que reconstruía la pila entera en cada navegación y perdía por
+el camino el estado local de la pantalla. Ahora el mes del calendario, la pestaña de progreso y el
+texto de búsqueda son estado del widget y **no viajan en los parámetros de la ruta**.
+
+Los providers se declaran **a mano**: `riverpod_generator` y `drift_dev` no coinciden en la versión
+de `analyzer` que admite el `flutter_test` de este SDK. Por lo mismo, `build_runner` y `drift_dev`
+llevan la restricción abierta en `pubspec.yaml` — **no las fijes** sin comprobar que `pub get`
+resuelve.
+
+### Datos
+
+`datos/bd.dart` tiene las cinco tablas y todas las consultas. drift devuelve clases de datos planas,
+así que —a diferencia de SQLAlchemy— una fila leída se puede pasar a la interfaz sin más.
+
+Aun así se conservan las consultas preagregadas (`resumenRutinas`, `seriesConFecha`,
+`coloresRutinas`, `ejerciciosDeRutina` con su join a la ficha): ahorran una consulta por fila en las
+pantallas que pintan listas. **Al añadir una vista, añade la consulta que le dé los datos ya
+resueltos.**
+
+`PRAGMA foreign_keys = ON` se activa en `beforeOpen`. Sin él SQLite ignora los `ON DELETE CASCADE` y
+borrar una rutina dejaría sus series huérfanas.
+
+**Migraciones:** `schemaVersion` va por 1. Todo cambio de esquema exige subirlo y añadir el paso en
+`MigrationStrategy`, o las bases de datos existentes se romperán.
 
 ### Catálogo de ejercicios
 
 1.324 ejercicios de [hasaneyldrm/exercises-dataset](https://github.com/hasaneyldrm/exercises-dataset).
 
-- `app/data/ejercicios.es.json` (~1 MB) se versiona; `seed.py` lo vuelca en la tabla
-  `ejercicio_catalogo` de forma idempotente (compara recuentos).
-- La columna `busqueda` es el índice: nombre en inglés **más** las traducciones de
-  `app/utils/i18n.py`, normalizado sin acentos. Por eso «mancuerna pecho» encuentra lo mismo
-  que «dumbbell bench press». Si tocas `i18n.py`, hay que **resembrar** (`seed_catalogo(c, forzar=True)`).
-- Los nombres de ejercicio solo existen en inglés y se muestran tal cual; lo que se traduce
-  son las categorías (`body_part`, `equipment`, `target`, músculos).
-- `Ejercicio.id_catalogo` es `NULL` en los ejercicios personalizados del usuario.
-- El buscador pagina de 40 en 40 con `on_scroll`; nunca pintes los 1.324 de golpe.
+- `assets/ejercicios.es.json` (~1 MB) se versiona y está declarado en `pubspec.yaml`. `semilla.dart`
+  lo vuelca en la tabla del catálogo de forma idempotente (compara recuentos) y lo parsea en un
+  isolate con `compute()`, para no congelar el primer frame.
+- La columna `busqueda` es el índice: nombre en inglés **más** las traducciones de `datos/i18n.dart`,
+  normalizado sin acentos. Por eso «mancuerna pecho» encuentra lo mismo que «dumbbell bench press».
+  Si tocas `i18n.dart`, hay que **resembrar** (`sembrarCatalogo(bd, forzar: true)`).
+- Dart no trae normalización Unicode, así que `normalizar()` sustituye los caracteres acentuados en
+  vez de descomponerlos en NFKD. Si añades vocabulario con diacríticos raros, amplía el mapa.
+- Los nombres de ejercicio solo existen en inglés y se muestran tal cual; lo que se traduce son las
+  categorías (`bodyPart`, `equipment`, `target`, músculos).
+- `Ejercicio.idCatalogo` es nulo en los ejercicios personalizados del usuario.
+- El buscador pagina de 40 en 40 con un `ScrollController`; nunca pintes los 1.324 de golpe.
+- El duplicado se comprueba **dentro de la rutina**: dos rutinas sí pueden compartir el mismo
+  ejercicio del catálogo. Hay un test que lo fija.
 
 ### Media: licencia y resolución
 
-Las imágenes y GIFs son **© Gym visual**, redistribuidos en el dataset original bajo permiso
-con dos condiciones: solo a 180×180 y con la atribución visible. **No se versionan en este
-repositorio** — `media/` está en el `.gitignore`. Se descargan del origen en el primer
-arranque o con `tools/fetch_media.py`.
+Las imágenes y GIFs son **© Gym visual**, redistribuidos en el dataset original bajo permiso con dos
+condiciones: solo a 180×180 y con la atribución visible. **No se versionan ni se empaquetan en el
+APK** — `media/` está en el `.gitignore`. Se descargan en el primer arranque desde la pantalla de
+onboarding, o se resuelven contra la URL remota si el usuario la omite.
 
-`media.resolver(ruta)` devuelve la ruta local si el fichero existe y la URL remota si no, y
-`ft.Image` acepta ambas: la app funciona durante la descarga, si se omite o si falló a
-medias. **Usa siempre `resolver()`, nunca construyas rutas a mano.** La ficha de ejercicio
-muestra `media.ATRIBUCION` al pie; es requisito de licencia, no decoración.
+`media.resolver(ruta)` devuelve un `ImageProvider`: `FileImage` si el fichero está descargado y
+`NetworkImage` si no. La app funciona durante la descarga, si se omite, o si falló a medias.
+**Usa siempre `resolver()`, nunca construyas rutas a mano.** La ficha de ejercicio muestra
+`media.atribucion` al pie; es requisito de licencia, no decoración.
 
-### Almacenamiento
-
-`app/utils/almacenamiento.py` resuelve dónde van la BD y `media/`: usa
-`FLET_APP_STORAGE_DATA` cuando existe (app empaquetada — en Android e iOS el directorio de
-trabajo **no es escribible**) y el directorio del proyecto en desarrollo. Cualquier escritura
-a disco nueva debe pasar por ahí.
+`inicializarMedia()` se llama desde `arranqueProvider` y fija el directorio con `path_provider`
+(en Android e iOS el directorio de trabajo no es escribible). Cualquier escritura a disco nueva debe
+pasar por ahí.
 
 ### Sistema de diseño
 
-`app/theme/tokens.py` (constantes) y `app/theme/ui.py` (componentes: `grupo`, `fila`,
-`stepper`, `pildora`, `miniatura`, `deslizar_para_borrar`, `dialogo_texto`, `barra`…).
+`tema/tokens.dart` (constantes) y `tema/ui.dart` (componentes).
 
-Los colores son los **semánticos de Cupertino** (`ft.CupertinoColors.LABEL`,
-`SECONDARY_SYSTEM_GROUPED_BACKGROUND`…), que Flutter resuelve solo en claro y oscuro. **No
-metas hex literales** salvo en `PALETA_RUTINAS`, que identifica rutinas y debe ser estable en
-ambos temas. Construye pantallas componiendo `ui.py`; si necesitas algo nuevo, añádelo ahí
-en vez de improvisarlo en la pantalla.
+Los colores son los **semánticos de Cupertino**, que en Flutter son `CupertinoDynamicColor` y **no
+valen tal cual**: hay que resolverlos contra el contexto o no cambian entre claro y oscuro. Está
+encapsulado en la extensión `Paleta`, así que en las pantallas se escribe `context.texto`,
+`context.tarjeta`, `context.acento`. **No uses `CupertinoColors` directamente** y no metas hex
+literales salvo en `coloresRutina`, que identifica rutinas y debe ser estable en ambos temas.
 
-### Peculiaridades de Flet 0.25.2 (ya sufridas)
+En `ui.dart` solo está lo que Flutter no trae: `SelectorNumerico`, `Pildora`, `Miniatura`,
+`PuntoColor`, `EstadoVacio`, `Cargando`, `BarraProgreso`, `DeslizarParaBorrar` y los diálogos. Para
+lo demás usa el widget del framework: `CupertinoListSection.insetGrouped` (envuelto en `ui.Grupo`),
+`CupertinoListTile`, `CupertinoSearchTextField`, `CupertinoSlidingSegmentedControl`.
 
-- **No existe `CupertinoSearchTextField`** — se compone con `CupertinoTextField` + prefijo
-  (`ui.campo_busqueda`).
-- **`CupertinoFilledButton` no acepta color de fondo.** `ui.boton_principal` usa
-  `CupertinoButton` con `bgcolor` para poder pintar acciones destructivas en rojo.
-- **`Dismissible.on_confirm_dismiss` ignora el valor devuelto**: hay que llamar a
-  `e.control.confirm_dismiss(True/False)`, lo que permite resolverlo tras cerrar un diálogo.
-- El trabajo en segundo plano va por `page.run_thread` (ver `setup_screen`).
+**No importes `material.dart`.** Si necesitas algo que solo existe en Material (`BarraProgreso` nació
+así, sustituyendo a `LinearProgressIndicator`), compónlo en `ui.dart`.
 
 ### Empaquetado
 
-`pyproject.toml` declara en `[project] dependencies` **solo las tres dependencias de
-ejecución** (flet, SQLAlchemy, requests): es lo que `flet build` mete en el APK, y tiene
-precedencia sobre `requirements.txt`. `requirements.txt` conserva además las de escritorio y
-build, que no tienen ruedas para Android. Si añades una dependencia que la app necesita en
-tiempo de ejecución, va **en los dos sitios**.
+`pubspec.yaml` es la única fuente de dependencias. El permiso de **INTERNET va en
+`android/app/src/main/AndroidManifest.xml`**: Flutter solo lo declara en los manifiestos de debug y
+profile, así que sin esa línea el APK de release no puede descargar la media.

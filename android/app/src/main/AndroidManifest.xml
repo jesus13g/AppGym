@@ -1,6 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- La app descarga las imágenes y GIFs de los ejercicios del repositorio
+         original. Flutter solo declara este permiso en los manifiestos de debug
+         y profile, así que en release hay que ponerlo aquí. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
     <application
-        android:label="appgym"
+        android:label="AppGym"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
