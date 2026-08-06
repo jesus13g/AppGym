@@ -5,6 +5,7 @@
 library;
 
 import 'package:appgym/datos/bd.dart';
+import 'package:appgym/datos/formato.dart' as formato;
 import 'package:appgym/datos/semilla.dart';
 import 'package:appgym/estado/providers.dart';
 import 'package:appgym/pantallas/catalogo.dart';
@@ -260,6 +261,69 @@ void main() {
       expect(series.first.repeticiones, 11);
       expect(series.skip(1).map((s) => s.repeticiones), everyElement(10));
       expect(series.map((s) => s.peso), everyElement(20));
+    });
+  });
+
+  group('fecha del entrenamiento', () {
+    late int idRutina;
+
+    setUp(() async {
+      idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarEjercicio(idRutina, 'Press banca');
+    });
+
+    testWidgets('por defecto es hoy y se puede cambiar a un día pasado', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      final hoy = DateTime.now();
+      expect(find.text(formato.fechaLarga(hoy)), findsOneWidget);
+
+      await tester.tap(find.text(formato.fechaLarga(hoy)));
+      await tester.pumpAndSettle();
+
+      // Se mueve la rueda por su callback en vez de arrastrando: la física del
+      // scroll haría el test dependiente de píxeles y de la altura de la fila.
+      final ayer = hoy.subtract(const Duration(days: 1));
+      tester
+          .widget<CupertinoDatePicker>(find.byType(CupertinoDatePicker))
+          .onDateTimeChanged(ayer);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Listo'));
+      await tester.pumpAndSettle();
+
+      expect(find.text(formato.fechaLarga(ayer)), findsOneWidget);
+
+      await tester.tap(find.text('Guardar entrenamiento'));
+      await tester.pumpAndSettle();
+
+      // Un día pasado se guarda a las 12:00, para que el orden dentro del día
+      // no dependa de la hora a la que se anotó.
+      final sesion = (await bd.historialRutina(idRutina)).single;
+      expect(sesion.fecha, DateTime(ayer.year, ayer.month, ayer.day, 12));
+    });
+
+    testWidgets('no deja elegir una fecha futura', (tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text(formato.fechaLarga(DateTime.now())));
+      await tester.pumpAndSettle();
+
+      final selector = tester.widget<CupertinoDatePicker>(
+        find.byType(CupertinoDatePicker),
+      );
+      expect(selector.maximumDate, isNotNull);
+      expect(
+        selector.maximumDate!.isAfter(
+          DateTime.now().add(const Duration(minutes: 1)),
+        ),
+        isFalse,
+      );
     });
   });
 

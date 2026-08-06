@@ -472,6 +472,61 @@ CupertinoNavigationBar barra(
   border: Border(bottom: BorderSide(color: context.separador, width: 0.5)),
 );
 
+/// Selector de fecha en una hoja inferior. Devuelve null si se cancela.
+///
+/// Es `CupertinoDatePicker` tal cual: la localización en español ya la resuelve
+/// `flutter_localizations` desde `main.dart`, así que no hace falta ni
+/// dependencia ni componente propio.
+Future<DateTime?> selectorFecha(
+  BuildContext context, {
+  required DateTime inicial,
+  DateTime? maxima,
+  DateTime? minima,
+}) {
+  var elegida = inicial;
+
+  return showCupertinoModalPopup<DateTime>(
+    context: context,
+    builder: (hoja) => Container(
+      height: 300,
+      padding: const EdgeInsets.only(top: t.s),
+      color: hoja.tarjeta,
+      child: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                CupertinoButton(
+                  onPressed: () => Navigator.pop(hoja),
+                  child: const Text('Cancelar'),
+                ),
+                CupertinoButton(
+                  onPressed: () => Navigator.pop(hoja, elegida),
+                  child: Text(
+                    'Listo',
+                    style: estilo(hoja, weight: t.semibold, color: hoja.acento),
+                  ),
+                ),
+              ],
+            ),
+            Expanded(
+              child: CupertinoDatePicker(
+                mode: CupertinoDatePickerMode.date,
+                initialDateTime: inicial,
+                minimumDate: minima,
+                maximumDate: maxima,
+                onDateTimeChanged: (valor) => elegida = valor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 /// Diálogo con un campo de texto. Devuelve el texto, o null si se cancela.
 Future<String?> dialogoTexto(
   BuildContext context, {

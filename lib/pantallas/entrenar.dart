@@ -106,6 +106,33 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
     if (mounted) setState(() => _ejercicios = ejercicios);
   }
 
+  /// Elige el día del entrenamiento, para poder anotar el de ayer.
+  ///
+  /// Un día pasado se guarda a las 12:00 en vez de a la hora actual: así el
+  /// orden dentro del día es estable y no depende de a qué hora uno se acordó
+  /// de abrir la app. Hoy conserva la hora, que es la de verdad.
+  Future<void> _elegirFecha() async {
+    final ahora = DateTime.now();
+    final elegida = await ui.selectorFecha(
+      context,
+      inicial: _fecha,
+      maxima: ahora,
+    );
+    if (elegida == null || !mounted) return;
+
+    bool mismoDia(DateTime a, DateTime b) =>
+        a.year == b.year && a.month == b.month && a.day == b.day;
+
+    setState(() {
+      _fecha = switch (elegida) {
+        // Elegir el mismo día no debe mover la hora de una sesión ya guardada.
+        _ when mismoDia(elegida, _fecha) => _fecha,
+        _ when mismoDia(elegida, ahora) => ahora,
+        _ => DateTime(elegida.year, elegida.month, elegida.day, 12),
+      };
+    });
+  }
+
   Future<void> _guardar() async {
     if (_guardando) return;
 
@@ -193,12 +220,28 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
                           ),
                         ),
                         const SizedBox(height: 2),
-                        Text(
-                          formato.fechaLarga(_fecha),
-                          style: ui.estilo(
-                            context,
-                            size: t.subhead,
-                            color: context.textoSec,
+                        CupertinoButton(
+                          onPressed: _elegirFecha,
+                          padding: EdgeInsets.zero,
+                          minimumSize: Size.zero,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                formato.fechaLarga(_fecha),
+                                style: ui.estilo(
+                                  context,
+                                  size: t.subhead,
+                                  color: context.acento,
+                                ),
+                              ),
+                              const SizedBox(width: t.xs),
+                              Icon(
+                                CupertinoIcons.calendar,
+                                size: 15,
+                                color: context.acento,
+                              ),
+                            ],
                           ),
                         ),
                       ],
