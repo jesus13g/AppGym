@@ -91,6 +91,7 @@ lib/
 └── pantallas/              una pantalla por fichero
 assets/ejercicios.es.json   catálogo de ejercicios en español
 test/                       tests de datos y de widget
+docs/especificaciones.md    funcionalidades previstas y su plan de entrega
 ```
 
 ## Créditos y licencias

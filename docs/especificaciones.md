@@ -3,7 +3,7 @@
 > Documento de especificación funcional y técnica para la siguiente iteración de AppGym.
 > Escrito sobre el código actual: **Flutter 3.44.8 / Dart 3.12.2**, `drift` sobre SQLite,
 > `Riverpod` para el estado, interfaz **solo Cupertino**, catálogo de 1.324 ejercicios,
-> diez pantallas y 27 tests. Ver `CLAUDE.md` para la arquitectura vigente.
+> nueve pantallas y 27 tests. Ver `CLAUDE.md` para la arquitectura vigente.
 
 ## Índice
 

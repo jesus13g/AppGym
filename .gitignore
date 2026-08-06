@@ -32,8 +32,8 @@ ios/Flutter/ephemeral/
 *.iml
 .DS_Store
 
-# Base de datos local
+# Red de seguridad. En la app ni la base de datos ni la media se escriben dentro
+# del repositorio: van al directorio que asigna path_provider. Estas dos entradas
+# solo cubren el caso de que alguien las genere aquí a mano.
 *.db
-
-# Imágenes y GIFs de los ejercicios (© Gym visual, se descargan en el primer arranque)
 media/

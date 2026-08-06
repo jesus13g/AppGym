@@ -1,11 +1,10 @@
 /// Componentes de interfaz con estética iOS.
 ///
-/// Aquí solo vive lo que Flutter **no** trae ya resuelto. Buena parte del
-/// antiguo `theme/ui.py` desapareció al portar: `grupo` es
-/// `CupertinoListSection.insetGrouped`, `fila` es `CupertinoListTile`,
-/// `campo_busqueda` es `CupertinoSearchTextField` (que en Flet no existía) y
-/// `deslizar_para_borrar` es `Dismissible`, cuyo `confirmDismiss` sí respeta el
-/// valor devuelto.
+/// Aquí solo vive lo que Flutter **no** trae ya resuelto. Antes de añadir nada,
+/// comprueba que el framework no lo tenga: una lista agrupada es
+/// `CupertinoListSection.insetGrouped` (envuelta en [Grupo]), una fila es
+/// `CupertinoListTile`, un buscador es `CupertinoSearchTextField` y deslizar
+/// para borrar es `Dismissible`.
 library;
 
 import 'package:flutter/cupertino.dart';

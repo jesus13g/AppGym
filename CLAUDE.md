@@ -51,8 +51,20 @@ lib/
 ├── datos/             bd.dart · consultas · i18n · semilla · media · formato
 ├── estado/            providers.dart
 ├── tema/              tokens.dart · ui.dart
-└── pantallas/         raiz + las diez pantallas
+└── pantallas/         raiz (las tres pestañas) + nueve pantallas
+assets/                ejercicios.es.json, el catálogo
+test/                  datos_test.dart · pantallas_test.dart
+docs/                  especificaciones.md, el trabajo previsto
 ```
+
+`catalogo.dart` sirve dos destinos con la misma pantalla: la pestaña Ejercicios y el modal de
+añadir a una rutina (`abrirAnadirEjercicio`). Por eso hay nueve ficheros de pantalla y diez
+destinos navegables.
+
+**`docs/especificaciones.md`** recoge lo que está previsto construir: series independientes por
+ejercicio, edición de entrenamientos, temporizador de descanso, ajustes, copia de seguridad,
+métricas de 1RM y el mapa muscular. Antes de proponer una funcionalidad nueva, mira si ya está
+ahí especificada — incluye el esquema de datos final y el orden de las migraciones.
 
 ### Navegación: pestañas con pila propia
 
@@ -121,8 +133,10 @@ borrar una rutina dejaría sus series huérfanas.
 
 Las imágenes y GIFs son **© Gym visual**, redistribuidos en el dataset original bajo permiso con dos
 condiciones: solo a 180×180 y con la atribución visible. **No se versionan ni se empaquetan en el
-APK** — `media/` está en el `.gitignore`. Se descargan en el primer arranque desde la pantalla de
-onboarding, o se resuelven contra la URL remota si el usuario la omite.
+APK**, y eso lo garantizan dos cosas: no están declarados en el bloque `assets:` de `pubspec.yaml`,
+y `inicializarMedia()` los descarga al directorio de `path_provider`, fuera del proyecto. La entrada
+`media/` del `.gitignore` es solo una red de seguridad. Se descargan en el primer arranque desde la
+pantalla de onboarding, o se resuelven contra la URL remota si el usuario la omite.
 
 `media.resolver(ruta)` devuelve un `ImageProvider`: `FileImage` si el fichero está descargado y
 `NetworkImage` si no. La app funciona durante la descarga, si se omite, o si falló a medias.
@@ -143,10 +157,11 @@ encapsulado en la extensión `Paleta`, así que en las pantallas se escribe `con
 `context.tarjeta`, `context.acento`. **No uses `CupertinoColors` directamente** y no metas hex
 literales salvo en `coloresRutina`, que identifica rutinas y debe ser estable en ambos temas.
 
-En `ui.dart` solo está lo que Flutter no trae: `SelectorNumerico`, `Pildora`, `Miniatura`,
-`PuntoColor`, `EstadoVacio`, `Cargando`, `BarraProgreso`, `DeslizarParaBorrar` y los diálogos. Para
-lo demás usa el widget del framework: `CupertinoListSection.insetGrouped` (envuelto en `ui.Grupo`),
-`CupertinoListTile`, `CupertinoSearchTextField`, `CupertinoSlidingSegmentedControl`.
+En `ui.dart` solo está lo que Flutter no trae. El inventario completo es `estilo`, `TituloGrande`,
+`Grupo`, `Pildora`, `PuntoColor`, `Miniatura`, `BotonPrincipal`, `SelectorNumerico`, `EstadoVacio`,
+`Cargando`, `BarraProgreso`, `DeslizarParaBorrar`, `barra`, `dialogoTexto`, `dialogoConfirmar` y
+`aviso`. Para lo demás usa el widget del framework: `CupertinoListSection.insetGrouped` (envuelto en
+`ui.Grupo`), `CupertinoListTile`, `CupertinoSearchTextField`, `CupertinoSlidingSegmentedControl`.
 
 **No importes `material.dart`.** Si necesitas algo que solo existe en Material (`BarraProgreso` nació
 así, sustituyendo a `LinearProgressIndicator`), compónlo en `ui.dart`.

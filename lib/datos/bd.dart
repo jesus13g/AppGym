@@ -1,13 +1,13 @@
 /// Esquema y consultas de la base de datos.
 ///
-/// Sustituye a la pareja modelo.py + conexionBD.py del proyecto Flet. A
-/// diferencia de SQLAlchemy, drift devuelve clases de datos planas y no objetos
-/// atados a una sesión, así que aquí no existe el problema de los objetos
-/// desasociados: una fila leída se puede pasar a la interfaz sin más.
+/// drift devuelve clases de datos planas, no objetos atados a una sesión: una
+/// fila leída se puede pasar a la interfaz sin más y no hay que preocuparse de
+/// accesos perezosos con la sesión ya cerrada.
 ///
-/// Aun así se conservan las consultas preagregadas ([resumenRutinas],
-/// [seriesConFecha], [coloresRutinas]): siguen ahorrando una consulta por fila
-/// en las pantallas que pintan listas.
+/// Las consultas preagregadas ([resumenRutinas], [seriesConFecha],
+/// [coloresRutinas], [ejerciciosDeRutina] con su join a la ficha) ahorran una
+/// consulta por fila en las pantallas que pintan listas. Al añadir una vista,
+/// añade también la consulta que le dé los datos ya resueltos.
 library;
 
 import 'package:drift/drift.dart';
