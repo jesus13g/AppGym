@@ -41,8 +41,13 @@ class PantallaResultadoEjercicio extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ejercicio = ref.watch(ejercicioProvider(idEjercicio));
+    // Una entrada por sesión, no por serie: con las series en crudo el gráfico
+    // pintaría una barra por cada una.
     final registros = ref.watch(
-      seriesConFechaProvider((idRutina: idRutina, idEjercicio: idEjercicio)),
+      resumenSesionesEjercicioProvider((
+        idRutina: idRutina,
+        idEjercicio: idEjercicio,
+      )),
     );
     final nombre = ejercicio.value?.nombre ?? 'Ejercicio';
 
@@ -77,14 +82,16 @@ class _Contenido extends StatelessWidget {
   const _Contenido({required this.nombre, required this.registros});
 
   final String nombre;
-  final List<RegistroSerie> registros;
+  final List<ResumenSesionEjercicio> registros;
 
   @override
   Widget build(BuildContext context) {
     final recientes = registros.length > _maxBarras
         ? registros.sublist(registros.length - _maxBarras)
         : registros;
-    final maximo = registros.map((r) => r.peso).reduce((a, b) => a > b ? a : b);
+    final maximo = registros
+        .map((r) => r.pesoMaximo)
+        .reduce((a, b) => a > b ? a : b);
     final ultimo = registros.last;
 
     return SafeArea(
@@ -100,7 +107,7 @@ class _Contenido extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _Dato('${formato.numero(ultimo.peso)} kg', 'Último'),
+                _Dato('${formato.numero(ultimo.pesoMaximo)} kg', 'Último'),
                 _Dato('${formato.numero(maximo)} kg', 'Máximo'),
                 _Dato('${registros.length}', 'Sesiones'),
               ],
@@ -134,7 +141,8 @@ class _Contenido extends StatelessWidget {
                     style: ui.estilo(context),
                   ),
                   subtitle: Text(
-                    '${r.series} series × ${r.repeticiones} repeticiones',
+                    '${formato.plural(r.nSeries, 'serie', 'series')} · '
+                    '${formato.numero(r.volumen)} kg de volumen',
                     style: ui.estilo(
                       context,
                       size: t.footnote,
@@ -142,7 +150,7 @@ class _Contenido extends StatelessWidget {
                     ),
                   ),
                   additionalInfo: Text(
-                    '${formato.numero(r.peso)} kg',
+                    '${formato.numero(r.pesoMaximo)} kg',
                     style: ui.estilo(context, color: context.textoSec),
                   ),
                 ),
@@ -158,7 +166,7 @@ class _Contenido extends StatelessWidget {
 class _Grafico extends StatelessWidget {
   const _Grafico({required this.registros, required this.maximo});
 
-  final List<RegistroSerie> registros;
+  final List<ResumenSesionEjercicio> registros;
   final double maximo;
 
   @override
@@ -222,7 +230,7 @@ class _Grafico extends StatelessWidget {
             x: indice,
             barRods: [
               BarChartRodData(
-                toY: r.peso,
+                toY: r.pesoMaximo,
                 width: 16,
                 color: context.acento,
                 borderRadius: const BorderRadius.vertical(

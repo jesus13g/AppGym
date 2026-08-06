@@ -80,9 +80,10 @@ final idsCatalogoEnRutinaProvider = FutureProvider.family<Set<String>, int>(
   (ref, idRutina) => ref.watch(bdProvider).idsCatalogoEnRutina(idRutina),
 );
 
-/// Valores del último registro de un ejercicio, para precargar el formulario.
-final ultimaSerieProvider = FutureProvider.family<UltimaSerie?, int>(
-  (ref, idEjercicio) => ref.watch(bdProvider).ultimaSerieEjercicio(idEjercicio),
+/// Series de la última sesión de un ejercicio, para precargar el registro.
+final ultimasSeriesProvider = FutureProvider.family<List<ValoresSerie>, int>(
+  (ref, idEjercicio) =>
+      ref.watch(bdProvider).ultimasSeriesEjercicio(idEjercicio),
 );
 
 // ── Catálogo ─────────────────────────────────────────────────────────────────
@@ -105,6 +106,14 @@ final seriesConFechaProvider =
       (ref, clave) => ref
           .watch(bdProvider)
           .seriesConFecha(clave.idRutina, clave.idEjercicio),
+    );
+
+/// Una entrada por sesión, que es lo que pintan el gráfico y las listas.
+final resumenSesionesEjercicioProvider =
+    FutureProvider.family<List<ResumenSesionEjercicio>, ClaveSeries>(
+      (ref, clave) => ref
+          .watch(bdProvider)
+          .resumenSesionesEjercicio(clave.idRutina, clave.idEjercicio),
     );
 
 final entrenamientosPorDiaProvider = FutureProvider<Map<DateTime, int>>(
@@ -132,7 +141,8 @@ void invalidarRutina(WidgetRef ref, int idRutina) {
 void invalidarEntrenamientos(WidgetRef ref, int idRutina) {
   ref.invalidate(entrenamientosPorDiaProvider);
   ref.invalidate(seriesConFechaProvider);
-  ref.invalidate(ultimaSerieProvider);
+  ref.invalidate(resumenSesionesEjercicioProvider);
+  ref.invalidate(ultimasSeriesProvider);
   ref.invalidate(estadisticasRutinaProvider(idRutina));
   invalidarRutinas(ref);
 }

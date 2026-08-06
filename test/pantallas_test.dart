@@ -8,7 +8,9 @@ import 'package:appgym/datos/bd.dart';
 import 'package:appgym/datos/semilla.dart';
 import 'package:appgym/estado/providers.dart';
 import 'package:appgym/pantallas/catalogo.dart';
+import 'package:appgym/pantallas/entrenar.dart';
 import 'package:appgym/pantallas/rutinas.dart';
+import 'package:appgym/tema/ui.dart' as ui;
 import 'package:drift/native.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -55,6 +57,18 @@ Widget _app(AppBD bd, Widget pantalla) => ProviderScope(
     home: pantalla,
   ),
 );
+
+/// Pone la ventana del tamaño de un móvil.
+///
+/// Por defecto los tests miden 800×600, donde casi nada desborda; el ancho que
+/// importa es el del teléfono, que es donde caben —o no— los cuatro controles
+/// de una fila de serie.
+void _comoUnMovil(WidgetTester tester) {
+  tester.view.physicalSize = const Size(375 * 3, 812 * 3);
+  tester.view.devicePixelRatio = 3;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+}
 
 void main() {
   late AppBD bd;
@@ -168,6 +182,83 @@ void main() {
 
       expect(find.text('barbell bench press'), findsOneWidget);
       expect(find.text('dumbbell curl'), findsNothing);
+    });
+  });
+
+  group('registro de entrenamiento', () {
+    late int idRutina;
+    late int idEjercicio;
+
+    setUp(() async {
+      idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarEjercicio(idRutina, 'Press banca');
+      idEjercicio = (await bd.ejerciciosDeRutina(idRutina)).single.id;
+    });
+
+    testWidgets('sin histórico propone cuatro series editables', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      // Dos selectores por serie: repeticiones y peso.
+      expect(find.byType(ui.SelectorEnLinea), findsNWidgets(8));
+      expect(find.text('Primera vez con este ejercicio'), findsOneWidget);
+    });
+
+    testWidgets('precarga tantas filas como series tuvo la última sesión', (
+      tester,
+    ) async {
+      // Seis series, que es el caso que el ancho de un móvil aprieta.
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [
+          ValoresSerie(repeticiones: 12, peso: 40, calentamiento: true),
+          ValoresSerie(repeticiones: 10, peso: 60),
+          ValoresSerie(repeticiones: 10, peso: 60),
+          ValoresSerie(repeticiones: 8, peso: 65),
+          ValoresSerie(repeticiones: 6, peso: 70),
+          ValoresSerie(repeticiones: 6, peso: 70),
+        ],
+      });
+
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      // Seis filas pintadas y ni un RenderFlex desbordado: el test falla solo
+      // si alguna fila no cabe.
+      expect(find.byType(ui.SelectorEnLinea), findsNWidgets(12));
+      expect(find.text('65,0 kg'), findsOneWidget);
+      expect(find.text('70,0 kg'), findsNWidgets(2));
+      expect(find.textContaining('Último: 6 series'), findsOneWidget);
+    });
+
+    testWidgets('añadir serie copia la última y se guarda una fila por serie', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Añadir serie'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ui.SelectorEnLinea), findsNWidgets(10));
+
+      // Subir las repeticiones de la primera serie no toca a las demás: es lo
+      // que el esquema agregado no permitía.
+      await tester.tap(find.byIcon(CupertinoIcons.plus).first);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Guardar entrenamiento'));
+      await tester.pumpAndSettle();
+
+      final series = await bd.seriesConFecha(idRutina, idEjercicio);
+      expect(series.length, 5);
+      expect(series.map((s) => s.nSerie), [1, 2, 3, 4, 5]);
+      expect(series.first.repeticiones, 11);
+      expect(series.skip(1).map((s) => s.repeticiones), everyElement(10));
+      expect(series.map((s) => s.peso), everyElement(20));
     });
   });
 }

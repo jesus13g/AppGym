@@ -84,7 +84,7 @@ void main() {
       await bd.insertarEjercicio(id, 'Sentadilla');
       final ejercicio = (await bd.ejerciciosDeRutina(id)).single;
       await bd.insertarEntrenamiento(id, DateTime(2026, 3, 1), {
-        ejercicio.id: const UltimaSerie(series: 4, repeticiones: 8, peso: 80),
+        ejercicio.id: const [ValoresSerie(repeticiones: 8, peso: 80)],
       });
 
       await bd.borrarRutina(id);
@@ -226,18 +226,24 @@ void main() {
       idEjercicio = (await bd.ejerciciosDeRutina(idRutina)).single.id;
     });
 
-    test('guarda las series y las devuelve con su fecha, en orden', () async {
+    test('guarda una fila por serie, con su fecha y en orden', () async {
+      // La pirámide que el esquema v1 no podía anotar: cada serie con su peso.
       await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 10), {
-        idEjercicio: const UltimaSerie(series: 4, repeticiones: 8, peso: 60),
+        idEjercicio: const [
+          ValoresSerie(repeticiones: 10, peso: 60),
+          ValoresSerie(repeticiones: 8, peso: 65),
+          ValoresSerie(repeticiones: 6, peso: 70),
+        ],
       });
       await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
-        idEjercicio: const UltimaSerie(series: 3, repeticiones: 10, peso: 50),
+        idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 50)],
       });
 
       final registros = await bd.seriesConFecha(idRutina, idEjercicio);
-      expect(registros.map((r) => r.peso), [50, 60]);
+      expect(registros.map((r) => r.peso), [50, 60, 65, 70]);
+      expect(registros.map((r) => r.nSerie), [1, 1, 2, 3]);
       expect(registros.first.fecha, DateTime(2026, 3, 1));
-      expect(registros.last.repeticiones, 8);
+      expect(registros.last.repeticiones, 6);
     });
 
     test('un entrenamiento sin series no se guarda', () async {
@@ -245,37 +251,94 @@ void main() {
         await bd.insertarEntrenamiento(idRutina, DateTime.now(), {}),
         isFalse,
       );
+      // Un ejercicio con la lista vacía tampoco: es lo que sustituye al
+      // interruptor de «incluir ejercicio».
+      expect(
+        await bd.insertarEntrenamiento(idRutina, DateTime.now(), {
+          idEjercicio: const [],
+        }),
+        isFalse,
+      );
       expect(await bd.contarEntrenamientosRutina(idRutina), 0);
     });
 
     test(
-      'ultimaSerieEjercicio devuelve la del entrenamiento más reciente',
+      'ultimasSeriesEjercicio devuelve todas las de la última sesión',
       () async {
-        expect(await bd.ultimaSerieEjercicio(idEjercicio), isNull);
+        expect(await bd.ultimasSeriesEjercicio(idEjercicio), isEmpty);
 
         await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
-          idEjercicio: const UltimaSerie(series: 3, repeticiones: 10, peso: 50),
+          idEjercicio: const [
+            ValoresSerie(repeticiones: 10, peso: 50),
+            ValoresSerie(repeticiones: 10, peso: 50),
+          ],
         });
         await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 10), {
-          idEjercicio: const UltimaSerie(
-            series: 4,
-            repeticiones: 8,
-            peso: 62.5,
-          ),
+          idEjercicio: const [
+            ValoresSerie(repeticiones: 12, peso: 40, calentamiento: true),
+            ValoresSerie(repeticiones: 8, peso: 62.5),
+            ValoresSerie(repeticiones: 8, peso: 62.5),
+            ValoresSerie(repeticiones: 6, peso: 65),
+          ],
         });
 
-        final ultima = await bd.ultimaSerieEjercicio(idEjercicio);
-        expect(ultima!.peso, 62.5);
-        expect(ultima.series, 4);
+        // Cuatro series, no un valor agregado: es lo que precarga el registro.
+        expect(await bd.ultimasSeriesEjercicio(idEjercicio), const [
+          ValoresSerie(repeticiones: 12, peso: 40, calentamiento: true),
+          ValoresSerie(repeticiones: 8, peso: 62.5),
+          ValoresSerie(repeticiones: 8, peso: 62.5),
+          ValoresSerie(repeticiones: 6, peso: 65),
+        ]);
       },
     );
+
+    test('resumenSesionesEjercicio agrega por sesión, no por serie', () async {
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [
+          ValoresSerie(repeticiones: 10, peso: 60),
+          ValoresSerie(repeticiones: 8, peso: 70),
+        ],
+      });
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 8), {
+        idEjercicio: const [ValoresSerie(repeticiones: 5, peso: 80)],
+      });
+
+      final resumen = await bd.resumenSesionesEjercicio(idRutina, idEjercicio);
+      expect(resumen.length, 2);
+      expect(resumen.first.nSeries, 2);
+      expect(resumen.first.volumen, 10 * 60 + 8 * 70);
+      expect(resumen.first.pesoMaximo, 70);
+      // Epley: 70 × (1 + 8/30) = 88,67, mejor que 60 × (1 + 10/30) = 80.
+      expect(resumen.first.mejor1RM, closeTo(88.67, 0.01));
+      expect(resumen.last.fecha, DateTime(2026, 3, 8));
+    });
+
+    test('el calentamiento no cuenta en volumen, máximo ni 1RM', () async {
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [
+          ValoresSerie(repeticiones: 20, peso: 100, calentamiento: true),
+          ValoresSerie(repeticiones: 10, peso: 60),
+        ],
+      });
+
+      final resumen = await bd.resumenSesionesEjercicio(idRutina, idEjercicio);
+      expect(resumen.single.nSeries, 1);
+      expect(resumen.single.volumen, 600);
+      expect(resumen.single.pesoMaximo, 60);
+      expect(resumen.single.mejor1RM, closeTo(80, 0.01));
+
+      // Pero la serie sigue guardada: se registra, no se descarta.
+      final series = await bd.seriesConFecha(idRutina, idEjercicio);
+      expect(series.length, 2);
+      expect(series.first.calentamiento, isTrue);
+    });
 
     test('resumenRutinas agrega conteo y última fecha de una vez', () async {
       final otra = (await bd.insertarRutina('Pierna'))!;
       await bd.insertarEjercicio(otra, 'Sentadilla');
       await bd.insertarEjercicio(otra, 'Peso muerto');
       await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 5), {
-        idEjercicio: const UltimaSerie(series: 4, repeticiones: 8, peso: 60),
+        idEjercicio: const [ValoresSerie(repeticiones: 8, peso: 60)],
       });
 
       final resumen = await bd.resumenRutinas();
@@ -290,17 +353,13 @@ void main() {
       'entrenamientosPorDia se queda con el más reciente de cada día',
       () async {
         await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 5, 9), {
-          idEjercicio: const UltimaSerie(series: 1, repeticiones: 1, peso: 10),
+          idEjercicio: const [ValoresSerie(repeticiones: 1, peso: 10)],
         });
         final otra = (await bd.insertarRutina('Pierna'))!;
         await bd.insertarEjercicio(otra, 'Sentadilla');
         final otroEjercicio = (await bd.ejerciciosDeRutina(otra)).single.id;
         await bd.insertarEntrenamiento(otra, DateTime(2026, 3, 5, 19), {
-          otroEjercicio: const UltimaSerie(
-            series: 1,
-            repeticiones: 1,
-            peso: 10,
-          ),
+          otroEjercicio: const [ValoresSerie(repeticiones: 1, peso: 10)],
         });
 
         final porDia = await bd.entrenamientosPorDia();
@@ -310,7 +369,7 @@ void main() {
 
     test('borrar un ejercicio se lleva sus series', () async {
       await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 5), {
-        idEjercicio: const UltimaSerie(series: 4, repeticiones: 8, peso: 60),
+        idEjercicio: const [ValoresSerie(repeticiones: 8, peso: 60)],
       });
       await bd.borrarEjercicio(idRutina, idEjercicio);
 

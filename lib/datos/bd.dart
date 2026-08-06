@@ -13,6 +13,9 @@ library;
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
+import 'esquemas.dart';
+import 'respaldo.dart';
+
 part 'bd.g.dart';
 
 /// Paleta de iOS que se reparte entre las rutinas para identificarlas en el
@@ -98,6 +101,7 @@ class Ejercicios extends Table {
   TextColumn get descripcion => text().nullable()();
 }
 
+/// Una serie registrada: una fila por serie hecha.
 @DataClassName('Serie')
 class SeriesTabla extends Table {
   @override
@@ -108,9 +112,23 @@ class SeriesTabla extends Table {
       integer().references(Entrenamientos, #id, onDelete: KeyAction.cascade)();
   IntColumn get idEjercicio =>
       integer().references(Ejercicios, #id, onDelete: KeyAction.cascade)();
+
+  /// Índice de la serie, de 1 a N, dentro del ejercicio en esa sesión.
+  ///
+  /// **Ojo con el nombre**: en el esquema v1 esta columna guardaba el *recuento*
+  /// de series de una única fila agregada por ejercicio y sesión, de forma que
+  /// las cuatro series compartían repeticiones y peso. Desde la v2 hay una fila
+  /// por serie y esto es su índice. El nombre se conservó para no reescribir el
+  /// resto de consultas; la semántica es la nueva.
   IntColumn get nSerie => integer()();
+
   IntColumn get repeticiones => integer()();
   RealColumn get peso => real()();
+
+  /// Serie de calentamiento: se guarda, pero queda fuera del volumen, de los
+  /// máximos y del 1RM estimado.
+  BoolColumn get calentamiento =>
+      boolean().withDefault(const Constant(false))();
 }
 
 // ── Resultados de las consultas preagregadas ─────────────────────────────────
@@ -136,15 +154,46 @@ class ResumenRutina {
 class RegistroSerie {
   const RegistroSerie({
     required this.fecha,
-    required this.series,
+    required this.nSerie,
     required this.repeticiones,
     required this.peso,
+    required this.calentamiento,
   });
 
   final DateTime fecha;
-  final int series;
+  final int nSerie;
   final int repeticiones;
   final double peso;
+  final bool calentamiento;
+}
+
+/// Lo que una sesión dio de sí en un ejercicio, ya agregado.
+///
+/// El calentamiento no cuenta en ninguna de las cifras.
+class ResumenSesionEjercicio {
+  const ResumenSesionEjercicio({
+    required this.idEntrenamiento,
+    required this.fecha,
+    required this.nSeries,
+    required this.volumen,
+    required this.pesoMaximo,
+    required this.mejor1RM,
+  });
+
+  final int idEntrenamiento;
+  final DateTime fecha;
+  final int nSeries;
+
+  /// Suma de peso × repeticiones de todas las series efectivas.
+  final double volumen;
+
+  final double pesoMaximo;
+
+  /// 1RM estimado por Epley: `peso × (1 + repeticiones / 30)`.
+  ///
+  /// Se calcula aquí porque sale de la misma agregación; la fórmula elegible y
+  /// la pantalla de récords son C16.
+  final double mejor1RM;
 }
 
 /// Un ejercicio de rutina con su ficha de catálogo ya resuelta.
@@ -161,17 +210,42 @@ class EjercicioConFicha {
   String get nombre => ejercicio.nombre;
 }
 
-/// Valores del último registro de un ejercicio, para precargar el formulario.
-class UltimaSerie {
-  const UltimaSerie({
-    required this.series,
+/// Los valores de **una** serie, tal y como se registran o se precargan.
+///
+/// Sustituye a la antigua `UltimaSerie`, que además de guardar el recuento de
+/// series sugería por el nombre que solo servía para lo último registrado.
+class ValoresSerie {
+  const ValoresSerie({
     required this.repeticiones,
     required this.peso,
+    this.calentamiento = false,
   });
 
-  final int series;
   final int repeticiones;
   final double peso;
+  final bool calentamiento;
+
+  ValoresSerie copiar({int? repeticiones, double? peso, bool? calentamiento}) =>
+      ValoresSerie(
+        repeticiones: repeticiones ?? this.repeticiones,
+        peso: peso ?? this.peso,
+        calentamiento: calentamiento ?? this.calentamiento,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      other is ValoresSerie &&
+      other.repeticiones == repeticiones &&
+      other.peso == peso &&
+      other.calentamiento == calentamiento;
+
+  @override
+  int get hashCode => Object.hash(repeticiones, peso, calentamiento);
+
+  @override
+  String toString() =>
+      'ValoresSerie($repeticiones × $peso kg'
+      '${calentamiento ? ', calentamiento' : ''})';
 }
 
 @DriftDatabase(
@@ -184,21 +258,70 @@ class UltimaSerie {
   ],
 )
 class AppBD extends _$AppBD {
+  /// Sin [executor] abre el fichero de siempre; los tests pasan el suyo en
+  /// memoria.
+  ///
+  /// La ruta se calcula a mano en vez de dejársela a `drift_flutter` porque
+  /// `databasePath` es el único punto que se ejecuta con la base todavía
+  /// cerrada, que es cuando se puede respaldar el fichero antes de migrarlo.
+  /// Es la misma ruta por defecto del paquete, no una nueva.
   AppBD([QueryExecutor? executor])
-    : super(executor ?? driftDatabase(name: 'appgym'));
+    : super(
+        executor ??
+            driftDatabase(
+              name: 'appgym',
+              native: DriftNativeOptions(databasePath: rutaBaseDeDatos),
+            ),
+      );
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => m.createAll(),
+    // Los pasos se escriben contra el esquema *de esa versión* (`esquemas.dart`,
+    // generado con `drift_dev schema steps`), no contra las tablas de arriba:
+    // así una migración vieja no se rompe cuando el modelo actual cambie.
+    onUpgrade: stepByStep(from1To2: _de1A2),
     beforeOpen: (details) async {
       // Sin esto SQLite ignora las claves foráneas y los ON DELETE CASCADE
       // no llegan a ejecutarse.
       await customStatement('PRAGMA foreign_keys = ON');
     },
   );
+
+  /// v1 → v2: cada fila agregada se expande en una fila por serie.
+  ///
+  /// Es la única migración del proyecto que transforma datos. No se puede
+  /// insertar en `serie` mientras se la está recorriendo, así que las filas
+  /// viejas se apartan primero a una tabla temporal. Lo que sale es fiel a lo
+  /// que el usuario quiso decir: cuatro series de 10×60 kg se convierten en
+  /// cuatro filas de 10×60 kg, y el volumen total no cambia.
+  Future<void> _de1A2(Migrator m, Schema2 esquema) async {
+    await m.addColumn(esquema.serie, esquema.serie.calentamiento);
+
+    await customStatement(
+      'CREATE TEMPORARY TABLE serie_v1 AS SELECT * FROM serie',
+    );
+    await customStatement('DELETE FROM serie');
+    await customStatement('''
+      WITH RECURSIVE indices(i) AS (
+        SELECT 1
+        UNION ALL
+        SELECT i + 1 FROM indices
+        WHERE i < (SELECT COALESCE(MAX(n_serie), 0) FROM serie_v1)
+      )
+      INSERT INTO serie (
+        id_entrenamiento, id_ejercicio, n_serie, repeticiones, peso, calentamiento
+      )
+      SELECT v.id_entrenamiento, v.id_ejercicio, i.i, v.repeticiones, v.peso, 0
+      FROM serie_v1 v
+      JOIN indices i ON i.i <= v.n_serie
+      ORDER BY v.id, i.i
+    ''');
+    await customStatement('DROP TABLE serie_v1');
+  }
 
   // ── Rutinas ────────────────────────────────────────────────────────────────
 
@@ -455,40 +578,59 @@ class AppBD extends _$AppBD {
 
   // ── Entrenamientos y series ────────────────────────────────────────────────
 
-  /// Guarda un entrenamiento con una serie por ejercicio.
+  /// Guarda un entrenamiento con todas las series de cada ejercicio.
   ///
-  /// [series] va de id de ejercicio a los valores registrados.
+  /// [series] va de id de ejercicio a la lista de series que se hicieron, en
+  /// orden. Un ejercicio con la lista vacía sencillamente no se guarda, que es
+  /// lo que sustituye al antiguo interruptor de «incluir ejercicio».
   Future<bool> insertarEntrenamiento(
     int idRutina,
     DateTime fecha,
-    Map<int, UltimaSerie> series,
+    Map<int, List<ValoresSerie>> series,
   ) async {
-    if (series.isEmpty) return false;
+    final conSeries = _soloConSeries(series);
+    if (conSeries.isEmpty) return false;
 
     await transaction(() async {
       final idEntrenamiento = await into(entrenamientos).insert(
         EntrenamientosCompanion.insert(idRutina: idRutina, fecha: fecha),
       );
-      await batch((b) {
-        b.insertAll(seriesTabla, [
-          for (final entrada in series.entries)
-            SeriesTablaCompanion.insert(
-              idEntrenamiento: idEntrenamiento,
-              idEjercicio: entrada.key,
-              nSerie: entrada.value.series,
-              repeticiones: entrada.value.repeticiones,
-              peso: entrada.value.peso,
-            ),
-        ]);
-      });
+      await _insertarSeries(idEntrenamiento, conSeries);
     });
     return true;
   }
 
-  /// Series de un ejercicio en una rutina, con su fecha, ordenadas por fecha.
+  Map<int, List<ValoresSerie>> _soloConSeries(
+    Map<int, List<ValoresSerie>> series,
+  ) => {
+    for (final entrada in series.entries)
+      if (entrada.value.isNotEmpty) entrada.key: entrada.value,
+  };
+
+  Future<void> _insertarSeries(
+    int idEntrenamiento,
+    Map<int, List<ValoresSerie>> series,
+  ) => batch((b) {
+    b.insertAll(seriesTabla, [
+      for (final entrada in series.entries)
+        for (final (indice, valores) in entrada.value.indexed)
+          SeriesTablaCompanion.insert(
+            idEntrenamiento: idEntrenamiento,
+            idEjercicio: entrada.key,
+            nSerie: indice + 1,
+            repeticiones: valores.repeticiones,
+            peso: valores.peso,
+            calentamiento: Value(valores.calentamiento),
+          ),
+    ]);
+  });
+
+  /// Series de un ejercicio en una rutina, una entrada por serie.
   ///
   /// Devolver la fecha aquí evita que la pantalla de progreso tenga que navegar
-  /// de la serie a su entrenamiento fila a fila.
+  /// de la serie a su entrenamiento fila a fila. Quien necesite el dato
+  /// agregado por sesión tiene [resumenSesionesEjercicio]; esto son las series
+  /// en crudo, calentamientos incluidos.
   Future<List<RegistroSerie>> seriesConFecha(
     int idRutina,
     int idEjercicio,
@@ -504,46 +646,112 @@ class AppBD extends _$AppBD {
             entrenamientos.idRutina.equals(idRutina) &
                 seriesTabla.idEjercicio.equals(idEjercicio),
           )
-          ..orderBy([OrderingTerm(expression: entrenamientos.fecha)]);
+          ..orderBy([
+            OrderingTerm(expression: entrenamientos.fecha),
+            OrderingTerm(expression: seriesTabla.idEntrenamiento),
+            OrderingTerm(expression: seriesTabla.nSerie),
+          ]);
 
     return [
       for (final f in await consulta.get())
         RegistroSerie(
           fecha: f.readTable(entrenamientos).fecha,
-          series: f.readTable(seriesTabla).nSerie,
+          nSerie: f.readTable(seriesTabla).nSerie,
           repeticiones: f.readTable(seriesTabla).repeticiones,
           peso: f.readTable(seriesTabla).peso,
+          calentamiento: f.readTable(seriesTabla).calentamiento,
         ),
     ];
   }
 
-  /// Valores del último registro de un ejercicio, o `null` si nunca se entrenó.
-  Future<UltimaSerie?> ultimaSerieEjercicio(int idEjercicio) async {
-    final consulta =
-        select(seriesTabla).join([
-            innerJoin(
-              entrenamientos,
-              entrenamientos.id.equalsExp(seriesTabla.idEntrenamiento),
-            ),
-          ])
-          ..where(seriesTabla.idEjercicio.equals(idEjercicio))
-          ..orderBy([
-            OrderingTerm(
-              expression: entrenamientos.fecha,
-              mode: OrderingMode.desc,
-            ),
-            OrderingTerm(expression: seriesTabla.id, mode: OrderingMode.desc),
-          ])
-          ..limit(1);
+  /// Lo que dio de sí cada **sesión** en un ejercicio, de la más antigua a la
+  /// más reciente.
+  ///
+  /// Es lo que consumen el gráfico y las listas de progreso: con
+  /// [seriesConFecha] pintarían una barra por serie en vez de una por sesión.
+  /// Las series de calentamiento no entran en ninguna de las cifras, así que
+  /// una sesión que solo fuera calentamiento no aparece aquí.
+  Future<List<ResumenSesionEjercicio>> resumenSesionesEjercicio(
+    int idRutina,
+    int idEjercicio,
+  ) async {
+    final filas = await customSelect(
+      '''
+      SELECT e.id            AS id,
+             e.fecha         AS fecha,
+             COUNT(*)        AS n_series,
+             SUM(s.peso * s.repeticiones)            AS volumen,
+             MAX(s.peso)                             AS maximo,
+             MAX(s.peso * (1 + s.repeticiones / 30.0)) AS mejor_1rm
+      FROM serie s
+      JOIN entrenamientos e ON e.id = s.id_entrenamiento
+      WHERE e.id_rutina = ? AND s.id_ejercicio = ? AND s.calentamiento = 0
+      GROUP BY e.id
+      ORDER BY e.fecha, e.id
+      ''',
+      variables: [Variable.withInt(idRutina), Variable.withInt(idEjercicio)],
+      readsFrom: {seriesTabla, entrenamientos},
+    ).get();
 
-    final fila = await consulta.getSingleOrNull();
-    if (fila == null) return null;
-    final serie = fila.readTable(seriesTabla);
-    return UltimaSerie(
-      series: serie.nSerie,
-      repeticiones: serie.repeticiones,
-      peso: serie.peso,
-    );
+    return [
+      for (final f in filas)
+        ResumenSesionEjercicio(
+          idEntrenamiento: f.read<int>('id'),
+          fecha: f.read<DateTime>('fecha'),
+          nSeries: f.read<int>('n_series'),
+          volumen: f.read<double>('volumen'),
+          pesoMaximo: f.read<double>('maximo'),
+          mejor1RM: f.read<double>('mejor_1rm'),
+        ),
+    ];
+  }
+
+  /// Series de la **última sesión** de un ejercicio, para precargar el registro.
+  ///
+  /// Devuelve tantas entradas como series tuvo aquel día, con sus valores; la
+  /// lista vacía significa que el ejercicio nunca se ha entrenado.
+  Future<List<ValoresSerie>> ultimasSeriesEjercicio(int idEjercicio) async {
+    final ultima =
+        await (select(seriesTabla).join([
+                innerJoin(
+                  entrenamientos,
+                  entrenamientos.id.equalsExp(seriesTabla.idEntrenamiento),
+                ),
+              ])
+              ..where(seriesTabla.idEjercicio.equals(idEjercicio))
+              ..orderBy([
+                OrderingTerm(
+                  expression: entrenamientos.fecha,
+                  mode: OrderingMode.desc,
+                ),
+                OrderingTerm(
+                  expression: entrenamientos.id,
+                  mode: OrderingMode.desc,
+                ),
+              ])
+              ..limit(1))
+            .getSingleOrNull();
+    if (ultima == null) return const [];
+
+    final idEntrenamiento = ultima.readTable(entrenamientos).id;
+    final series =
+        await (select(seriesTabla)
+              ..where(
+                (s) =>
+                    s.idEjercicio.equals(idEjercicio) &
+                    s.idEntrenamiento.equals(idEntrenamiento),
+              )
+              ..orderBy([(s) => OrderingTerm(expression: s.nSerie)]))
+            .get();
+
+    return [
+      for (final s in series)
+        ValoresSerie(
+          repeticiones: s.repeticiones,
+          peso: s.peso,
+          calentamiento: s.calentamiento,
+        ),
+    ];
   }
 
   /// Fecha del último entrenamiento de una rutina.

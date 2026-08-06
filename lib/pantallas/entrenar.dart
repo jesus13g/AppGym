@@ -1,4 +1,9 @@
-/// Registro de un entrenamiento: series, repeticiones y peso por ejercicio.
+/// Registro de un entrenamiento: las series de cada ejercicio, una a una.
+///
+/// Cada serie es una fila con sus repeticiones y su peso, de modo que una
+/// pirámide o un drop set se anotan tal y como se hicieron. Un ejercicio sin
+/// series no se guarda, que es lo que sustituye al antiguo interruptor de
+/// «incluir ejercicio».
 library;
 
 import 'package:flutter/cupertino.dart';
@@ -12,7 +17,8 @@ import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
 
 /// Lo que se propone cuando el ejercicio nunca se ha entrenado.
-const _porDefecto = UltimaSerie(series: 4, repeticiones: 10, peso: 20);
+const _serieNueva = ValoresSerie(repeticiones: 10, peso: 20);
+const _seriesPorDefecto = 4;
 
 Future<void> abrirEntrenar(BuildContext context, int idRutina) =>
     Navigator.of(context, rootNavigator: true).push(
@@ -32,14 +38,11 @@ class PantallaEntrenar extends ConsumerStatefulWidget {
 }
 
 class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
-  /// id de ejercicio -> valores que se van a guardar.
-  final _valores = <int, UltimaSerie>{};
-
-  /// id de ejercicio -> si entra en el entrenamiento.
-  final _incluidos = <int, bool>{};
+  /// id de ejercicio -> series que se van a guardar, en orden.
+  final _series = <int, List<ValoresSerie>>{};
 
   /// id de ejercicio -> lo que se registró la última vez, para la referencia.
-  final _ultimas = <int, UltimaSerie?>{};
+  final _ultimas = <int, List<ValoresSerie>>{};
 
   List<EjercicioConFicha>? _ejercicios;
   bool _guardando = false;
@@ -55,11 +58,13 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
     final ejercicios = await bd.ejerciciosDeRutina(widget.idRutina);
 
     for (final ejercicio in ejercicios) {
-      // Se precarga lo último registrado, que casi siempre es lo que se repite.
-      final ultima = await bd.ultimaSerieEjercicio(ejercicio.id);
-      _ultimas[ejercicio.id] = ultima;
-      _valores[ejercicio.id] = ultima ?? _porDefecto;
-      _incluidos[ejercicio.id] = true;
+      // Se precargan las series de la última sesión —cuántas fueron incluido—,
+      // que casi siempre es lo que se repite.
+      final ultimas = await bd.ultimasSeriesEjercicio(ejercicio.id);
+      _ultimas[ejercicio.id] = ultimas;
+      _series[ejercicio.id] = ultimas.isEmpty
+          ? List.filled(_seriesPorDefecto, _serieNueva)
+          : List.of(ultimas);
     }
 
     if (mounted) setState(() => _ejercicios = ejercicios);
@@ -68,24 +73,15 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
   Future<void> _guardar() async {
     if (_guardando) return;
 
-    final aGuardar = {
-      for (final entrada in _valores.entries)
-        if (_incluidos[entrada.key] ?? false) entrada.key: entrada.value,
-    };
-    if (aGuardar.isEmpty) {
-      ui.aviso(context, 'Marca al menos un ejercicio');
-      return;
-    }
-
     setState(() => _guardando = true);
     final bien = await ref
         .read(bdProvider)
-        .insertarEntrenamiento(widget.idRutina, DateTime.now(), aGuardar);
+        .insertarEntrenamiento(widget.idRutina, DateTime.now(), _series);
     if (!mounted) return;
 
     if (!bien) {
       setState(() => _guardando = false);
-      ui.aviso(context, 'No se pudo guardar el entrenamiento');
+      ui.aviso(context, 'Añade al menos una serie');
       return;
     }
     invalidarEntrenamientos(ref, widget.idRutina);
@@ -170,14 +166,12 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
                   for (final ejercicio in ejercicios)
                     Padding(
                       padding: const EdgeInsets.only(bottom: t.l),
-                      child: _Tarjeta(
+                      child: TarjetaEjercicio(
                         ejercicio: ejercicio,
-                        ultima: _ultimas[ejercicio.id],
-                        valores: _valores[ejercicio.id]!,
-                        incluido: _incluidos[ejercicio.id] ?? true,
-                        onIncluido: (valor) =>
-                            setState(() => _incluidos[ejercicio.id] = valor),
-                        onValores: (valor) => _valores[ejercicio.id] = valor,
+                        ultimas: _ultimas[ejercicio.id] ?? const [],
+                        series: _series[ejercicio.id] ?? const [],
+                        onSeries: (valor) =>
+                            setState(() => _series[ejercicio.id] = valor),
                       ),
                     ),
                   Padding(
@@ -203,155 +197,257 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
   );
 }
 
-/// Tarjeta de un ejercicio con sus tres steppers y el interruptor de incluir.
-class _Tarjeta extends StatefulWidget {
-  const _Tarjeta({
+/// Tarjeta de un ejercicio con la lista de sus series.
+///
+/// Es pública para poder montarla suelta en los tests de widget, que es donde
+/// se vigila que la fila de cuatro controles no desborde.
+class TarjetaEjercicio extends StatelessWidget {
+  const TarjetaEjercicio({
+    super.key,
     required this.ejercicio,
-    required this.ultima,
-    required this.valores,
-    required this.incluido,
-    required this.onIncluido,
-    required this.onValores,
+    required this.ultimas,
+    required this.series,
+    required this.onSeries,
   });
 
   final EjercicioConFicha ejercicio;
-  final UltimaSerie? ultima;
-  final UltimaSerie valores;
-  final bool incluido;
-  final ValueChanged<bool> onIncluido;
-  final ValueChanged<UltimaSerie> onValores;
 
-  @override
-  State<_Tarjeta> createState() => _TarjetaState();
-}
+  /// Series de la última sesión, solo para la línea de referencia.
+  final List<ValoresSerie> ultimas;
 
-class _TarjetaState extends State<_Tarjeta> {
-  /// Los tres steppers acumulan sus cambios aquí en vez de pisarse entre ellos.
-  late UltimaSerie _actual = widget.valores;
+  final List<ValoresSerie> series;
+  final ValueChanged<List<ValoresSerie>> onSeries;
 
-  void _emitir(UltimaSerie nuevo) {
-    _actual = nuevo;
-    widget.onValores(nuevo);
+  void _cambiar(int indice, ValoresSerie valores) {
+    final nuevas = List.of(series)..[indice] = valores;
+    onSeries(nuevas);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final ejercicio = widget.ejercicio;
-    final ultima = widget.ultima;
-    final incluido = widget.incluido;
+  void _borrar(int indice) => onSeries(List.of(series)..removeAt(indice));
 
-    final referencia = ultima == null
-        ? 'Primera vez con este ejercicio'
-        : 'Último: ${ultima.series}×${ultima.repeticiones} · '
-              '${formato.numero(ultima.peso)} kg';
+  /// Añadir copia la última serie, que es el gesto más frecuente.
+  void _anadir() => onSeries(
+    List.of(series)..add(series.isEmpty ? _serieNueva : series.last),
+  );
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: t.l),
-      decoration: BoxDecoration(
-        color: context.tarjeta,
-        borderRadius: BorderRadius.circular(t.radioL),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: t.l, vertical: t.m),
-            child: Row(
-              children: [
-                ui.Miniatura(formato.imagenEjercicio(ejercicio), tamano: 40),
-                const SizedBox(width: t.m),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        ejercicio.nombre,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: ui.estilo(
-                          context,
-                          size: t.callout,
-                          weight: t.semibold,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        referencia,
-                        style: ui.estilo(
-                          context,
-                          size: t.caption,
-                          color: context.textoSec,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                CupertinoSwitch(
-                  value: incluido,
-                  activeTrackColor: context.exito,
-                  onChanged: widget.onIncluido,
-                ),
-              ],
+  Future<void> _menu(BuildContext context, int indice) async {
+    final serie = series[indice];
+    await showCupertinoModalPopup<void>(
+      context: context,
+      builder: (hoja) => CupertinoActionSheet(
+        title: Text('Serie ${indice + 1}'),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(hoja);
+              _cambiar(
+                indice,
+                serie.copiar(calentamiento: !serie.calentamiento),
+              );
+            },
+            child: Text(
+              serie.calentamiento
+                  ? 'Quitar el calentamiento'
+                  : 'Marcar como calentamiento',
             ),
           ),
-          Container(height: 0.5, color: context.separador),
-          AnimatedOpacity(
-            opacity: incluido ? 1 : 0.35,
-            duration: const Duration(milliseconds: 150),
-            child: IgnorePointer(
-              ignoring: !incluido,
-              child: Column(
-                children: [
-                  ui.SelectorNumerico(
-                    etiqueta: 'Series',
-                    valor: widget.valores.series.toDouble(),
-                    minimo: 1,
-                    maximo: 20,
-                    onChanged: (v) => _emitir(
-                      UltimaSerie(
-                        series: v.round(),
-                        repeticiones: _actual.repeticiones,
-                        peso: _actual.peso,
-                      ),
-                    ),
-                  ),
-                  Container(height: 0.5, color: context.separador),
-                  ui.SelectorNumerico(
-                    etiqueta: 'Repeticiones',
-                    valor: widget.valores.repeticiones.toDouble(),
-                    minimo: 1,
-                    maximo: 50,
-                    onChanged: (v) => _emitir(
-                      UltimaSerie(
-                        series: _actual.series,
-                        repeticiones: v.round(),
-                        peso: _actual.peso,
-                      ),
-                    ),
-                  ),
-                  Container(height: 0.5, color: context.separador),
-                  ui.SelectorNumerico(
-                    etiqueta: 'Peso',
-                    valor: widget.valores.peso,
-                    minimo: 0,
-                    maximo: 400,
-                    paso: 2.5,
-                    unidad: 'kg',
-                    decimales: 1,
-                    onChanged: (v) => _emitir(
-                      UltimaSerie(
-                        series: _actual.series,
-                        repeticiones: _actual.repeticiones,
-                        peso: v,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              Navigator.pop(hoja);
+              _borrar(indice);
+            },
+            child: const Text('Eliminar serie'),
           ),
         ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(hoja),
+          child: const Text('Cancelar'),
+        ),
       ),
     );
   }
+
+  String get _referencia {
+    if (ultimas.isEmpty) return 'Primera vez con este ejercicio';
+    final volumen = ultimas
+        .where((s) => !s.calentamiento)
+        .fold<double>(0, (suma, s) => suma + s.peso * s.repeticiones);
+    return 'Último: ${formato.plural(ultimas.length, 'serie', 'series')} · '
+        '${formato.numero(volumen)} kg';
+  }
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.symmetric(horizontal: t.l),
+    decoration: BoxDecoration(
+      color: context.tarjeta,
+      borderRadius: BorderRadius.circular(t.radioL),
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: t.l, vertical: t.m),
+          child: Row(
+            children: [
+              ui.Miniatura(formato.imagenEjercicio(ejercicio), tamano: 40),
+              const SizedBox(width: t.m),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      ejercicio.nombre,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: ui.estilo(
+                        context,
+                        size: t.callout,
+                        weight: t.semibold,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _referencia,
+                      style: ui.estilo(
+                        context,
+                        size: t.caption,
+                        color: context.textoSec,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Container(height: 0.5, color: context.separador),
+        if (series.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: t.m),
+            child: Text(
+              'Sin series: este ejercicio no se guardará',
+              style: ui.estilo(
+                context,
+                size: t.footnote,
+                color: context.textoTer,
+              ),
+            ),
+          )
+        else
+          for (final (indice, serie) in series.indexed)
+            ui.DeslizarParaBorrar(
+              // El índice no vale como llave: al borrar una serie, las de abajo
+              // cambian de índice y Flutter reutilizaría el estado equivocado.
+              llave: ValueKey('${ejercicio.id}-$indice-${series.length}'),
+              onBorrar: () => _borrar(indice),
+              child: ColoredBox(
+                color: context.tarjeta,
+                child: _FilaSerie(
+                  numero: indice + 1,
+                  serie: serie,
+                  onSerie: (valores) => _cambiar(indice, valores),
+                  onMenu: () => _menu(context, indice),
+                ),
+              ),
+            ),
+        Container(height: 0.5, color: context.separador),
+        CupertinoButton(
+          onPressed: _anadir,
+          padding: const EdgeInsets.symmetric(vertical: t.m),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(CupertinoIcons.add, size: 16, color: context.acento),
+              const SizedBox(width: t.xs),
+              Text(
+                'Añadir serie',
+                style: ui.estilo(
+                  context,
+                  size: t.subhead,
+                  color: context.acento,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Una serie: número, repeticiones, peso y su menú.
+class _FilaSerie extends StatelessWidget {
+  const _FilaSerie({
+    required this.numero,
+    required this.serie,
+    required this.onSerie,
+    required this.onMenu,
+  });
+
+  final int numero;
+  final ValoresSerie serie;
+  final ValueChanged<ValoresSerie> onSerie;
+  final VoidCallback onMenu;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: t.m, vertical: t.xs),
+    child: Row(
+      children: [
+        SizedBox(
+          width: 26,
+          child: serie.calentamiento
+              ? Icon(CupertinoIcons.flame, size: 16, color: context.textoTer)
+              : Text(
+                  '$numero',
+                  textAlign: TextAlign.center,
+                  style: ui.estilo(
+                    context,
+                    size: t.subhead,
+                    color: context.textoSec,
+                  ),
+                ),
+        ),
+        // El reparto 2:3 no es decorativo: el peso lleva decimales y unidad, y
+        // con las repeticiones a la mitad de ancho la fila desbordaba en un
+        // móvil estrecho. Hay un test que lo fija.
+        Expanded(
+          flex: 2,
+          child: ui.SelectorEnLinea(
+            semantica: 'Repeticiones',
+            valor: serie.repeticiones.toDouble(),
+            minimo: 1,
+            maximo: 50,
+            onChanged: (v) => onSerie(serie.copiar(repeticiones: v.round())),
+          ),
+        ),
+        const SizedBox(width: t.s),
+        Expanded(
+          flex: 3,
+          child: ui.SelectorEnLinea(
+            semantica: 'Peso',
+            valor: serie.peso,
+            minimo: 0,
+            maximo: 400,
+            paso: 2.5,
+            unidad: 'kg',
+            decimales: 1,
+            onChanged: (v) => onSerie(serie.copiar(peso: v)),
+          ),
+        ),
+        CupertinoButton(
+          onPressed: onMenu,
+          padding: const EdgeInsets.symmetric(horizontal: t.s, vertical: t.s),
+          minimumSize: Size.zero,
+          child: Icon(
+            CupertinoIcons.ellipsis,
+            size: 18,
+            color: context.textoSec,
+          ),
+        ),
+      ],
+    ),
+  );
 }

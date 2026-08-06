@@ -66,9 +66,12 @@ String plural(int cantidad, String singular, String plural) =>
     '$cantidad ${cantidad == 1 ? singular : plural}';
 
 /// Formatea un número quitando el '.0' cuando es entero, como el '%g' de Python.
+///
+/// Con coma decimal: la interfaz está en español y `toString` siempre escribe
+/// el punto, sea cual sea la localización.
 String numero(num valor) {
   if (valor == valor.roundToDouble()) return valor.round().toString();
-  return valor.toString();
+  return valor.toString().replaceAll('.', ',');
 }
 
 /// Deserializa una columna de texto que guarda una lista JSON.
