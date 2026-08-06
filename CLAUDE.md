@@ -37,8 +37,8 @@ distinto, de forma que un `RenderFlex overflowed` en un test puede no darse en e
 señalar un widget que conviene hacer flexible igualmente); y las imágenes de red devuelven error, lo
 que ejercita el `errorBuilder` de `ui.Miniatura`.
 
-Lo que **no** se puede comprobar aquí: el aspecto visual y el APK. El APK lo construye CI en cada
-push a `claude/**` y se publica en la release `apk-preview`.
+Lo que **no** se puede comprobar aquí: el aspecto visual y el APK. El APK lo construye CI a partir
+de `main`; ver [CI y versiones](#ci-y-versiones).
 
 ## Arquitectura
 
@@ -176,3 +176,35 @@ CI construye un APK **universal**, que pesa unos 55 MB porque lleva dentro las l
 las tres arquitecturas. Se eligió así para que sea un único fichero que instalar a mano desde el
 móvil. Con `--split-per-abi`, o compilando solo `arm64-v8a`, baja a unos 20 MB a cambio de dejar
 fuera los móviles de 32 bits.
+
+### CI y versiones
+
+`.github/workflows/build-apk.yml` es el único workflow. **El APK sale siempre de `main`**, que es la
+versión buena; las ramas de trabajo no publican nada.
+
+| Disparador | Verifica | Construye APK | Publica release |
+|---|---|---|---|
+| **Pull request a `main`** | sí | sí, como *artifact* de la ejecución | no |
+| **Push a `main`** (mergear un PR) | sí | sí | **sí, una nueva** |
+| **`workflow_dispatch`** | sí | sí | solo si se lanza sobre `main` |
+
+Un PR no publica release a propósito: apuntaría a código que todavía no está integrado y que puede
+no llegar a mergearse nunca. Para probar un PR en el móvil se descarga su artifact desde la pestaña
+*Actions*.
+
+**Versionado.** La versión es `SERIE.<número de ejecución>`, con `SERIE` (hoy `1.0`) en el bloque
+`env:` del workflow. El contador de ejecuciones lo lleva GitHub, así que sube solo y **nunca se
+repite**: cada merge a `main` deja una release nueva etiquetada `v1.0.N`, y las anteriores se
+quedan. No hay una release móvil que se sobrescriba, de modo que el enlace de descarga para el
+móvil es `releases/latest`. Las releases **no** van marcadas como *prerelease*, precisamente para
+que `releases/latest` las resuelva.
+
+Ese mismo número se pasa a `--build-name` y `--build-number`, así que el `versionCode` de Android
+también es estrictamente creciente y el móvil reconoce cada APK como una actualización del anterior.
+El `version: 1.0.0+1` de `pubspec.yaml` solo se usa en compilaciones locales; CI siempre lo pisa.
+
+Para subir de serie (a `1.1`, por ejemplo), se cambia `SERIE` en el workflow y nada más.
+
+**Cambios que no generan versión.** `paths-ignore` deja fuera `README.md`, `CLAUDE.md` y `docs/**`:
+un merge que solo toca documentación produciría un APK idéntico al anterior. Si tocas esos ficheros
+**y** código en el mismo commit, sí se dispara.

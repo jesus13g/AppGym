@@ -23,18 +23,25 @@ La interfaz sigue el tema del sistema: se ve en claro u oscuro automáticamente.
 
 ## Probarla en el móvil (Android)
 
-Cada push a una rama `claude/**` compila un APK en GitHub Actions y lo publica en la
-release **[`apk-preview`](../../releases/tag/apk-preview)**. Desde el móvil:
+Cada cambio que entra en `main` compila un APK en GitHub Actions y publica una
+**[release nueva](../../releases/latest)**. Desde el móvil:
 
-1. Abre la release y descarga `AppGym.apk`.
+1. Abre la [última release](../../releases/latest) y descarga `AppGym.apk`.
 2. Ábrelo. Android pedirá permiso para instalar apps de origen desconocido la
    primera vez (*Ajustes → Instalar apps desconocidas → Chrome*).
 3. En el primer arranque, pulsa **«Ahora no»** en la descarga de imágenes si estás con
    datos móviles: la app funciona igual y carga cada imagen cuando la necesita.
 
-También se puede lanzar a mano desde la pestaña *Actions* → *Construir APK* → *Run
-workflow*. Para iOS haría falta un Mac y una cuenta de desarrollador de Apple, así que
-por ahí no hay atajo.
+Las versiones se numeran `1.0.N` y no se sobrescriben: las anteriores siguen
+disponibles en la [lista de releases](../../releases), por si hay que volver a una.
+
+Un pull request a `main` también compila su APK, pero como *artifact* de la ejecución
+en lugar de release: se descarga desde la pestaña *Actions*, entrando en la ejecución
+del PR. Sirve para probar un cambio antes de mergearlo.
+
+También se puede lanzar a mano desde *Actions* → *Construir APK* → *Run workflow*. Para
+iOS haría falta un Mac y una cuenta de desarrollador de Apple, así que por ahí no hay
+atajo.
 
 ## Desarrollo
 

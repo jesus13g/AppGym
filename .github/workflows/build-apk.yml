@@ -2,21 +2,46 @@ name: Construir APK
 
 # Comprueba el proyecto y genera un APK instalable en Android, para poder
 # probar la app sin tener un ordenador delante.
+#
+# Se construye a partir de `main`, que es la versión buena:
+#   - Pull request a main -> se verifica y se compila el APK, que queda como
+#     artifact de la ejecución. No se publica release: el código todavía no
+#     está integrado y una release apuntaría a algo que puede no llegar nunca.
+#   - Push a main (lo que ocurre al mergear un PR) -> además se publica una
+#     release nueva, con su propia etiqueta. Las releases se acumulan: cada
+#     merge deja una versión descargable y las anteriores siguen ahí.
 on:
   workflow_dispatch:
   push:
     branches:
-      - "claude/**"
+      - main
     paths-ignore:
       - "README.md"
       - "CLAUDE.md"
+      - "docs/**"
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - "README.md"
+      - "CLAUDE.md"
+      - "docs/**"
 
 permissions:
   contents: write
 
+# Si se empuja dos veces seguidas al mismo sitio, la ejecución anterior sobra.
+# En main NO se cancela: cada merge debe dejar su release.
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 env:
   # Debe coincidir con la versión con la que se desarrolla; ver CLAUDE.md.
   FLUTTER_VERSION: "3.44.8"
+  # Serie de la versión. El tercer número lo pone el contador de ejecuciones de
+  # este workflow, así que sube solo y nunca se repite.
+  SERIE: "1.0"
 
 jobs:
   # Análisis y tests van en su propio job: son rápidos y no necesitan el SDK de
@@ -72,12 +97,18 @@ jobs:
       - name: Generar el código de drift
         run: dart run build_runner build
 
+      - name: Calcular la versión
+        id: version
+        run: |
+          echo "nombre=${SERIE}.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "etiqueta=v${SERIE}.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
       # --split-per-abi generaría varios APK; uno universal es más simple de
       # instalar a mano aunque pese algo más.
       - name: Construir APK
         run: |
           flutter build apk --release \
-            --build-name "1.0.$GITHUB_RUN_NUMBER" \
+            --build-name "${{ steps.version.outputs.nombre }}" \
             --build-number "$GITHUB_RUN_NUMBER"
 
       - name: Renombrar el APK
@@ -86,25 +117,29 @@ jobs:
           cp build/app/outputs/flutter-apk/app-release.apk dist/AppGym.apk
           ls -lh dist/
 
+      # El artifact se sube siempre, también en los PR: es la forma de probar
+      # una rama antes de mergearla.
       - uses: actions/upload-artifact@v4
         with:
-          name: AppGym-apk
+          name: AppGym-${{ steps.version.outputs.nombre }}
           path: dist/AppGym.apk
 
-      # La release da un enlace directo al .apk, que desde el móvil es mucho más
-      # cómodo que el artifact (que se descarga en un .zip).
+      # La release solo se publica desde main. Da un enlace directo al .apk, que
+      # desde el móvil es mucho más cómodo que el artifact (un .zip).
       - name: Publicar la release
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
+          ETIQUETA: ${{ steps.version.outputs.etiqueta }}
+          NOMBRE: ${{ steps.version.outputs.nombre }}
         run: |
-          gh release delete apk-preview --yes --cleanup-tag || true
-          gh release create apk-preview dist/AppGym.apk \
-            --title "AppGym — APK de prueba" \
-            --prerelease \
+          gh release create "$ETIQUETA" dist/AppGym.apk \
+            --title "AppGym $NOMBRE" \
             --target "$GITHUB_SHA" \
-            --notes "APK de la rama \`${GITHUB_REF_NAME}\` (build ${GITHUB_RUN_NUMBER}).
+            --generate-notes \
+            --notes "Compilado desde \`main\` (build ${GITHUB_RUN_NUMBER}).
 
           Descárgalo desde el móvil y ábrelo para instalarlo. Android pedirá permiso
           para instalar apps de origen desconocido la primera vez.
 
-          Sin firmar con una clave propia: es una compilación de prueba."
+          APK universal, sin firmar con una clave propia: es una compilación de prueba."

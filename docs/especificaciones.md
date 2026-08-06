@@ -1498,8 +1498,8 @@ Orden propuesto. Cada fase deja la app funcionando y es publicable por separado.
 > **Anulado respecto a la versión anterior del documento:** allí la fase 0 consistía en montar una
 > red de tests desde cero, hacer testeable el singleton de la base de datos y activar las claves
 > foráneas. La reescritura en Flutter **ya trae las tres cosas**: 27 tests con `NativeDatabase.memory()`
-> sobrescribiendo `bdProvider`, `flutter analyze` en 0 issues y CI que construye el APK en cada push
-> a `claude/**`. Esa fase desaparece.
+> sobrescribiendo `bdProvider`, `flutter analyze` en 0 issues y CI que verifica cada pull request y
+> publica una release por cada merge a `main`. Esa fase desaparece.
 
 ### Fase 0 — Herramienta de migraciones
 
@@ -1551,7 +1551,8 @@ Se deja fuera de esta iteración, de forma consciente:
   esta iteración justamente empieza a recoger (RPE, volumen por serie). Reconsiderar después.
 - **Internacionalización de la interfaz.** Los textos siguen incrustados en las pantallas;
   `flutter_localizations` solo cubre hoy los del framework.
-- **Publicación en tiendas.** El APK sigue siendo el de la release `apk-preview`.
+- **Publicación en tiendas.** El APK se sigue instalando a mano desde las releases del repositorio,
+  sin firmar con una clave propia.
 - **Vídeos o media adicional.** Se mantiene la relación actual con el dataset de Gym visual y sus
   condiciones de uso.
 - **Ejercicios personalizados con músculo asignado.** Lo pide D, pero no se aborda ahora; se
