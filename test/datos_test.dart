@@ -4,6 +4,7 @@
 /// estado. Esto es lo que en el proyecto Flet no se podía hacer.
 library;
 
+import 'package:appgym/datos/ajustes.dart';
 import 'package:appgym/datos/bd.dart';
 import 'package:appgym/datos/formato.dart';
 import 'package:appgym/datos/i18n.dart';
@@ -261,12 +262,12 @@ void main() {
     );
 
     test('se guardan y se sobrescriben por clave', () async {
-      await bd.fijarAjuste(AppBD.claveEsfuerzoActivo, '1');
-      await bd.fijarAjuste(AppBD.claveEsfuerzoEscala, 'rir');
+      await bd.fijarAjuste(Claves.esfuerzoActivo, '1');
+      await bd.fijarAjuste(Claves.esfuerzoEscala, 'rir');
       expect((await bd.ajustes()).esfuerzoActivo, isTrue);
       expect((await bd.ajustes()).escala, EscalaEsfuerzo.rir);
 
-      await bd.fijarAjuste(AppBD.claveEsfuerzoEscala, 'rpe');
+      await bd.fijarAjuste(Claves.esfuerzoEscala, 'rpe');
       expect((await bd.ajustes()).escala, EscalaEsfuerzo.rpe);
     });
 
@@ -357,7 +358,7 @@ void main() {
     test('un entrenamiento sin series no se guarda', () async {
       expect(
         await bd.insertarEntrenamiento(idRutina, DateTime.now(), {}),
-        isFalse,
+        isNull,
       );
       // Un ejercicio con la lista vacía tampoco: es lo que sustituye al
       // interruptor de «incluir ejercicio».
@@ -365,7 +366,7 @@ void main() {
         await bd.insertarEntrenamiento(idRutina, DateTime.now(), {
           idEjercicio: const [],
         }),
-        isFalse,
+        isNull,
       );
       expect(await bd.contarEntrenamientosRutina(idRutina), 0);
     });

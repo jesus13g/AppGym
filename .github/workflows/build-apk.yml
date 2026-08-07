@@ -105,11 +105,15 @@ jobs:
 
       # --split-per-abi generaría varios APK; uno universal es más simple de
       # instalar a mano aunque pese algo más.
+      # --dart-define pasa la misma versión al código: es lo que lee
+      # `versionApp` para el «Acerca de» de Ajustes, sin necesidad de
+      # package_info_plus solo para una cadena.
       - name: Construir APK
         run: |
           flutter build apk --release \
             --build-name "${{ steps.version.outputs.nombre }}" \
-            --build-number "$GITHUB_RUN_NUMBER"
+            --build-number "$GITHUB_RUN_NUMBER" \
+            --dart-define "VERSION=${{ steps.version.outputs.nombre }}"
 
       - name: Renombrar el APK
         run: |

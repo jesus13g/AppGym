@@ -1,0 +1,198 @@
+/// Preferencias de la app: claves, valores por defecto y tipado.
+///
+/// Viven en la tabla `ajustes` de la propia base de datos (clave/texto) y no en
+/// un fichero aparte: así no hace falta otra dependencia y entran gratis en la
+/// copia de seguridad junto al resto de los datos.
+///
+/// Todo se guarda como texto y se castea al leer. Esto es lo único que sabe
+/// interpretar esos textos; `AppBD.ajustes()` se limita a traer las filas.
+///
+/// **El peso se guarda siempre en kilogramos.** Las libras son solo
+/// presentación: convertir al mostrar y al introducir deja el histórico intacto
+/// si el usuario cambia de unidad a mitad de camino, que es justo lo que
+/// guardar en la unidad activa no permitiría.
+library;
+
+/// Unidad en la que se muestran los pesos. En la base siempre hay kilos.
+enum Unidad {
+  kg('kg'),
+  lb('lb');
+
+  const Unidad(this.sufijo);
+
+  /// Lo que se escribe detrás del número.
+  final String sufijo;
+}
+
+/// Un kilogramo en libras.
+const factorLibras = 2.20462;
+
+/// Escala con la que se pide el esfuerzo al registrar.
+///
+/// Solo cambia cómo se muestra: en la base siempre se guarda RPE.
+enum EscalaEsfuerzo {
+  /// 6–10, donde 10 es el fallo.
+  rpe,
+
+  /// Repeticiones en recámara: `RIR = 10 − RPE`, así que 0 es el fallo.
+  rir,
+}
+
+/// Brillo de la interfaz.
+enum Tema { sistema, claro, oscuro }
+
+/// Claves de la tabla `ajustes`.
+///
+/// Son texto porque acaban en una columna de texto; cambiarlas equivale a
+/// perder el valor guardado, así que no se tocan.
+abstract final class Claves {
+  static const unidad = 'unidad';
+  static const pasoPeso = 'paso_peso';
+  static const descanso = 'descanso_seg';
+  static const sonidoDescanso = 'sonido_descanso';
+  static const series = 'series_por_defecto';
+  static const repeticiones = 'repeticiones_por_defecto';
+  static const esfuerzoActivo = 'esfuerzo_activo';
+  static const esfuerzoEscala = 'esfuerzo_escala';
+  static const sesionesPorSemana = 'sesiones_por_semana';
+  static const tema = 'tema';
+}
+
+/// Pasos de peso que se ofrecen, en la unidad activa.
+const pasosPeso = <double>[0.5, 1, 1.25, 2.5, 5];
+
+/// Descansos que se ofrecen, en segundos.
+const descansos = <int>[30, 45, 60, 90, 120, 150, 180, 240, 300];
+
+/// Las preferencias, ya interpretadas.
+class Ajustes {
+  const Ajustes({
+    this.unidad = Unidad.kg,
+    this.pasoPeso = 2.5,
+    this.descansoSeg = 90,
+    this.sonidoDescanso = true,
+    this.seriesPorDefecto = 4,
+    this.repeticionesPorDefecto = 10,
+    this.esfuerzoActivo = false,
+    this.escala = EscalaEsfuerzo.rpe,
+    this.sesionesPorSemana = 3,
+    this.tema = Tema.sistema,
+  });
+
+  /// Interpreta las filas de la tabla. Lo que falte o no se entienda se queda
+  /// con su valor por defecto, de modo que una clave con basura no rompe nada.
+  factory Ajustes.desdeMapa(Map<String, String> valores) {
+    const porDefecto = Ajustes();
+
+    int entero(
+      String clave,
+      int siNo, {
+      required int minimo,
+      required int maximo,
+    }) {
+      final valor = int.tryParse(valores[clave] ?? '');
+      if (valor == null || valor < minimo || valor > maximo) return siNo;
+      return valor;
+    }
+
+    return Ajustes(
+      unidad: valores[Claves.unidad] == 'lb' ? Unidad.lb : Unidad.kg,
+      pasoPeso: switch (double.tryParse(valores[Claves.pasoPeso] ?? '')) {
+        final paso? when pasosPeso.contains(paso) => paso,
+        _ => porDefecto.pasoPeso,
+      },
+      descansoSeg: entero(
+        Claves.descanso,
+        porDefecto.descansoSeg,
+        minimo: 15,
+        maximo: 600,
+      ),
+      // Un ajuste booleano sin fila guardada vale su valor por defecto, que
+      // aquí es «sí»: solo el '0' explícito lo apaga.
+      sonidoDescanso: (valores[Claves.sonidoDescanso] ?? '1') == '1',
+      seriesPorDefecto: entero(
+        Claves.series,
+        porDefecto.seriesPorDefecto,
+        minimo: 1,
+        maximo: 10,
+      ),
+      repeticionesPorDefecto: entero(
+        Claves.repeticiones,
+        porDefecto.repeticionesPorDefecto,
+        minimo: 1,
+        maximo: 30,
+      ),
+      esfuerzoActivo: valores[Claves.esfuerzoActivo] == '1',
+      escala: valores[Claves.esfuerzoEscala] == 'rir'
+          ? EscalaEsfuerzo.rir
+          : EscalaEsfuerzo.rpe,
+      sesionesPorSemana: entero(
+        Claves.sesionesPorSemana,
+        porDefecto.sesionesPorSemana,
+        minimo: 1,
+        maximo: 7,
+      ),
+      tema: switch (valores[Claves.tema]) {
+        'claro' => Tema.claro,
+        'oscuro' => Tema.oscuro,
+        _ => Tema.sistema,
+      },
+    );
+  }
+
+  final Unidad unidad;
+
+  /// Cuánto sube o baja el selector de peso, **en la unidad activa**.
+  final double pasoPeso;
+
+  final int descansoSeg;
+  final bool sonidoDescanso;
+  final int seriesPorDefecto;
+  final int repeticionesPorDefecto;
+
+  /// Por defecto desactivado: quien no use el RPE no debe verlo estorbando en
+  /// el registro.
+  final bool esfuerzoActivo;
+
+  final EscalaEsfuerzo escala;
+  final int sesionesPorSemana;
+  final Tema tema;
+
+  /// Cómo se escribe cada ajuste en la tabla. Es la vuelta de [desdeMapa].
+  static String texto(Object valor) => switch (valor) {
+    final bool v => v ? '1' : '0',
+    Unidad.lb => 'lb',
+    Unidad.kg => 'kg',
+    EscalaEsfuerzo.rir => 'rir',
+    EscalaEsfuerzo.rpe => 'rpe',
+    Tema.claro => 'claro',
+    Tema.oscuro => 'oscuro',
+    Tema.sistema => 'sistema',
+    _ => '$valor',
+  };
+
+  // ── Conversión de unidades ─────────────────────────────────────────────────
+
+  /// Un peso guardado (kilos) en la unidad activa.
+  double desdeKilos(double kilos) =>
+      unidad == Unidad.kg ? kilos : kilos * factorLibras;
+
+  /// Un valor introducido en la unidad activa, de vuelta a kilos.
+  double aKilos(double valor) =>
+      unidad == Unidad.kg ? valor : valor / factorLibras;
+
+  /// El valor para el selector: convertido y cuadrado al paso.
+  ///
+  /// Sin cuadrarlo, 60 kg en libras arrancaría en 132,2772 y cada toque
+  /// arrastraría ese resto por toda la columna.
+  double paraSelector(double kilos) =>
+      (desdeKilos(kilos) / pasoPeso).round() * pasoPeso;
+
+  /// Decimales con los que se escribe un peso en el selector.
+  ///
+  /// El paso de 1,25 es el único que necesita dos.
+  int get decimalesPaso => pasoPeso == 1.25 ? 2 : 1;
+
+  /// Tope del selector de peso en la unidad activa (400 kg).
+  double get pesoMaximo => desdeKilos(400).ceilToDouble();
+}

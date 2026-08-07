@@ -1,18 +1,32 @@
 /// Ajustes de la app.
 ///
-/// De momento solo el esfuerzo percibido, que es lo que A5 necesita poder
-/// activar. La pantalla de ajustes completa —unidades, copia de seguridad,
-/// descanso— es B9; esto es su primer trozo, no un sustituto.
+/// Hasta ahora había valores razonables pero clavados en el código: el paso del
+/// peso a 2,5, el `4 × 10 × 20 kg` de partida y el kilogramo escrito a mano en
+/// media docena de pantallas. Aquí se tocan todos, y también lo que necesitan
+/// el temporizador de descanso, el esfuerzo percibido y la copia de seguridad.
+///
+/// Se llega por el engranaje de la pestaña **Rutinas**, no por una cuarta
+/// pestaña: tres es el equilibrio del `CupertinoTabScaffold` y esto no es una
+/// zona de uso frecuente.
 library;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../datos/bd.dart';
+import '../datos/ajustes.dart';
+import '../datos/formato.dart' as formato;
+import '../datos/media.dart' as media;
 import '../estado/providers.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
+import 'copia_seguridad.dart';
+
+/// Versión con la que se compiló, que CI pasa con `--dart-define`.
+///
+/// En una compilación local no hay ninguna, y decirlo es más honesto que
+/// enseñar el `1.0.0+1` de `pubspec.yaml`, que CI siempre pisa.
+const versionApp = String.fromEnvironment('VERSION', defaultValue: 'local');
 
 Future<void> abrirAjustes(BuildContext context) => Navigator.of(
   context,
@@ -21,9 +35,30 @@ Future<void> abrirAjustes(BuildContext context) => Navigator.of(
 class PantallaAjustes extends ConsumerWidget {
   const PantallaAjustes({super.key});
 
-  Future<void> _fijar(WidgetRef ref, String clave, String valor) async {
-    await ref.read(bdProvider).fijarAjuste(clave, valor);
+  Future<void> _fijar(WidgetRef ref, String clave, Object valor) async {
+    await ref.read(bdProvider).fijarAjuste(clave, Ajustes.texto(valor));
     invalidarAjustes(ref);
+  }
+
+  /// Pide un valor en una hoja y lo guarda si se elige.
+  Future<void> _elegir<T extends Object>(
+    BuildContext context,
+    WidgetRef ref, {
+    required String clave,
+    required String titulo,
+    required List<(T, String)> opciones,
+    required T actual,
+    String? mensaje,
+  }) async {
+    final elegido = await ui.elegirEnHoja<T>(
+      context,
+      titulo: titulo,
+      mensaje: mensaje,
+      opciones: opciones,
+      actual: actual,
+    );
+    if (elegido == null) return;
+    await _fijar(ref, clave, elegido.$1);
   }
 
   @override
@@ -40,68 +75,289 @@ class PantallaAjustes extends ConsumerWidget {
       child: SafeArea(
         child: ListView(
           children: [
-            ui.Grupo(
-              cabecera: 'Registro',
-              pie:
-                  'El esfuerzo percibido de cada serie. Desactivado, el '
-                  'registro queda igual que si no existiera.',
-              filas: [
-                CupertinoListTile(
-                  backgroundColor: context.tarjeta,
-                  title: Text('Anotar el esfuerzo', style: ui.estilo(context)),
-                  trailing: CupertinoSwitch(
-                    value: ajustes.esfuerzoActivo,
-                    onChanged: (valor) => _fijar(
-                      ref,
-                      AppBD.claveEsfuerzoActivo,
-                      valor ? '1' : '0',
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (ajustes.esfuerzoActivo)
-              ui.Grupo(
-                cabecera: 'Escala',
-                pie:
-                    'RPE va de 6 a 10, donde 10 es el fallo. RIR cuenta las '
-                    'repeticiones que quedaban en recámara, así que 0 es el '
-                    'fallo. Se guarda siempre lo mismo: cambiar de escala solo '
-                    'cambia cómo se lee.',
-                filas: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: t.l,
-                      vertical: t.m,
-                    ),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: CupertinoSlidingSegmentedControl<EscalaEsfuerzo>(
-                        groupValue: ajustes.escala,
-                        onValueChanged: (valor) => _fijar(
-                          ref,
-                          AppBD.claveEsfuerzoEscala,
-                          valor == EscalaEsfuerzo.rir ? 'rir' : 'rpe',
-                        ),
-                        children: const {
-                          EscalaEsfuerzo.rpe: Padding(
-                            padding: EdgeInsets.symmetric(vertical: t.xs),
-                            child: Text('RPE'),
-                          ),
-                          EscalaEsfuerzo.rir: Padding(
-                            padding: EdgeInsets.symmetric(vertical: t.xs),
-                            child: Text('RIR'),
-                          ),
-                        },
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+            _unidades(context, ref, ajustes),
+            _entrenamiento(context, ref, ajustes),
+            _objetivos(context, ref, ajustes),
+            _apariencia(context, ref, ajustes),
+            const GrupoDatos(),
+            _acercaDe(context, ref),
             const SizedBox(height: t.xxl),
           ],
         ),
       ),
     );
   }
+
+  // ── Unidades ───────────────────────────────────────────────────────────────
+
+  Widget _unidades(
+    BuildContext context,
+    WidgetRef ref,
+    Ajustes ajustes,
+  ) => ui.Grupo(
+    cabecera: 'Unidades',
+    pie:
+        'El peso se guarda siempre en kilogramos: cambiar a libras solo '
+        'cambia cómo se lee, y volver deja los valores originales intactos.',
+    filas: [
+      _segmentos<Unidad>(
+        context,
+        etiqueta: 'Unidad de peso',
+        valor: ajustes.unidad,
+        opciones: const {Unidad.kg: 'kg', Unidad.lb: 'lb'},
+        onValor: (valor) => _fijar(ref, Claves.unidad, valor),
+      ),
+      _fila(
+        context,
+        titulo: 'Paso del peso',
+        valor: '${formato.numero(ajustes.pasoPeso)} ${ajustes.unidad.sufijo}',
+        onTap: () => _elegir<double>(
+          context,
+          ref,
+          clave: Claves.pasoPeso,
+          titulo: 'Paso del peso',
+          mensaje: 'Cuánto sube o baja cada toque en el registro.',
+          actual: ajustes.pasoPeso,
+          opciones: [
+            for (final paso in pasosPeso)
+              (paso, '${formato.numero(paso)} ${ajustes.unidad.sufijo}'),
+          ],
+        ),
+      ),
+    ],
+  );
+
+  // ── Entrenamiento ──────────────────────────────────────────────────────────
+
+  Widget _entrenamiento(BuildContext context, WidgetRef ref, Ajustes ajustes) =>
+      ui.Grupo(
+        cabecera: 'Entrenamiento',
+        pie:
+            'Las series y repeticiones por defecto solo se usan la primera vez '
+            'que entrenas un ejercicio; a partir de ahí se precarga lo que '
+            'hiciste la última vez.',
+        filas: [
+          _fila(
+            context,
+            titulo: 'Descanso por defecto',
+            valor: formato.descanso(ajustes.descansoSeg),
+            onTap: () => _elegir<int>(
+              context,
+              ref,
+              clave: Claves.descanso,
+              titulo: 'Descanso por defecto',
+              mensaje:
+                  'Cada ejercicio puede llevar el suyo, desde su tarjeta en el '
+                  'registro.',
+              actual: ajustes.descansoSeg,
+              opciones: [
+                for (final segundos in descansos)
+                  (segundos, formato.descanso(segundos)),
+              ],
+            ),
+          ),
+          _interruptor(
+            context,
+            titulo: 'Sonido al terminar',
+            valor: ajustes.sonidoDescanso,
+            onValor: (valor) => _fijar(ref, Claves.sonidoDescanso, valor),
+          ),
+          _fila(
+            context,
+            titulo: 'Series por defecto',
+            valor: '${ajustes.seriesPorDefecto}',
+            onTap: () => _elegir<int>(
+              context,
+              ref,
+              clave: Claves.series,
+              titulo: 'Series por defecto',
+              actual: ajustes.seriesPorDefecto,
+              opciones: [
+                for (var n = 1; n <= 10; n++)
+                  (n, formato.plural(n, 'serie', 'series')),
+              ],
+            ),
+          ),
+          _fila(
+            context,
+            titulo: 'Repeticiones por defecto',
+            valor: '${ajustes.repeticionesPorDefecto}',
+            onTap: () => _elegir<int>(
+              context,
+              ref,
+              clave: Claves.repeticiones,
+              titulo: 'Repeticiones por defecto',
+              actual: ajustes.repeticionesPorDefecto,
+              opciones: [
+                for (var n = 1; n <= 30; n++)
+                  (n, formato.plural(n, 'repetición', 'repeticiones')),
+              ],
+            ),
+          ),
+          _esfuerzo(context, ref, ajustes),
+        ],
+      );
+
+  /// El esfuerzo percibido en una sola fila de tres opciones.
+  ///
+  /// Se guarda en dos claves —si está activo y en qué escala— porque apagarlo y
+  /// volver a encenderlo debe recordar la escala que usabas.
+  Widget _esfuerzo(BuildContext context, WidgetRef ref, Ajustes ajustes) =>
+      _segmentos<String>(
+        context,
+        etiqueta: 'Anotar el esfuerzo',
+        valor: switch (ajustes) {
+          _ when !ajustes.esfuerzoActivo => 'no',
+          _ when ajustes.escala == EscalaEsfuerzo.rir => 'rir',
+          _ => 'rpe',
+        },
+        opciones: const {'no': 'No', 'rpe': 'RPE', 'rir': 'RIR'},
+        onValor: (valor) async {
+          await ref.read(bdProvider).fijarAjustes({
+            Claves.esfuerzoActivo: valor == 'no' ? '0' : '1',
+            if (valor != 'no') Claves.esfuerzoEscala: valor,
+          });
+          invalidarAjustes(ref);
+        },
+      );
+
+  // ── Objetivos ──────────────────────────────────────────────────────────────
+
+  Widget _objetivos(BuildContext context, WidgetRef ref, Ajustes ajustes) =>
+      ui.Grupo(
+        cabecera: 'Objetivos',
+        filas: [
+          _fila(
+            context,
+            titulo: 'Sesiones por semana',
+            valor: '${ajustes.sesionesPorSemana}',
+            onTap: () => _elegir<int>(
+              context,
+              ref,
+              clave: Claves.sesionesPorSemana,
+              titulo: 'Sesiones por semana',
+              actual: ajustes.sesionesPorSemana,
+              opciones: [
+                for (var n = 1; n <= 7; n++)
+                  (n, formato.plural(n, 'sesión', 'sesiones')),
+              ],
+            ),
+          ),
+        ],
+      );
+
+  // ── Apariencia ─────────────────────────────────────────────────────────────
+
+  Widget _apariencia(BuildContext context, WidgetRef ref, Ajustes ajustes) =>
+      ui.Grupo(
+        cabecera: 'Apariencia',
+        pie: 'Con «Sistema», la app sigue el modo claro u oscuro del móvil.',
+        filas: [
+          _segmentos<Tema>(
+            context,
+            etiqueta: 'Tema',
+            valor: ajustes.tema,
+            opciones: const {
+              Tema.sistema: 'Sistema',
+              Tema.claro: 'Claro',
+              Tema.oscuro: 'Oscuro',
+            },
+            onValor: (valor) => _fijar(ref, Claves.tema, valor),
+          ),
+        ],
+      );
+
+  // ── Acerca de ──────────────────────────────────────────────────────────────
+
+  Widget _acercaDe(BuildContext context, WidgetRef ref) {
+    final catalogo = ref.watch(arranqueProvider).value?.length;
+
+    return ui.Grupo(
+      cabecera: 'Acerca de',
+      pie:
+          'Las imágenes y animaciones son ${media.atribucion} y se usan a '
+          '180×180 con la atribución visible, según sus condiciones de uso. '
+          'Los datos del catálogo vienen de hasaneyldrm/exercises-dataset, con '
+          'licencia MIT.',
+      filas: [
+        _fila(context, titulo: 'Versión', valor: versionApp),
+        _fila(
+          context,
+          titulo: 'Catálogo',
+          valor: catalogo == null ? '…' : '$catalogo ejercicios',
+        ),
+      ],
+    );
+  }
+
+  // ── Piezas comunes ─────────────────────────────────────────────────────────
+
+  Widget _fila(
+    BuildContext context, {
+    required String titulo,
+    required String valor,
+    VoidCallback? onTap,
+  }) => CupertinoListTile(
+    backgroundColor: context.tarjeta,
+    title: Text(titulo, style: ui.estilo(context)),
+    additionalInfo: Text(
+      valor,
+      style: ui.estilo(context, color: context.textoSec),
+    ),
+    trailing: onTap == null ? null : const CupertinoListTileChevron(),
+    onTap: onTap,
+  );
+
+  Widget _interruptor(
+    BuildContext context, {
+    required String titulo,
+    required bool valor,
+    required ValueChanged<bool> onValor,
+  }) => CupertinoListTile(
+    backgroundColor: context.tarjeta,
+    title: Text(titulo, style: ui.estilo(context)),
+    trailing: CupertinoSwitch(value: valor, onChanged: onValor),
+  );
+
+  /// Fila con su control segmentado debajo.
+  ///
+  /// A lo ancho de un móvil, tres segmentos y una etiqueta no caben en la misma
+  /// línea sin apretar el texto, así que la etiqueta va encima.
+  Widget _segmentos<T extends Object>(
+    BuildContext context, {
+    required String etiqueta,
+    required T valor,
+    required Map<T, String> opciones,
+    required ValueChanged<T> onValor,
+  }) => Container(
+    color: context.tarjeta,
+    padding: const EdgeInsets.symmetric(horizontal: t.l, vertical: t.m),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(etiqueta, style: ui.estilo(context)),
+        const SizedBox(height: t.s),
+        SizedBox(
+          width: double.infinity,
+          child: CupertinoSlidingSegmentedControl<T>(
+            groupValue: valor,
+            onValueChanged: (nuevo) {
+              if (nuevo != null) onValor(nuevo);
+            },
+            children: {
+              for (final entrada in opciones.entries)
+                entrada.key: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: t.xs),
+                  child: Text(
+                    entrada.value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            },
+          ),
+        ),
+      ],
+    ),
+  );
 }

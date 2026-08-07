@@ -96,6 +96,38 @@ final equipamientosProvider = FutureProvider<List<String>>(
   (ref) => ref.watch(bdProvider).equipamientosDisponibles(),
 );
 
+/// Músculos objetivo con su número de ejercicios, para el filtro del catálogo.
+final objetivosProvider = FutureProvider<List<(String, int)>>(
+  (ref) => ref.watch(bdProvider).objetivosDisponibles(),
+);
+
+final favoritosProvider = FutureProvider<List<FichaCatalogo>>(
+  (ref) => ref.watch(bdProvider).fichasFavoritas(),
+);
+
+final idsFavoritosProvider = FutureProvider<Set<String>>(
+  (ref) => ref.watch(bdProvider).idsFavoritos(),
+);
+
+final vistosProvider = FutureProvider<List<FichaCatalogo>>(
+  (ref) => ref.watch(bdProvider).vistosRecientes(),
+);
+
+/// En qué rutinas está ya un ejercicio del catálogo.
+final rutinasQueContienenProvider = FutureProvider.family<List<Rutina>, String>(
+  (ref, idCatalogo) => ref.watch(bdProvider).rutinasQueContienen(idCatalogo),
+);
+
+// ── Medidas del cuerpo ───────────────────────────────────────────────────────
+
+final serieMedidaProvider = FutureProvider.family<List<Medida>, String>(
+  (ref, tipo) => ref.watch(bdProvider).serieMedida(tipo),
+);
+
+final ultimaMedidaProvider = FutureProvider.family<Medida?, String>(
+  (ref, tipo) => ref.watch(bdProvider).ultimaMedida(tipo),
+);
+
 // ── Progreso ─────────────────────────────────────────────────────────────────
 
 /// Clave de las series de un ejercicio dentro de una rutina.
@@ -144,6 +176,20 @@ final sesionProvider = FutureProvider.family<SesionCompleta?, int>(
   (ref, idEntrenamiento) => ref.watch(bdProvider).sesion(idEntrenamiento),
 );
 
+/// Récords batidos en una sesión, para el resumen de cierre.
+final recordsSesionProvider = FutureProvider.family<List<RecordSesion>, int>(
+  (ref, idEntrenamiento) =>
+      ref.watch(bdProvider).recordsDeSesion(idEntrenamiento),
+);
+
+/// El borrador de la sesión en curso, si lo hay.
+///
+/// Se consulta una vez al arrancar para ofrecer recuperarla; el resto del
+/// tiempo la sesión viva lleva su estado en la pantalla.
+final sesionActivaProvider = FutureProvider<SesionActiva?>(
+  (ref) => ref.watch(bdProvider).sesionActiva(),
+);
+
 // ── Ajustes ──────────────────────────────────────────────────────────────────
 
 final ajustesProvider = FutureProvider<Ajustes>(
@@ -177,9 +223,49 @@ void invalidarEntrenamientos(WidgetRef ref, int idRutina) {
   // fuera se nota enseguida: una pantalla mostrando lo que ya no está.
   ref.invalidate(historialRutinaProvider(idRutina));
   ref.invalidate(sesionProvider);
+  ref.invalidate(recordsSesionProvider);
   ref.invalidate(estadisticasRutinaProvider(idRutina));
   invalidarRutinas(ref);
 }
 
 /// Refresca lo que depende de las preferencias.
 void invalidarAjustes(WidgetRef ref) => ref.invalidate(ajustesProvider);
+
+/// Refresca los favoritos y los vistos recientemente.
+void invalidarCatalogoDelUsuario(WidgetRef ref) {
+  ref.invalidate(favoritosProvider);
+  ref.invalidate(idsFavoritosProvider);
+  ref.invalidate(vistosProvider);
+}
+
+/// Refresca las medidas del cuerpo.
+void invalidarMedidas(WidgetRef ref) {
+  ref.invalidate(serieMedidaProvider);
+  ref.invalidate(ultimaMedidaProvider);
+}
+
+/// Refresca **todo**, sin saber qué ha cambiado.
+///
+/// Es lo que hace falta tras importar una copia de seguridad o borrar los
+/// datos: ahí no cambia una rutina, cambia la base entera, y enumerar provider
+/// a provider sería justo el sitio donde olvidarse de uno.
+void invalidarTodo(WidgetRef ref) {
+  invalidarRutinas(ref);
+  invalidarCatalogoDelUsuario(ref);
+  invalidarMedidas(ref);
+  invalidarAjustes(ref);
+  ref.invalidate(ejerciciosRutinaProvider);
+  ref.invalidate(ejercicioProvider);
+  ref.invalidate(estadisticasRutinaProvider);
+  ref.invalidate(idsCatalogoEnRutinaProvider);
+  ref.invalidate(rutinaProvider);
+  ref.invalidate(rutinasQueContienenProvider);
+  ref.invalidate(ultimasSeriesProvider);
+  ref.invalidate(seriesConFechaProvider);
+  ref.invalidate(resumenSesionesEjercicioProvider);
+  ref.invalidate(entrenamientosPorDiaProvider);
+  ref.invalidate(historialRutinaProvider);
+  ref.invalidate(sesionProvider);
+  ref.invalidate(recordsSesionProvider);
+  ref.invalidate(sesionActivaProvider);
+}

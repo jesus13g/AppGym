@@ -62,6 +62,20 @@ String hace(DateTime? valor) {
   return 'Hace $n ${n > 1 ? 'meses' : 'mes'}';
 }
 
+/// Cuánto hace, en lenguaje natural: 'hace 12 minutos', 'hace 2 horas'.
+///
+/// A diferencia de [hace], que cuenta días para el calendario, esto cuenta
+/// minutos: la sesión que se ofrece retomar se dejó hace un rato, no hace días.
+String desde(DateTime valor) {
+  final minutos = DateTime.now().difference(valor).inMinutes;
+  if (minutos < 1) return 'hace un momento';
+  if (minutos < 60) return 'hace ${plural(minutos, 'minuto', 'minutos')}';
+
+  final horas = minutos ~/ 60;
+  if (horas < 24) return 'hace ${plural(horas, 'hora', 'horas')}';
+  return 'hace ${plural(horas ~/ 24, 'día', 'días')}';
+}
+
 String plural(int cantidad, String singular, String plural) =>
     '$cantidad ${cantidad == 1 ? singular : plural}';
 
@@ -84,6 +98,38 @@ List<String> listaJson(String? valor) {
   } on FormatException {
     return const [];
   }
+}
+
+/// Un peso guardado (siempre en kilos) escrito en la unidad activa.
+///
+/// Es el único sitio por el que debe pasar un peso antes de pintarse: en cuanto
+/// una pantalla escriba `'$valor kg'` a mano, cambiar a libras dejará de
+/// funcionar justo ahí.
+String peso(double kilos, Ajustes ajustes) {
+  final valor = ajustes.desdeKilos(kilos);
+  // Un decimal: en libras la conversión saca 132,2772 y ese resto no aporta
+  // nada, ni siquiera precisión real.
+  return '${numero((valor * 10).round() / 10)} ${ajustes.unidad.sufijo}';
+}
+
+/// Una duración en segundos como '1:05:12' o '34:12'.
+///
+/// Las horas solo aparecen si las hay: un entrenamiento de 40 minutos escrito
+/// como «0:40:12» se lee peor.
+String duracion(int segundos) {
+  final horas = segundos ~/ 3600;
+  final minutos = (segundos % 3600) ~/ 60;
+  final resto = (segundos % 60).toString().padLeft(2, '0');
+  if (horas == 0) return '$minutos:$resto';
+  return '$horas:${minutos.toString().padLeft(2, '0')}:$resto';
+}
+
+/// Un descanso en segundos como '1 min 30 s'.
+String descanso(int segundos) {
+  if (segundos < 60) return '$segundos s';
+  final minutos = segundos ~/ 60;
+  final resto = segundos % 60;
+  return resto == 0 ? '$minutos min' : '$minutos min $resto s';
 }
 
 /// El esfuerzo guardado (siempre RPE) escrito en la escala elegida.

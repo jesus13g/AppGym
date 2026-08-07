@@ -4,6 +4,7 @@
 /// pantallas se ejercitan de verdad —consultas incluidas— sin tocar disco.
 library;
 
+import 'package:appgym/datos/ajustes.dart';
 import 'package:appgym/datos/bd.dart';
 import 'package:appgym/datos/formato.dart' as formato;
 import 'package:appgym/datos/semilla.dart';
@@ -112,6 +113,10 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Crear rutina'));
+      await tester.pumpAndSettle();
+
+      // El «+» ofrece antes las plantillas; «En blanco» es el camino de siempre.
+      await tester.tap(find.text('En blanco'));
       await tester.pumpAndSettle();
 
       await tester.enterText(find.byType(CupertinoTextField), 'Full body');
@@ -292,8 +297,8 @@ void main() {
     testWidgets('activado en Ajustes, se elige y se guarda como RPE', (
       tester,
     ) async {
-      await bd.fijarAjuste(AppBD.claveEsfuerzoActivo, '1');
-      await bd.fijarAjuste(AppBD.claveEsfuerzoEscala, 'rir');
+      await bd.fijarAjuste(Claves.esfuerzoActivo, '1');
+      await bd.fijarAjuste(Claves.esfuerzoEscala, 'rir');
 
       _comoUnMovil(tester);
       await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
@@ -335,7 +340,7 @@ void main() {
     testWidgets('el detalle enseña la nota y el esfuerzo de cada serie', (
       tester,
     ) async {
-      await bd.fijarAjuste(AppBD.claveEsfuerzoActivo, '1');
+      await bd.fijarAjuste(Claves.esfuerzoActivo, '1');
       await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
         idEjercicio: const [
           ValoresSerie(

@@ -1,32 +1,71 @@
-/// Registro de un entrenamiento: las series de cada ejercicio, una a una.
+/// Registro de un entrenamiento, en dos modos.
 ///
-/// Cada serie es una fila con sus repeticiones y su peso, de modo que una
+/// **Sesión viva** (`Modo.vivo`) es la de entrenar: arranca un cronómetro, cada
+/// serie se marca conforme se completa, al marcarla salta el descanso y el
+/// borrador se guarda solo, de forma que cerrar la app a mitad no se lleva la
+/// hora que llevabas anotando. Al terminar se enseña el resumen de cierre.
+///
+/// **Formulario** (`Modo.formulario`) es la de siempre: se rellena entero y se
+/// guarda al final. Sigue existiendo porque anotar el entrenamiento de ayer no
+/// puede exigir un cronómetro, y porque editar una sesión guardada es eso
+/// mismo. La diferencia está en el punto de entrada, no en un ajuste.
+///
+/// En ambos, cada serie es una fila con sus repeticiones y su peso: una
 /// pirámide o un drop set se anotan tal y como se hicieron. Un ejercicio sin
-/// series no se guarda, que es lo que sustituye al antiguo interruptor de
-/// «incluir ejercicio».
+/// series no se guarda.
 library;
+
+import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../datos/ajustes.dart' show descansos;
 import '../datos/bd.dart';
+import '../datos/borrador.dart';
 import '../datos/formato.dart' as formato;
+import '../estado/descanso.dart';
 import '../estado/providers.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
+import 'resumen_sesion.dart';
 
-/// Lo que se propone cuando el ejercicio nunca se ha entrenado.
-const _serieNueva = ValoresSerie(repeticiones: 10, peso: 20);
-const _seriesPorDefecto = 4;
+/// Cada cuánto se escribe el borrador en disco.
+///
+/// Sin esperar, cada toque de un selector sería una escritura: se anota una
+/// serie de diez repeticiones a golpe de botón.
+const _esperaBorrador = Duration(seconds: 2);
 
-Future<void> abrirEntrenar(BuildContext context, int idRutina) =>
-    Navigator.of(context, rootNavigator: true).push(
-      CupertinoPageRoute<void>(
-        fullscreenDialog: true,
-        builder: (_) => PantallaEntrenar(idRutina: idRutina),
-      ),
-    );
+/// Cómo se registra.
+enum Modo {
+  /// Entrenando ahora: cronómetro, series que se marcan y descanso.
+  vivo,
+
+  /// Anotando: se rellena y se guarda, sin reloj.
+  formulario,
+}
+
+/// Empieza un entrenamiento en curso.
+///
+/// Con [borrador] se retoma una sesión que quedó a medias en vez de empezar de
+/// cero.
+Future<void> abrirEntrenar(
+  BuildContext context,
+  int idRutina, {
+  Modo modo = Modo.vivo,
+  SesionActiva? borrador,
+}) => Navigator.of(context, rootNavigator: true).push(
+  CupertinoPageRoute<void>(
+    fullscreenDialog: true,
+    builder: (_) =>
+        PantallaEntrenar(idRutina: idRutina, modo: modo, borrador: borrador),
+  ),
+);
+
+/// Anota una sesión pasada con el formulario de siempre.
+Future<void> abrirRegistrarAnterior(BuildContext context, int idRutina) =>
+    abrirEntrenar(context, idRutina, modo: Modo.formulario);
 
 /// Reabre una sesión ya guardada para corregirla.
 Future<void> abrirEditarEntrenamiento(
@@ -36,8 +75,11 @@ Future<void> abrirEditarEntrenamiento(
 ) => Navigator.of(context, rootNavigator: true).push(
   CupertinoPageRoute<void>(
     fullscreenDialog: true,
-    builder: (_) =>
-        PantallaEntrenar(idRutina: idRutina, idEntrenamiento: idEntrenamiento),
+    builder: (_) => PantallaEntrenar(
+      idRutina: idRutina,
+      idEntrenamiento: idEntrenamiento,
+      modo: Modo.formulario,
+    ),
   ),
 );
 
@@ -46,6 +88,8 @@ class PantallaEntrenar extends ConsumerStatefulWidget {
     super.key,
     required this.idRutina,
     this.idEntrenamiento,
+    this.modo = Modo.formulario,
+    this.borrador,
   });
 
   final int idRutina;
@@ -53,13 +97,18 @@ class PantallaEntrenar extends ConsumerStatefulWidget {
   /// Si viene informado se edita esa sesión en vez de crear una nueva.
   final int? idEntrenamiento;
 
+  final Modo modo;
+
+  /// Sesión a medias que se retoma. Solo tiene sentido en [Modo.vivo].
+  final SesionActiva? borrador;
+
   @override
   ConsumerState<PantallaEntrenar> createState() => _PantallaEntrenarState();
 }
 
 class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
   /// id de ejercicio -> series que se van a guardar, en orden.
-  final _series = <int, List<ValoresSerie>>{};
+  final _series = <int, List<SerieEnCurso>>{};
 
   /// id de ejercicio -> lo que se registró la última vez, para la referencia.
   final _ultimas = <int, List<ValoresSerie>>{};
@@ -69,52 +118,189 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
   DateTime _fecha = DateTime.now();
   final _nota = TextEditingController();
 
-  bool get _editando => widget.idEntrenamiento != null;
+  /// Cuándo empezó la sesión viva. En formulario no se usa.
+  late DateTime _inicio = DateTime.now();
 
-  String get _titulo => _editando ? 'Editar entrenamiento' : 'Entrenamiento';
+  /// Repinta la cabecera del cronómetro una vez por segundo.
+  Timer? _cronometro;
+
+  /// Aplaza la escritura del borrador mientras se está tocando la pantalla.
+  Timer? _guardadoBorrador;
+
+  /// Guardado en un campo porque `dispose` lo necesita, y ahí `ref` ya no se
+  /// puede tocar: cuelga del `BuildContext`, que para entonces está desactivado.
+  DescansoNotifier? _descanso;
+
+  bool get _editando => widget.idEntrenamiento != null;
+  bool get _vivo => widget.modo == Modo.vivo;
+
+  String get _titulo => switch (widget.modo) {
+    _ when _editando => 'Editar entrenamiento',
+    Modo.vivo => 'Entrenando',
+    Modo.formulario => 'Registrar sesión',
+  };
 
   @override
   void initState() {
     super.initState();
+    _descanso = ref.read(descansoProvider.notifier);
     _cargar();
+    if (_vivo) {
+      _cronometro = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    }
   }
 
   @override
   void dispose() {
+    _cronometro?.cancel();
+    _guardadoBorrador?.cancel();
+    // Cerrar la pantalla cancela el descanso: dejar el `Timer` vivo es la fuga
+    // clásica de esta funcionalidad, y aquí ya no hay nada que descansar.
+    //
+    // Al frame siguiente, no ahora: `saltar` escribe el estado del provider, y
+    // hacerlo mientras se desmonta el árbol es justo lo que Riverpod prohíbe.
+    // El `Timer` sí se para en el acto; lo que se aplaza es el repintado.
+    if (_descanso case final descanso?) {
+      descanso.pararReloj();
+      WidgetsBinding.instance.addPostFrameCallback((_) => descanso.saltar());
+    }
     _nota.dispose();
     super.dispose();
   }
 
   Future<void> _cargar() async {
     final bd = ref.read(bdProvider);
+    final ajustes = await ref.read(ajustesProvider.future);
     final ejercicios = await bd.ejerciciosDeRutina(widget.idRutina);
 
     // Al editar se parte de lo que se guardó aquel día; los ejercicios de la
     // rutina que no se hicieron aparecen vacíos, por si faltó anotar alguno.
     final sesion = _editando ? await bd.sesion(widget.idEntrenamiento!) : null;
-    final guardadas = sesion?.series ?? const {};
+    final guardadas = sesion?.series ?? const <int, List<ValoresSerie>>{};
     if (sesion != null) {
       _fecha = sesion.fecha;
       _nota.text = sesion.nota ?? '';
     }
 
+    // Una sesión recuperada manda sobre cualquier precarga: son las series que
+    // el usuario ya tenía delante cuando se cerró la app.
+    final recuperado = switch (widget.borrador) {
+      final b? => Borrador.desdeJson(b.estado),
+      _ => null,
+    };
+    if (widget.borrador case final b?) _inicio = b.inicio;
+    if (recuperado != null) _nota.text = recuperado.nota;
+
+    final serieNueva = ValoresSerie(
+      repeticiones: ajustes.repeticionesPorDefecto,
+      peso: 20,
+    );
+
     for (final ejercicio in ejercicios) {
-      // Se precargan las series de la última sesión —cuántas fueron incluido—,
-      // que casi siempre es lo que se repite.
       final ultimas = await bd.ultimasSeriesEjercicio(ejercicio.id);
       _ultimas[ejercicio.id] = ultimas;
-      _series[ejercicio.id] = switch (guardadas[ejercicio.id]) {
+
+      if (recuperado?.series[ejercicio.id] case final enCurso?) {
+        _series[ejercicio.id] = List.of(enCurso);
+        continue;
+      }
+
+      // Se precargan las series de la última sesión —cuántas fueron incluido—,
+      // que casi siempre es lo que se repite.
+      final valores = switch (guardadas[ejercicio.id]) {
         final serie? => List.of(serie),
-        _ when _editando => const [],
+        _ when _editando => const <ValoresSerie>[],
         _ =>
           ultimas.isEmpty
-              ? List.filled(_seriesPorDefecto, _serieNueva)
+              ? List.filled(ajustes.seriesPorDefecto, serieNueva)
               : List.of(ultimas),
       };
+      _series[ejercicio.id] = [
+        for (final v in valores) (valores: v, hecha: false),
+      ];
     }
 
     if (mounted) setState(() => _ejercicios = ejercicios);
   }
+
+  // ── Borrador ───────────────────────────────────────────────────────────────
+
+  Borrador get _borrador => Borrador(series: _series, nota: _nota.text);
+
+  /// Programa la escritura del borrador. Solo en sesión viva.
+  void _apuntarBorrador() {
+    if (!_vivo || _guardando) return;
+    _guardadoBorrador?.cancel();
+    _guardadoBorrador = Timer(_esperaBorrador, _escribirBorrador);
+  }
+
+  Future<void> _escribirBorrador() async {
+    if (!mounted || _guardando) return;
+    await ref
+        .read(bdProvider)
+        .guardarSesionActiva(widget.idRutina, _inicio, _borrador.aJson());
+  }
+
+  void _cambiarSeries(int idEjercicio, List<SerieEnCurso> series) {
+    setState(() => _series[idEjercicio] = series);
+    _apuntarBorrador();
+  }
+
+  /// Marca o desmarca una serie. Marcarla dispara el descanso.
+  void _marcar(EjercicioConFicha ejercicio, int indice, bool hecha) {
+    final series = List.of(_series[ejercicio.id] ?? const <SerieEnCurso>[]);
+    if (indice >= series.length) return;
+
+    series[indice] = (valores: series[indice].valores, hecha: hecha);
+    _cambiarSeries(ejercicio.id, series);
+    if (hecha) _empezarDescanso(ejercicio);
+  }
+
+  // ── Descanso ───────────────────────────────────────────────────────────────
+
+  int _descansoDe(EjercicioConFicha ejercicio, Ajustes ajustes) =>
+      ejercicio.ejercicio.descansoSeg ?? ajustes.descansoSeg;
+
+  void _empezarDescanso(EjercicioConFicha ejercicio) {
+    final ajustes = ref.read(ajustesProvider).value ?? const Ajustes();
+    _descanso?.arrancar(_descansoDe(ejercicio, ajustes));
+  }
+
+  /// Cambia el descanso propio de un ejercicio, o lo devuelve al global.
+  Future<void> _elegirDescanso(
+    EjercicioConFicha ejercicio,
+    Ajustes ajustes,
+  ) async {
+    final elegido = await ui.elegirEnHoja<int?>(
+      context,
+      titulo: 'Descanso de «${ejercicio.nombre}»',
+      mensaje:
+          'Los descansos de una sentadilla y de un curl no son iguales; aquí '
+          'se separa uno del otro.',
+      actual: ejercicio.ejercicio.descansoSeg,
+      opciones: [
+        (null, 'Como el global (${formato.descanso(ajustes.descansoSeg)})'),
+        for (final segundos in descansos)
+          (segundos, formato.descanso(segundos)),
+      ],
+    );
+    if (elegido == null) return;
+
+    final bd = ref.read(bdProvider);
+    await bd.fijarDescansoEjercicio(ejercicio.id, elegido.$1);
+    // La lista local se relee, o la tarjeta seguiría enseñando el valor viejo
+    // hasta salir y volver a entrar. Es una consulta de una rutina; no compensa
+    // reconstruir la fila a mano solo para ahorrársela.
+    final refrescados = await bd.ejerciciosDeRutina(widget.idRutina);
+    if (!mounted) return;
+
+    invalidarRutina(ref, widget.idRutina);
+    setState(() => _ejercicios = refrescados);
+  }
+
+  // ── Fecha ──────────────────────────────────────────────────────────────────
 
   /// Elige el día del entrenamiento, para poder anotar el de ayer.
   ///
@@ -143,39 +329,95 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
     });
   }
 
+  // ── Guardar y salir ────────────────────────────────────────────────────────
+
   Future<void> _guardar() async {
     if (_guardando) return;
 
     setState(() => _guardando = true);
+    _guardadoBorrador?.cancel();
+
     final bd = ref.read(bdProvider);
-    final bien = _editando
-        ? await bd.actualizarEntrenamiento(
-            widget.idEntrenamiento!,
-            _fecha,
-            _series,
-            nota: _nota.text,
-          )
-        : await bd.insertarEntrenamiento(
-            widget.idRutina,
-            _fecha,
-            _series,
-            nota: _nota.text,
-          );
+    // En sesión viva solo cuentan las series marcadas: las que quedaron sin
+    // hacer eran el plan, no el entrenamiento.
+    final series = _borrador.paraGuardar(soloHechas: _vivo);
+
+    final int? idGuardado;
+    if (_editando) {
+      final bien = await bd.actualizarEntrenamiento(
+        widget.idEntrenamiento!,
+        _fecha,
+        series,
+        nota: _nota.text,
+      );
+      idGuardado = bien ? widget.idEntrenamiento : null;
+    } else {
+      idGuardado = await bd.insertarEntrenamiento(
+        widget.idRutina,
+        _vivo ? DateTime.now() : _fecha,
+        series,
+        nota: _nota.text,
+        duracionSeg: _vivo ? _transcurrido.inSeconds : null,
+        descartarBorrador: _vivo,
+      );
+    }
     if (!mounted) return;
 
-    if (!bien) {
+    if (idGuardado == null) {
       setState(() => _guardando = false);
-      ui.aviso(context, 'Añade al menos una serie');
+      ui.aviso(
+        context,
+        _vivo ? 'Marca al menos una serie' : 'Añade al menos una serie',
+      );
       return;
     }
+
     invalidarEntrenamientos(ref, widget.idRutina);
+    ref.invalidate(sesionActivaProvider);
+    _descanso?.saltar();
+
+    final navegador = Navigator.of(context);
+    navegador.pop();
+    // El resumen de cierre sustituye a la pantalla que se acaba de cerrar, no
+    // se apila encima: al cerrarlo se vuelve a la rutina, no al registro.
+    if (_vivo) await abrirResumenSesion(context, idGuardado);
+  }
+
+  Duration get _transcurrido => DateTime.now().difference(_inicio);
+
+  /// Cierra la sesión viva ofreciendo conservarla o tirarla.
+  Future<void> _salirDeVivo() async {
+    final elegido = await ui.elegirEnHoja<bool>(
+      context,
+      titulo: 'Dejar el entrenamiento',
+      mensaje:
+          'Si lo dejas para luego, al abrir la app te ofrecerá continuarlo '
+          'donde lo dejaste.',
+      opciones: const [
+        (true, 'Seguir luego'),
+        (false, 'Descartar el entrenamiento'),
+      ],
+    );
+    if (elegido == null || !mounted) return;
+
+    if (elegido.$1) {
+      await _escribirBorrador();
+    } else {
+      await ref.read(bdProvider).descartarSesionActiva();
+    }
+    if (!mounted) return;
+
+    ref.invalidate(sesionActivaProvider);
     Navigator.of(context).pop();
   }
+
+  // ── Interfaz ───────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final rutina = ref.watch(rutinaProvider(widget.idRutina)).value;
     final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
+    final descanso = ref.watch(descansoProvider);
     final ejercicios = _ejercicios;
 
     if (ejercicios != null && ejercicios.isEmpty) {
@@ -184,7 +426,7 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
         navigationBar: ui.barra(
           context,
           titulo: _titulo,
-          izquierda: _botonCancelar(context),
+          izquierda: _botonSalir(context),
         ),
         child: const ui.EstadoVacio(
           icono: CupertinoIcons.exclamationmark_triangle,
@@ -198,13 +440,13 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
       navigationBar: ui.barra(
         context,
         titulo: _titulo,
-        izquierda: _botonCancelar(context),
+        izquierda: _botonSalir(context),
         derecha: CupertinoButton(
           padding: EdgeInsets.zero,
           minimumSize: Size.zero,
           onPressed: _guardando ? null : _guardar,
           child: Text(
-            'Guardar',
+            _vivo ? 'Terminar' : 'Guardar',
             style: ui.estilo(
               context,
               weight: t.semibold,
@@ -215,115 +457,155 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
       ),
       child: ejercicios == null
           ? const ui.Cargando()
-          : SafeArea(
-              child: ListView(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(
-                      left: t.l,
-                      right: t.l,
-                      top: t.m,
-                      bottom: t.l,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          rutina?.nombre ?? '',
-                          style: ui.estilo(
-                            context,
-                            size: t.title2,
-                            weight: t.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        CupertinoButton(
-                          onPressed: _elegirFecha,
-                          padding: EdgeInsets.zero,
-                          minimumSize: Size.zero,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                formato.fechaLarga(_fecha),
-                                style: ui.estilo(
-                                  context,
-                                  size: t.subhead,
-                                  color: context.acento,
-                                ),
-                              ),
-                              const SizedBox(width: t.xs),
-                              Icon(
-                                CupertinoIcons.calendar,
-                                size: 15,
-                                color: context.acento,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+          : Column(
+              children: [
+                Expanded(
+                  child: SafeArea(
+                    bottom: false,
+                    child: _lista(context, ejercicios, rutina, ajustes),
                   ),
-                  for (final ejercicio in ejercicios)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: t.l),
-                      child: TarjetaEjercicio(
-                        ejercicio: ejercicio,
-                        ultimas: _ultimas[ejercicio.id] ?? const [],
-                        series: _series[ejercicio.id] ?? const [],
-                        ajustes: ajustes,
-                        onSeries: (valor) =>
-                            setState(() => _series[ejercicio.id] = valor),
-                      ),
-                    ),
-                  ui.Grupo(
-                    cabecera: 'Notas',
-                    pie:
-                        'Lo que explique este entrenamiento dentro de tres '
-                        'semanas: molestias, cinturón, mal día.',
-                    filas: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: t.m,
-                          vertical: t.s,
-                        ),
-                        child: CupertinoTextField.borderless(
-                          controller: _nota,
-                          placeholder: 'Nota de la sesión',
-                          maxLines: null,
-                          minLines: 2,
-                          style: ui.estilo(context),
-                        ),
-                      ),
-                    ],
+                ),
+                if (descanso != null)
+                  ui.BarraDescanso(
+                    reloj: descanso.reloj,
+                    progreso: descanso.progreso,
+                    excedido: descanso.excedido,
+                    onMas: () => _descanso?.ajustar(ajusteDescanso),
+                    onMenos: () => _descanso?.ajustar(-ajusteDescanso),
+                    onSaltar: () => _descanso?.saltar(),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.all(t.l),
-                    child: ui.BotonPrincipal(
-                      'Guardar entrenamiento',
-                      icono: CupertinoIcons.check_mark,
-                      onPressed: _guardando ? null : _guardar,
-                    ),
-                  ),
-                  const SizedBox(height: t.xl),
-                ],
-              ),
+              ],
             ),
     );
   }
 
-  Widget _botonCancelar(BuildContext context) => CupertinoButton(
+  Widget _lista(
+    BuildContext context,
+    List<EjercicioConFicha> ejercicios,
+    Rutina? rutina,
+    Ajustes ajustes,
+  ) => ListView(
+    children: [
+      _cabecera(context, rutina),
+      for (final ejercicio in ejercicios)
+        Padding(
+          padding: const EdgeInsets.only(bottom: t.l),
+          child: TarjetaEjercicio(
+            ejercicio: ejercicio,
+            ultimas: _ultimas[ejercicio.id] ?? const [],
+            series: _series[ejercicio.id] ?? const [],
+            ajustes: ajustes,
+            vivo: _vivo,
+            descansoSeg: _descansoDe(ejercicio, ajustes),
+            descansoPropio: ejercicio.ejercicio.descansoSeg != null,
+            onSeries: (valor) => _cambiarSeries(ejercicio.id, valor),
+            onMarcar: (indice, hecha) => _marcar(ejercicio, indice, hecha),
+            onDescanso: () => _empezarDescanso(ejercicio),
+            onCambiarDescanso: () => _elegirDescanso(ejercicio, ajustes),
+          ),
+        ),
+      ui.Grupo(
+        cabecera: 'Notas',
+        pie:
+            'Lo que explique este entrenamiento dentro de tres semanas: '
+            'molestias, cinturón, mal día.',
+        filas: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: t.m, vertical: t.s),
+            child: CupertinoTextField.borderless(
+              controller: _nota,
+              placeholder: 'Nota de la sesión',
+              maxLines: null,
+              minLines: 2,
+              style: ui.estilo(context),
+              onChanged: (_) => _apuntarBorrador(),
+            ),
+          ),
+        ],
+      ),
+      Padding(
+        padding: const EdgeInsets.all(t.l),
+        child: ui.BotonPrincipal(
+          _vivo ? 'Terminar entrenamiento' : 'Guardar entrenamiento',
+          icono: CupertinoIcons.check_mark,
+          onPressed: _guardando ? null : _guardar,
+        ),
+      ),
+      const SizedBox(height: t.xl),
+    ],
+  );
+
+  /// Nombre de la rutina y, debajo, la fecha o el progreso de la sesión.
+  Widget _cabecera(BuildContext context, Rutina? rutina) {
+    final (hechas, total) = _borrador.progreso;
+
+    return Padding(
+      padding: const EdgeInsets.only(
+        left: t.l,
+        right: t.l,
+        top: t.m,
+        bottom: t.l,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            rutina?.nombre ?? '',
+            style: ui.estilo(context, size: t.title2, weight: t.bold),
+          ),
+          const SizedBox(height: 2),
+          if (_vivo)
+            Text(
+              '$hechas / $total series · '
+              '${formato.duracion(_transcurrido.inSeconds)}',
+              style: ui.estilo(
+                context,
+                size: t.subhead,
+                color: context.textoSec,
+              ),
+            )
+          else
+            CupertinoButton(
+              onPressed: _elegirFecha,
+              padding: EdgeInsets.zero,
+              minimumSize: Size.zero,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    formato.fechaLarga(_fecha),
+                    style: ui.estilo(
+                      context,
+                      size: t.subhead,
+                      color: context.acento,
+                    ),
+                  ),
+                  const SizedBox(width: t.xs),
+                  Icon(
+                    CupertinoIcons.calendar,
+                    size: 15,
+                    color: context.acento,
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _botonSalir(BuildContext context) => CupertinoButton(
     padding: EdgeInsets.zero,
     minimumSize: Size.zero,
-    onPressed: () => Navigator.of(context).pop(),
-    child: const Text('Cancelar'),
+    onPressed: _vivo ? _salirDeVivo : () => Navigator.of(context).pop(),
+    child: Text(_vivo ? 'Dejarlo' : 'Cancelar'),
   );
 }
 
 /// Tarjeta de un ejercicio con la lista de sus series.
 ///
 /// Es pública para poder montarla suelta en los tests de widget, que es donde
-/// se vigila que la fila de cuatro controles no desborde.
+/// se vigila que la fila de controles no desborde en un móvil estrecho.
 class TarjetaEjercicio extends StatelessWidget {
   const TarjetaEjercicio({
     super.key,
@@ -332,6 +614,12 @@ class TarjetaEjercicio extends StatelessWidget {
     required this.series,
     required this.onSeries,
     this.ajustes = const Ajustes(),
+    this.vivo = false,
+    this.descansoSeg = 90,
+    this.descansoPropio = false,
+    this.onMarcar,
+    this.onDescanso,
+    this.onCambiarDescanso,
   });
 
   final EjercicioConFicha ejercicio;
@@ -339,26 +627,40 @@ class TarjetaEjercicio extends StatelessWidget {
   /// Series de la última sesión, solo para la línea de referencia.
   final List<ValoresSerie> ultimas;
 
-  final List<ValoresSerie> series;
-  final ValueChanged<List<ValoresSerie>> onSeries;
+  final List<SerieEnCurso> series;
+  final ValueChanged<List<SerieEnCurso>> onSeries;
 
-  /// De aquí sale si se pide el esfuerzo y en qué escala se muestra.
+  /// De aquí salen la unidad, el paso del peso y si se pide el esfuerzo.
   final Ajustes ajustes;
 
-  void _cambiar(int indice, ValoresSerie valores) {
-    final nuevas = List.of(series)..[indice] = valores;
-    onSeries(nuevas);
-  }
+  /// En sesión viva cada fila lleva su check y la tarjeta, su descanso.
+  final bool vivo;
+
+  final int descansoSeg;
+
+  /// True si el valor de arriba es propio del ejercicio y no el global.
+  final bool descansoPropio;
+
+  final void Function(int indice, bool hecha)? onMarcar;
+  final VoidCallback? onDescanso;
+  final VoidCallback? onCambiarDescanso;
+
+  void _cambiar(int indice, ValoresSerie valores) => onSeries(
+    List.of(series)..[indice] = (valores: valores, hecha: series[indice].hecha),
+  );
 
   void _borrar(int indice) => onSeries(List.of(series)..removeAt(indice));
 
   /// Añadir copia la última serie, que es el gesto más frecuente.
-  void _anadir() => onSeries(
-    List.of(series)..add(series.isEmpty ? _serieNueva : series.last),
-  );
+  void _anadir() {
+    final ultima = series.isEmpty
+        ? ValoresSerie(repeticiones: ajustes.repeticionesPorDefecto, peso: 20)
+        : series.last.valores;
+    onSeries(List.of(series)..add((valores: ultima, hecha: false)));
+  }
 
   Future<void> _nota(BuildContext context, int indice) async {
-    final serie = series[indice];
+    final serie = series[indice].valores;
     final texto = await ui.dialogoTexto(
       context,
       titulo: 'Nota de la serie ${indice + 1}',
@@ -377,7 +679,7 @@ class TarjetaEjercicio extends StatelessWidget {
   }
 
   Future<void> _menu(BuildContext context, int indice) async {
-    final serie = series[indice];
+    final serie = series[indice].valores;
     await showCupertinoModalPopup<void>(
       context: context,
       builder: (hoja) => CupertinoActionSheet(
@@ -427,7 +729,7 @@ class TarjetaEjercicio extends StatelessWidget {
         .where((s) => !s.calentamiento)
         .fold<double>(0, (suma, s) => suma + s.peso * s.repeticiones);
     return 'Último: ${formato.plural(ultimas.length, 'serie', 'series')} · '
-        '${formato.numero(volumen)} kg';
+        '${formato.peso(volumen, ajustes)}';
   }
 
   @override
@@ -472,6 +774,7 @@ class TarjetaEjercicio extends StatelessWidget {
                   ],
                 ),
               ),
+              if (onCambiarDescanso != null) _botonDescanso(context),
             ],
           ),
         ),
@@ -499,10 +802,13 @@ class TarjetaEjercicio extends StatelessWidget {
                 color: context.tarjeta,
                 child: _FilaSerie(
                   numero: indice + 1,
-                  serie: serie,
+                  serie: serie.valores,
+                  hecha: serie.hecha,
                   ajustes: ajustes,
+                  vivo: vivo,
                   onSerie: (valores) => _cambiar(indice, valores),
                   onMenu: () => _menu(context, indice),
+                  onMarcar: () => onMarcar?.call(indice, !serie.hecha),
                 ),
               ),
             ),
@@ -529,59 +835,101 @@ class TarjetaEjercicio extends StatelessWidget {
       ],
     ),
   );
+
+  /// Descanso del ejercicio: se toca para arrancarlo, se mantiene para
+  /// cambiarlo.
+  ///
+  /// Es también el «botón de descanso» suelto de la especificación: en el
+  /// formulario, donde no hay checks que lo disparen, es la única forma de
+  /// echar a andar la cuenta atrás.
+  Widget _botonDescanso(BuildContext context) => CupertinoButton(
+    onPressed: onDescanso,
+    onLongPress: onCambiarDescanso,
+    padding: const EdgeInsets.symmetric(horizontal: t.s, vertical: t.xs),
+    minimumSize: Size.zero,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          CupertinoIcons.timer,
+          size: 18,
+          color: descansoPropio ? context.acento : context.textoSec,
+        ),
+        Text(
+          formato.descanso(descansoSeg),
+          style: ui.estilo(
+            context,
+            size: t.caption,
+            color: descansoPropio ? context.acento : context.textoSec,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
-/// Una serie: número, repeticiones, peso y su menú.
+/// Una serie: número (o check), repeticiones, peso y su menú.
 class _FilaSerie extends StatelessWidget {
   const _FilaSerie({
     required this.numero,
     required this.serie,
+    required this.hecha,
     required this.ajustes,
+    required this.vivo,
     required this.onSerie,
     required this.onMenu,
+    required this.onMarcar,
   });
 
   final int numero;
   final ValoresSerie serie;
+  final bool hecha;
   final Ajustes ajustes;
+  final bool vivo;
   final ValueChanged<ValoresSerie> onSerie;
   final VoidCallback onMenu;
+  final VoidCallback onMarcar;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: t.m, vertical: t.xs),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _principal(context),
-        if (ajustes.esfuerzoActivo)
-          _Esfuerzo(
-            valor: serie.rpe,
-            escala: ajustes.escala,
-            onValor: (valor) => onSerie(
-              valor == null
-                  ? serie.copiar(sinRpe: true)
-                  : serie.copiar(rpe: valor),
-            ),
-          ),
-        if (serie.nota case final nota?)
-          Padding(
-            padding: const EdgeInsets.only(left: 26, bottom: t.xs),
-            child: Text(
-              nota,
-              style: ui.estilo(
-                context,
-                size: t.caption,
-                color: context.textoSec,
+  Widget build(BuildContext context) => Opacity(
+    // Una serie hecha se atenúa: lo que queda por delante es lo que importa.
+    opacity: hecha ? 0.55 : 1,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: t.m, vertical: t.xs),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _principal(context),
+          if (ajustes.esfuerzoActivo)
+            _Esfuerzo(
+              valor: serie.rpe,
+              escala: ajustes.escala,
+              onValor: (valor) => onSerie(
+                valor == null
+                    ? serie.copiar(sinRpe: true)
+                    : serie.copiar(rpe: valor),
               ),
             ),
-          ),
-      ],
+          if (serie.nota case final nota?)
+            Padding(
+              padding: const EdgeInsets.only(left: 26, bottom: t.xs),
+              child: Text(
+                nota,
+                style: ui.estilo(
+                  context,
+                  size: t.caption,
+                  color: context.textoSec,
+                ),
+              ),
+            ),
+        ],
+      ),
     ),
   );
 
   Widget _principal(BuildContext context) => Row(
     children: [
+      if (vivo) ui.CheckSerie(hecha: hecha, onCambiar: onMarcar),
       SizedBox(
         width: 26,
         child: serie.calentamiento
@@ -614,13 +962,15 @@ class _FilaSerie extends StatelessWidget {
         flex: 3,
         child: ui.SelectorEnLinea(
           semantica: 'Peso',
-          valor: serie.peso,
+          // El selector trabaja en la unidad activa y devuelve kilos: es lo
+          // único que sabe de libras en toda la pantalla.
+          valor: ajustes.paraSelector(serie.peso),
           minimo: 0,
-          maximo: 400,
-          paso: 2.5,
-          unidad: 'kg',
-          decimales: 1,
-          onChanged: (v) => onSerie(serie.copiar(peso: v)),
+          maximo: ajustes.pesoMaximo,
+          paso: ajustes.pasoPeso,
+          unidad: ajustes.unidad.sufijo,
+          decimales: ajustes.decimalesPaso,
+          onChanged: (v) => onSerie(serie.copiar(peso: ajustes.aKilos(v))),
         ),
       ),
       CupertinoButton(

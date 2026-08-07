@@ -403,6 +403,118 @@ class BarraProgreso extends StatelessWidget {
   );
 }
 
+/// Barra fija del descanso, con el tiempo en grande y sus tres botones.
+///
+/// Se apoya en [BarraProgreso], que ya existía. Al pasarse de la cuenta el
+/// contador sigue subiendo pero en gris: se ve de un vistazo cuánto se ha
+/// alargado el descanso sin que el número desaparezca.
+class BarraDescanso extends StatelessWidget {
+  const BarraDescanso({
+    super.key,
+    required this.reloj,
+    required this.progreso,
+    required this.excedido,
+    required this.onMas,
+    required this.onMenos,
+    required this.onSaltar,
+  });
+
+  /// El tiempo ya formateado como 'M:SS'.
+  final String reloj;
+
+  /// Entre 0 y 1.
+  final double progreso;
+
+  /// True cuando ya se ha pasado y el contador sube en vez de bajar.
+  final bool excedido;
+
+  final VoidCallback onMas;
+  final VoidCallback onMenos;
+  final VoidCallback onSaltar;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: context.barra,
+      border: Border(top: BorderSide(color: context.separador, width: 0.5)),
+    ),
+    child: SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: t.l, vertical: t.m),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            BarraProgreso(progreso),
+            const SizedBox(height: t.m),
+            Row(
+              children: [
+                Text(
+                  excedido ? '+$reloj' : reloj,
+                  style: estilo(
+                    context,
+                    size: t.title1,
+                    weight: t.semibold,
+                    color: excedido ? context.textoSec : context.texto,
+                  ),
+                ),
+                const Spacer(),
+                _boton(context, '−15 s', onMenos),
+                const SizedBox(width: t.s),
+                _boton(context, '+15 s', onMas),
+                const SizedBox(width: t.s),
+                _boton(context, 'Saltar', onSaltar, destacado: true),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  Widget _boton(
+    BuildContext context,
+    String etiqueta,
+    VoidCallback onPressed, {
+    bool destacado = false,
+  }) => CupertinoButton(
+    onPressed: onPressed,
+    padding: const EdgeInsets.symmetric(horizontal: t.m, vertical: t.xs),
+    minimumSize: Size.zero,
+    color: destacado ? context.acento : context.relleno,
+    borderRadius: BorderRadius.circular(t.radioXl),
+    child: Text(
+      etiqueta,
+      style: estilo(
+        context,
+        size: t.footnote,
+        weight: t.semibold,
+        color: destacado ? CupertinoColors.white : context.texto,
+      ),
+    ),
+  );
+}
+
+/// Círculo de «hecho» para marcar una serie completada.
+class CheckSerie extends StatelessWidget {
+  const CheckSerie({super.key, required this.hecha, required this.onCambiar});
+
+  final bool hecha;
+  final VoidCallback onCambiar;
+
+  @override
+  Widget build(BuildContext context) => CupertinoButton(
+    onPressed: onCambiar,
+    padding: const EdgeInsets.symmetric(horizontal: t.xs, vertical: t.xs),
+    minimumSize: Size.zero,
+    child: Icon(
+      hecha ? CupertinoIcons.checkmark_circle_fill : CupertinoIcons.circle,
+      size: 24,
+      color: hecha ? context.exito : context.textoTer,
+    ),
+  );
+}
+
 /// Envuelve una fila para poder borrarla deslizando hacia la izquierda.
 ///
 /// A diferencia de Flet, `confirmDismiss` de Flutter **sí** respeta el valor
@@ -526,6 +638,49 @@ Future<DateTime?> selectorFecha(
     ),
   );
 }
+
+/// Hoja inferior para elegir un valor de una lista.
+///
+/// Devuelve `null` si se cancela y `(valor,)` si se elige, envuelto en un
+/// registro de un elemento para poder distinguir «cancelar» de «elegir nada»,
+/// que es un valor legítimo (el descanso «como el global», por ejemplo).
+///
+/// Es la alternativa al `CupertinoSlidingSegmentedControl` cuando hay más de
+/// tres opciones y no caben en una fila.
+Future<(T,)?> elegirEnHoja<T>(
+  BuildContext context, {
+  required String titulo,
+  required List<(T, String)> opciones,
+  String? mensaje,
+  T? actual,
+}) => showCupertinoModalPopup<(T,)>(
+  context: context,
+  builder: (hoja) => CupertinoActionSheet(
+    title: Text(titulo),
+    message: mensaje == null ? null : Text(mensaje),
+    actions: [
+      for (final (valor, etiqueta) in opciones)
+        CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(hoja, (valor,)),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(child: Text(etiqueta, textAlign: TextAlign.center)),
+              if (valor == actual) ...[
+                const SizedBox(width: t.s),
+                Icon(CupertinoIcons.check_mark, size: 18, color: hoja.acento),
+              ],
+            ],
+          ),
+        ),
+    ],
+    cancelButton: CupertinoActionSheetAction(
+      isDefaultAction: true,
+      onPressed: () => Navigator.pop(hoja),
+      child: const Text('Cancelar'),
+    ),
+  ),
+);
 
 /// Diálogo con un campo de texto. Devuelve el texto, o null si se cancela.
 Future<String?> dialogoTexto(
