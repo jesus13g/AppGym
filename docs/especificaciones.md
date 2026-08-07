@@ -1000,6 +1000,16 @@ Future<void> borrarMedida(DateTime fecha, String tipo);
 
 ## C. Progreso y análisis
 
+> **Bloque implementado.** C16, C17 y C19 están en el código desde la iteración de agosto de 2026,
+> sin ningún cambio de esquema —los récords se calculan, no se almacenan—. Lo que sigue se conserva
+> como el porqué de cada decisión; **las desviaciones respecto a lo especificado van marcadas en su
+> punto**.
+>
+> El módulo nuevo es `lib/datos/metricas.dart`, y todo lo que hay dentro son funciones puras: 1RM,
+> volumen, mejor serie, récords, reparto por semanas y racha. Ahí está el grueso de la lógica de
+> este bloque, y por eso `test/metricas_test.dart` lo cubre sin montar base de datos ni pantallas,
+> con fechas fijas.
+
 ### C16. 1RM estimado
 
 **Problema.**
@@ -1058,11 +1068,34 @@ una sesión antigua no convierte retroactivamente en récord algo que no lo fue.
 
 **Criterios de aceptación.**
 
-- [ ] `unoRm(100, 1)` devuelve exactamente `100`.
-- [ ] `unoRm(60, 10)` con Epley devuelve `80.0`.
-- [ ] Una sesión con una serie de 15 repeticiones no genera récord de 1RM.
-- [ ] Cambiar el eje del gráfico a Volumen recalcula sin volver a consultar la base de datos.
-- [ ] Borrar la sesión que tenía el récord hace que el récord pase a la siguiente mejor.
+- [x] `unoRm(100, 1)` devuelve exactamente `100`.
+- [x] `unoRm(60, 10)` con Epley devuelve `80.0`.
+- [x] Una sesión con una serie de 15 repeticiones no genera récord de 1RM.
+- [x] Cambiar el eje del gráfico a Volumen recalcula sin volver a consultar la base de datos.
+- [x] Borrar la sesión que tenía el récord hace que el récord pase a la siguiente mejor.
+
+**Desviaciones de lo implementado.**
+
+1. **`recordsEjercicio` no es un método de `AppBD`,** sino una función pura de `metricas.dart` que
+   recibe el histórico por sesión que la pantalla **ya tiene cargado**. Cumple los dos criterios que
+   importan —cambiar el eje no vuelve a consultar, y borrar la sesión del récord lo pasa a la
+   siguiente mejor— sin una consulta más, y deja los récords donde se pueden probar directamente.
+   Junto a ella va `sesionesConRecord`, que recorre el histórico con un máximo corriente para marcar
+   la sesión que **fue** récord el día que se hizo; eso es lo que pinta el trofeo, que en una lista
+   de días tiene más sentido que marcar solo lo que hoy sigue siendo el máximo.
+2. **`recordsBatidos` se llamó `recordsDeSesion`** y ya existía desde B8, aunque solo miraba el peso
+   máximo. Ahora devuelve los tres tipos (`TipoRecord.peso`, `.unoRm`, `.volumen`) y el resumen de
+   cierre dice cuál se batió en cada ejercicio.
+3. **Con una repetición el 1RM es el peso tal cual**, no lo que sale de la fórmula. Epley cruda
+   daría 103,3 para 100 kg, que no es un máximo estimado: es un máximo medido. El caso especial está
+   tanto en `metricas.unoRm` como en la expresión SQL, compuestas ambas desde un solo sitio para que
+   no puedan discrepar.
+4. **Brzycki se satura en 36 repeticiones.** Su denominador es `37 − repeticiones`: con 37 divide
+   por cero y a partir de ahí devuelve negativos.
+5. **`ResumenSesionEjercicio` trae dos estimaciones**, `mejor1RM` y `mejor1RMFiable`. La segunda es
+   `null` cuando la sesión no tuvo ninguna serie de doce repeticiones o menos, y es la única que
+   cuenta para un récord; la primera se enseña igual, en gris y con asterisco.
+6. **El icono del trofeo es `CupertinoIcons.rosette`**, que es lo más parecido que trae Cupertino.
 
 ---
 
@@ -1112,12 +1145,30 @@ hacia atrás.
 
 **Criterios de aceptación.**
 
-- [ ] Con el objetivo en 3 y 3 sesiones esta semana, el indicador está completo.
-- [ ] La racha no se rompe el lunes por la mañana.
-- [ ] Una semana sin entrenar rompe la racha una vez terminada.
-- [ ] Sin ninguna sesión registrada, el bloque no aparece y se conserva el `ui.EstadoVacio` actual.
-- [ ] Todo el resumen se calcula con 2 consultas o menos.
-- [ ] Test de datos con fechas fijas que cubra el cambio de semana y la racha rota.
+- [x] Con el objetivo en 3 y 3 sesiones esta semana, el indicador está completo.
+- [x] La racha no se rompe el lunes por la mañana.
+- [x] Una semana sin entrenar rompe la racha una vez terminada.
+- [x] Sin ninguna sesión registrada, el bloque no aparece y se conserva el `ui.EstadoVacio` actual.
+- [x] Todo el resumen se calcula con 2 consultas o menos.
+- [x] Test de datos con fechas fijas que cubra el cambio de semana y la racha rota.
+
+**Desviaciones de lo implementado.**
+
+1. **El agrupado por semana se hace en Dart, no en SQL.** `AppBD.sesionesConVolumen({desde})` es la
+   única consulta: devuelve cada sesión con su volumen ya sumado, y `metricas.porSemana` reparte.
+   El motivo no es comodidad: las funciones de fecha de SQLite trabajan en **UTC**, de modo que un
+   `strftime('%Y-%W')` partiría mal las semanas en huso local, y peor todavía en el cambio de año.
+   De paso, `resumenSemana` y `rachaSemanas` quedan como funciones puras y sus tests fijan la fecha
+   en vez de depender de cuándo se ejecute la suite.
+2. **La consulta se limita a los dos últimos años.** Es de sobra para cualquier racha y pone techo a
+   lo que se carga en memoria en una pantalla que se abre constantemente.
+3. **La racha tiene suelo en la primera semana registrada.** Sin él, una racha que llegara hasta el
+   principio de los datos seguiría contando semanas vacías hacia atrás para siempre.
+4. **Los siete puntos son la semana en curso** (de lunes a domingo), no los siete días anteriores a
+   hoy: así coinciden con el «3 de 4» que llevan encima y con `formato.diasSemana`. Los días que
+   todavía no han llegado se pintan apagados —no son días sin entrenar, son días que no han pasado—.
+5. **El «hoy» sale de `datos/reloj.dart`**, no de `DateTime.now()`. La regla del proyecto lo pedía
+   solo para lo que cronometra, pero aquí es lo que permite fijar la semana en los tests de widget.
 
 ---
 
@@ -1148,10 +1199,26 @@ día se entrenó, pero no **qué** se hizo. Es el gesto que cualquiera intenta a
 
 **Criterios de aceptación.**
 
-- [ ] Pulsar un día entrenado muestra todas las sesiones de ese día.
-- [ ] Pulsar un día vacío del pasado abre el registro con esa fecha ya seleccionada.
-- [ ] Los días futuros no responden al toque.
-- [ ] Eliminar una sesión desde el detalle actualiza el calendario (vía `invalidarEntrenamientos`).
+- [x] Pulsar un día entrenado muestra todas las sesiones de ese día.
+- [x] Pulsar un día vacío del pasado abre el registro con esa fecha ya seleccionada.
+- [x] Los días futuros no responden al toque.
+- [x] Eliminar una sesión desde el detalle actualiza el calendario (vía `invalidarEntrenamientos`).
+
+**Desviaciones de lo implementado.**
+
+1. **La celda va en un `CupertinoButton` de padding cero**, no en un `GestureDetector`. La
+   atenuación al pulsar la trae de serie, y con `onPressed: null` un día futuro queda inerte sin
+   repartir condicionales por el árbol.
+2. **`SesionDelDia` trae ya las cifras** —duración, ejercicios, series y volumen— y
+   `entrenamientosPorDia` pasó a ser una consulta agregada. Sigue siendo una consulta por mes, y sin
+   esto pulsar una celda dispararía una consulta por cada sesión listada, que es justo la regla de
+   las consultas preagregadas.
+3. **Antes de registrar hay que elegir rutina.** Desde el calendario no hay ninguna de contexto, a
+   diferencia de cuando se entra desde la propia rutina; se pide con `ui.elegirEnHoja`. Sin ninguna
+   rutina creada sale un `ui.aviso` en vez de una hoja vacía, igual que ya hacía «añadir a rutina»
+   desde el catálogo (B12).
+4. **La hoja lleva directamente a la sesión**, sin el botón «Ver sesión» intermedio que describía la
+   especificación: cada acción de la hoja *es* la sesión, así que el botón sobraba.
 
 ---
 
@@ -1563,9 +1630,15 @@ plantillas) → **B12** (catálogo) → **B13** (peso corporal).
 > recomendaba la nota original. Lo cubre el respaldo del fichero (`datos/respaldo.dart`), que
 > justamente se montó para eso.
 
-### Fase 4 — Análisis
+### Fase 4 — Análisis ✅
 
-**C16** (1RM y récords) → **C17** (semana y racha) → **C19** (días pulsables).
+Hecha, en ese orden: **C16** (1RM y récords) → **C17** (semana y racha) → **C19** (días pulsables).
+Sin ningún cambio de esquema: los récords se calculan y la semana sale de una consulta agregada, así
+que `schemaVersion` se quedó en 6 y las migraciones no se tocaron.
+
+Lo que sí trajo es `lib/datos/metricas.dart`, el primer módulo de la app que es solo lógica: no
+importa Flutter ni escribe en la base, y `test/metricas_test.dart` lo prueba con datos y fechas a
+mano. Cuando llegue el bloque D, el `musculos.dart` que pide debería vivir con esa misma forma.
 
 ### Fase 5 — Mapa muscular
 
@@ -1610,8 +1683,9 @@ Cuestiones que conviene cerrar antes o durante la implementación:
    programando. Decidir entre dibujo original o fuente en dominio público.
 4. **¿Parser de SVG o JSON de puntos?** (D.7). Se recomienda el JSON de puntos, para no mantener un
    parser de un formato ajeno.
-5. **Fórmula de 1RM por defecto** (C16): Epley es la propuesta; Brzycki es algo más conservadora en
-   repeticiones altas. Puede dejarse elegible en Ajustes a coste casi nulo.
+5. ~~**Fórmula de 1RM por defecto** (C16)~~ **Cerrada:** Epley por defecto y **elegible en
+   Ajustes**, en el grupo «Objetivos». Costó lo previsto: una clave más, una fila de dos segmentos y
+   la expresión SQL compuesta según la fórmula en las dos consultas que estiman.
 6. ~~**Escala de esfuerzo por defecto** (A5)~~ **Cerrada:** desactivado de inicio, y en Ajustes
    se elige entre «No», «RPE» y «RIR» en una sola fila.
 7. ~~**Dependencias nuevas de B10**~~ **Cerrada:** se aceptaron las dos. Con ellas la app va por
