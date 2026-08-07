@@ -1,5 +1,11 @@
 plugins {
     id("com.android.application")
+    // Escape temporal de `android.builtInKotlin=false` (gradle.properties): con AGP 9 hay que
+    // volver a aplicar el KGP clásico aquí para que plugins de terceros que todavía lo aplican en
+    // su propio build.gradle (file_picker, share_plus) compilen. Sin esto, Gradle no comparte la
+    // versión de Kotlin y su clase de plugin no se genera: "cannot find symbol" en
+    // GeneratedPluginRegistrant.java. Se retira cuando esos plugins terminen su migración.
+    id("org.jetbrains.kotlin.android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
