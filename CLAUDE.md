@@ -12,7 +12,7 @@ flutter pub get
 dart run build_runner build     # genera bd.g.dart; obligatorio tras clonar
 flutter run                     # app en un dispositivo o emulador
 flutter analyze                 # objetivo permanente: 0 issues
-flutter test                    # 177 tests: datos, pantallas, migraciones, copia y ajustes
+flutter test                    # 226 tests: datos, pantallas, migraciones, copia, ajustes y métricas
 dart format lib test
 flutter build apk --release     # APK local (necesita SDK de Android y Java 17)
 ```
@@ -59,6 +59,7 @@ lib/
 │   ├── semilla.dart   carga del catálogo en la base de datos
 │   ├── media.dart     descarga y resolución de imágenes y GIFs
 │   ├── i18n.dart      vocabulario del catálogo en español
+│   ├── metricas.dart  1RM, récords, semana y racha: solo funciones puras
 │   ├── reloj.dart     la hora, en un punto que los tests pueden adelantar
 │   └── formato.dart   fechas, pesos, duraciones y textos
 ├── estado/            providers.dart · descanso.dart (el temporizador)
@@ -66,7 +67,7 @@ lib/
 └── pantallas/         quince pantallas + dos piezas compartidas
 assets/                ejercicios.es.json (el catálogo) · plantillas.json
 drift_schemas/         un JSON por versión del esquema, para los tests de migración
-test/                  datos · pantallas · migraciones · copia · ajustes · plantillas
+test/                  datos · pantallas · migraciones · copia · ajustes · plantillas · metricas
                        esquemas/ (generado)
 docs/                  especificaciones.md, el trabajo previsto
 ```
@@ -81,13 +82,13 @@ añadir a una rutina (`abrirAnadirEjercicio`), y `entrenar.dart` es, según su `
 o el formulario de siempre.
 
 **`docs/especificaciones.md`** recoge lo que está previsto construir. Sus **bloques A
-(limitaciones del modelo de datos) y B (uso diario) ya están implementados**: series
-independientes, editar y borrar entrenamientos, elegir la fecha, orden, notas y RPE, varias
-rutinas el mismo día, temporizador de descanso, sesión viva, la pantalla de Ajustes completa,
-copia de seguridad, plantillas, favoritos y medidas del cuerpo. Queda **C** (1RM, racha y días
-pulsables) y **D** (mapa muscular). Antes de proponer una funcionalidad nueva, mira si ya está
-ahí especificada — incluye el esquema de datos final, el orden de las migraciones y las
-desviaciones de lo que se implementó.
+(limitaciones del modelo de datos), B (uso diario) y C (progreso y análisis) ya están
+implementados**: series independientes, editar y borrar entrenamientos, elegir la fecha, orden,
+notas y RPE, varias rutinas el mismo día, temporizador de descanso, sesión viva, la pantalla de
+Ajustes completa, copia de seguridad, plantillas, favoritos, medidas del cuerpo, 1RM estimado con
+sus récords, resumen semanal con racha y días de calendario pulsables. Queda **D** (mapa muscular).
+Antes de proponer una funcionalidad nueva, mira si ya está ahí especificada — incluye el esquema de
+datos final, el orden de las migraciones y las desviaciones de lo que se implementó.
 
 ### Navegación: pestañas con pila propia
 
@@ -224,11 +225,37 @@ de funcionar justo ahí.
 
 **Nada que cronometre debe llamar a `DateTime.now()`.** El descanso y el cronómetro de la sesión
 viva usan `datos/reloj.dart`, que es la costura que los tests adelantan: `tester.pump` mueve los
-`Timer`, no el calendario.
+`Timer`, no el calendario. **El resumen semanal también pasa por ahí** aunque no cronometre nada: es
+lo que permite a sus tests fijar la semana en vez de depender de cuándo se ejecute la suite.
 
 **Dos tablas van sin clave foránea a propósito**, `favoritos` y `vistos`: `sembrarCatalogo` borra y
 reinserta el catálogo entero cuando cambia el dataset, y con la clave puesta esa operación fallaría
 en cuanto hubiera un favorito guardado. Hay un test que lo fija.
+
+### Métricas: la lógica fuera de la base y fuera de la pantalla
+
+`datos/metricas.dart` es el único módulo de la app que **no importa Flutter ni escribe en la base**:
+1RM estimado, volumen, mejor serie, récords, reparto por semanas y racha. Recibe listas y devuelve
+números, así que `test/metricas_test.dart` lo cubre con datos y fechas escritos a mano.
+
+- **Los récords se calculan, no se almacenan.** Guardarlos abriría la puerta a que quedaran
+  desincronizados al editar o borrar una sesión; recorrer el histórico en memoria es instantáneo con
+  volúmenes personales. Por lo mismo, `recordsEjercicio` y `sesionesConRecord` trabajan sobre la
+  lista que `resumenSesionesEjercicio` **ya devolvió** a la pantalla: cambiar el eje del gráfico o el
+  rango no vuelve a consultar.
+- **Con una repetición el 1RM es el peso tal cual.** Epley cruda daría 103,3 para 100 kg, que no es
+  una estimación sino un máximo medido. El caso especial está en `unoRm` **y** en la expresión SQL;
+  las dos consultas que estiman la componen desde `AppBD._expresion1RM`, para que no puedan
+  discrepar. Si tocas una, mira la otra.
+- **Más de doce repeticiones no estiman un máximo.** Se calcula igual y se enseña marcado, pero no
+  cuenta para un récord: de ahí que `ResumenSesionEjercicio` traiga `mejor1RM` y `mejor1RMFiable`,
+  y que la segunda pueda ser nula.
+- **La semana se agrupa en Dart, no con `strftime`.** Las funciones de fecha de SQLite trabajan en
+  UTC y partirían mal las semanas en huso local. `sesionesConVolumen` es la única consulta del
+  resumen semanal; el reparto lo hace `porSemana`.
+- **La racha no cuenta la semana en curso.** Si contara, el lunes por la mañana toda racha valdría
+  cero. Y tiene suelo en la primera semana registrada, o seguiría contando semanas vacías hacia
+  atrás para siempre.
 
 ### Catálogo de ejercicios
 

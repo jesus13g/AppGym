@@ -18,6 +18,7 @@ import 'package:appgym/pantallas/ficha.dart';
 import 'package:appgym/pantallas/historial.dart';
 import 'package:appgym/pantallas/medidas.dart';
 import 'package:appgym/pantallas/progreso.dart';
+import 'package:appgym/pantallas/resultado_ejercicio.dart';
 import 'package:appgym/pantallas/resumen_sesion.dart';
 import 'package:appgym/pantallas/rutina.dart';
 import 'package:appgym/pantallas/rutinas.dart';
@@ -912,9 +913,15 @@ void main() {
       expect(find.text('2'), findsOneWidget);
       expect(find.text('1.040 kg'), findsNothing);
       expect(find.text('34:12'), findsOneWidget);
-      // Récord: 65 kg contra los 60 de la semana anterior.
+      // Récord: 65 kg contra los 60 de la semana anterior. Se baten los tres,
+      // porque subir el peso sube también la estimación y el volumen.
       expect(find.text('Récords'.toUpperCase()), findsOneWidget);
-      expect(find.text('Antes: 60 kg'), findsOneWidget);
+      expect(
+        find.text(
+          'Peso (antes 60 kg) · 1RM (antes 80 kg) · Volumen (antes 600 kg)',
+        ),
+        findsOneWidget,
+      );
     });
   });
 
@@ -1397,6 +1404,397 @@ void main() {
       await bd.fijarAjuste(Claves.tema, 'claro');
 
       expect(await brilloDe(tester, bd), Brightness.light);
+    });
+  });
+
+  // ── C16: 1RM estimado y récords ────────────────────────────────────────────
+
+  group('evolución de un ejercicio', () {
+    late int idRutina;
+    late int idEjercicio;
+
+    setUp(() async {
+      idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarEjercicio(idRutina, 'Press banca');
+      idEjercicio = (await bd.ejerciciosDeRutina(idRutina)).single.id;
+    });
+
+    Future<void> abrir(WidgetTester tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(
+        _app(
+          bd,
+          PantallaResultadoEjercicio(
+            idRutina: idRutina,
+            idEjercicio: idEjercicio,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('la tarjeta enseña las cuatro cifras', (tester) async {
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
+      });
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 8), {
+        idEjercicio: const [ValoresSerie(repeticiones: 8, peso: 65)],
+      });
+
+      await abrir(tester);
+
+      expect(find.text('1RM estimado'), findsOneWidget);
+      expect(find.text('Peso máximo'), findsOneWidget);
+      expect(find.text('Volumen total'), findsOneWidget);
+      expect(find.text('Sesiones'), findsOneWidget);
+
+      expect(find.text('65 kg'), findsWidgets); // peso máximo
+      expect(find.text('1.120 kg'), findsNothing); // el volumen no lleva puntos
+      expect(find.text('2'), findsOneWidget); // sesiones
+      // Epley sobre 8 × 65 = 82,3, mejor que los 80 de la primera sesión.
+      expect(find.text('82,3 kg'), findsOneWidget);
+    });
+
+    testWidgets('cambiar el eje a Volumen repinta sin volver a consultar', (
+      tester,
+    ) async {
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
+      });
+
+      await abrir(tester);
+      await tester.tap(find.text('Volumen').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('1RM'));
+      await tester.pumpAndSettle();
+
+      // Si el gráfico reventara al cambiar de métrica, el árbol no llegaría
+      // aquí entero.
+      expect(find.text('Histórico'.toUpperCase()), findsOneWidget);
+    });
+
+    testWidgets('el rango recorta el gráfico sin perder el histórico', (
+      tester,
+    ) async {
+      // Una sesión de hace dos años y otra de ayer: con «1M» solo entra la
+      // reciente en el gráfico, pero la lista de abajo las enseña las dos.
+      final ahora = DateTime.now();
+      await bd.insertarEntrenamiento(
+        idRutina,
+        ahora.subtract(const Duration(days: 730)),
+        {
+          idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 50)],
+        },
+      );
+      await bd.insertarEntrenamiento(
+        idRutina,
+        ahora.subtract(const Duration(days: 1)),
+        {
+          idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
+        },
+      );
+
+      await abrir(tester);
+      await tester.tap(find.text('1M'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('2'), findsOneWidget); // siguen siendo dos sesiones
+      expect(find.byIcon(CupertinoIcons.rosette), findsNWidgets(2));
+    });
+
+    testWidgets('una serie larga se marca como estimación poco fiable', (
+      tester,
+    ) async {
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [ValoresSerie(repeticiones: 20, peso: 40)],
+      });
+
+      await abrir(tester);
+
+      expect(find.textContaining('*'), findsWidgets);
+      expect(
+        find.textContaining('no cuenta como récord', findRichText: true),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('sin registros no se pinta ni tarjeta ni gráfico', (
+      tester,
+    ) async {
+      await abrir(tester);
+
+      expect(find.text('Sin registros todavía'), findsOneWidget);
+      expect(find.text('1RM estimado'), findsNothing);
+    });
+  });
+
+  // ── C17: resumen semanal y racha ───────────────────────────────────────────
+
+  group('resumen de la semana', () {
+    /// Miércoles 11 de marzo de 2026; su semana va del lunes 9 al domingo 15.
+    ///
+    /// La fecha se fija para que la racha y el «esta semana» no dependan de
+    /// cuándo se ejecute la suite, que es justo el fallo que tendría un test
+    /// escrito contra `DateTime.now()`.
+    final hoy = DateTime(2026, 3, 11, 19);
+
+    late int idRutina;
+    late int idEjercicio;
+
+    setUp(() async {
+      reloj.fijarReloj(() => hoy);
+      addTearDown(() => reloj.fijarReloj(null));
+
+      idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarEjercicio(idRutina, 'Press banca');
+      idEjercicio = (await bd.ejerciciosDeRutina(idRutina)).single.id;
+    });
+
+    Future<void> entrenar(DateTime fecha, {double peso = 60}) =>
+        bd.insertarEntrenamiento(idRutina, fecha, {
+          idEjercicio: [ValoresSerie(repeticiones: 10, peso: peso)],
+        });
+
+    Future<void> abrir(WidgetTester tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, const PantallaProgreso()));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('cuenta las sesiones de la semana contra el objetivo', (
+      tester,
+    ) async {
+      await entrenar(DateTime(2026, 3, 9));
+      await entrenar(DateTime(2026, 3, 11));
+      // La del domingo anterior es de la semana pasada y no cuenta aquí.
+      await entrenar(DateTime(2026, 3, 8));
+
+      await abrir(tester);
+
+      expect(find.text('Esta semana'.toUpperCase()), findsOneWidget);
+      expect(find.text('2 de 3'), findsOneWidget);
+    });
+
+    testWidgets('la comparativa se omite sin datos de la semana anterior', (
+      tester,
+    ) async {
+      await entrenar(DateTime(2026, 3, 9));
+
+      await abrir(tester);
+
+      expect(find.text('1 de 3'), findsOneWidget);
+      expect(find.textContaining('de volumen'), findsNothing);
+    });
+
+    testWidgets('con semana previa enseña la variación con signo', (
+      tester,
+    ) async {
+      // La semana pasada: una sesión de 600 kg. Esta: dos de 600 y 720.
+      await entrenar(DateTime(2026, 3, 4));
+      await entrenar(DateTime(2026, 3, 9));
+      await entrenar(DateTime(2026, 3, 10), peso: 72);
+
+      await abrir(tester);
+
+      expect(find.text('+1 sesión'), findsOneWidget);
+      // (1320 − 600) / 600 = +120 %.
+      expect(find.text('+120 % de volumen'), findsOneWidget);
+    });
+
+    testWidgets('la racha cuenta semanas cerradas, no la que está en curso', (
+      tester,
+    ) async {
+      // Objetivo 2, cumplido las dos semanas anteriores. La actual va por una,
+      // y aun así la racha sigue viva porque la semana no ha terminado.
+      await bd.fijarAjuste(Claves.sesionesPorSemana, '2');
+      for (final dia in [23, 25]) {
+        await entrenar(DateTime(2026, 2, dia));
+      }
+      for (final dia in [2, 4]) {
+        await entrenar(DateTime(2026, 3, dia));
+      }
+      await entrenar(DateTime(2026, 3, 9));
+
+      await abrir(tester);
+
+      expect(find.text('1 de 2'), findsOneWidget);
+      expect(
+        find.textContaining('2 semanas seguidas', findRichText: true),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('avisa cuando hace más de una semana del último entreno', (
+      tester,
+    ) async {
+      await entrenar(DateTime(2026, 3, 1));
+
+      await abrir(tester);
+
+      expect(find.text('0 de 3'), findsOneWidget);
+      expect(
+        find.text('Hace 10 días de tu último entrenamiento'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('sin ninguna sesión no hay tarjeta, sino el estado vacío', (
+      tester,
+    ) async {
+      await abrir(tester);
+
+      expect(find.text('Todavía no hay datos'), findsOneWidget);
+      expect(find.text('Esta semana'.toUpperCase()), findsNothing);
+    });
+  });
+
+  // ── C19: días del calendario pulsables ─────────────────────────────────────
+
+  group('días del calendario', () {
+    late int idRutina;
+    late int idEjercicio;
+
+    setUp(() async {
+      idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarEjercicio(idRutina, 'Press banca');
+      idEjercicio = (await bd.ejerciciosDeRutina(idRutina)).single.id;
+    });
+
+    /// Abre el calendario del mes en curso, que es el que monta la pantalla.
+    Future<void> abrirCalendario(WidgetTester tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, const PantallaProgreso()));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Calendario'));
+      await tester.pumpAndSettle();
+    }
+
+    /// Pulsa la celda de un día del mes visible.
+    ///
+    /// El número del día aparece también en otros sitios de la pantalla, así
+    /// que se busca dentro del `GridView` del calendario.
+    Future<void> pulsarDia(WidgetTester tester, int dia) async {
+      await tester.tap(
+        find.descendant(of: find.byType(GridView), matching: find.text('$dia')),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('pulsar un día entrenado enseña sus sesiones', (tester) async {
+      // Se entrena **hoy**, y no un día fijo del mes: un 4 clavado convertiría
+      // el test en futuro —y por tanto no pulsable— los tres primeros días de
+      // cada mes.
+      final ahora = DateTime.now();
+      // Dos sesiones el mismo día: la hoja debe traerlas las dos.
+      await bd.insertarEntrenamiento(
+        idRutina,
+        DateTime(ahora.year, ahora.month, ahora.day, 9),
+        {
+          idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
+        },
+      );
+      await bd.insertarEntrenamiento(
+        idRutina,
+        DateTime(ahora.year, ahora.month, ahora.day, 19),
+        {
+          idEjercicio: const [ValoresSerie(repeticiones: 8, peso: 65)],
+        },
+      );
+
+      await abrirCalendario(tester);
+      await pulsarDia(tester, ahora.day);
+
+      expect(find.text('2 sesiones'), findsOneWidget);
+      // El nombre de la rutina sale también en la leyenda del mes, así que se
+      // cuenta solo dentro de la hoja.
+      expect(
+        find.descendant(
+          of: find.byType(CupertinoActionSheet),
+          matching: find.text('Empuje'),
+        ),
+        findsNWidgets(2),
+      );
+      expect(
+        find.textContaining('9:00 · 1 ejercicio · 600 kg'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('19:00 · 1 ejercicio · 520 kg'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('desde la hoja se llega al detalle de la sesión', (
+      tester,
+    ) async {
+      final ahora = DateTime.now();
+      await bd.insertarEntrenamiento(
+        idRutina,
+        DateTime(ahora.year, ahora.month, ahora.day, 9),
+        {
+          idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
+        },
+      );
+
+      await abrirCalendario(tester);
+      await pulsarDia(tester, ahora.day);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(CupertinoActionSheet),
+          matching: find.text('Empuje'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // La pantalla de sesión de A2, con su botón de eliminar.
+      expect(find.text('Sesión'), findsWidgets);
+      expect(find.text('Eliminar sesión'), findsOneWidget);
+    });
+
+    testWidgets('un día pasado y vacío ofrece registrar en él', (tester) async {
+      await abrirCalendario(tester);
+      await pulsarDia(tester, 1);
+
+      expect(
+        find.text('Registrar un entrenamiento en este día'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Empuje'));
+      await tester.pumpAndSettle();
+
+      // Se abre el formulario de siempre, con el día elegido puesto.
+      expect(find.text('Registrar sesión'), findsOneWidget);
+      final ahora = DateTime.now();
+      expect(
+        find.text(formato.fechaLarga(DateTime(ahora.year, ahora.month, 1))),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('sin ninguna rutina avisa en vez de abrir una hoja vacía', (
+      tester,
+    ) async {
+      await bd.borrarRutina(idRutina);
+
+      await abrirCalendario(tester);
+      await pulsarDia(tester, 1);
+
+      expect(find.text('Crea antes una rutina'), findsOneWidget);
+      await _cerrarAviso(tester);
+    });
+
+    testWidgets('los días futuros no responden al toque', (tester) async {
+      final ahora = DateTime.now();
+      // El último día del mes; si hoy es ese mismo día no hay futuro que
+      // probar dentro del mes visible y el caso no aplica.
+      final ultimo = DateTime(ahora.year, ahora.month + 1, 0).day;
+      if (ahora.day >= ultimo) return;
+
+      await abrirCalendario(tester);
+      await pulsarDia(tester, ultimo);
+
+      expect(find.text('Registrar un entrenamiento en este día'), findsNothing);
+      expect(find.text('Cancelar'), findsNothing);
     });
   });
 }

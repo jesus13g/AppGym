@@ -38,6 +38,11 @@ import 'resumen_sesion.dart';
 /// serie de diez repeticiones a golpe de botón.
 const _esperaBorrador = Duration(seconds: 2);
 
+bool _mismoDia(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
+
+bool _esHoy(DateTime fecha) => _mismoDia(fecha, DateTime.now());
+
 /// Cómo se registra.
 enum Modo {
   /// Entrenando ahora: cronómetro, series que se marcan y descanso.
@@ -56,17 +61,28 @@ Future<void> abrirEntrenar(
   int idRutina, {
   Modo modo = Modo.vivo,
   SesionActiva? borrador,
+  DateTime? fecha,
 }) => Navigator.of(context, rootNavigator: true).push(
   CupertinoPageRoute<void>(
     fullscreenDialog: true,
-    builder: (_) =>
-        PantallaEntrenar(idRutina: idRutina, modo: modo, borrador: borrador),
+    builder: (_) => PantallaEntrenar(
+      idRutina: idRutina,
+      modo: modo,
+      borrador: borrador,
+      fecha: fecha,
+    ),
   ),
 );
 
 /// Anota una sesión pasada con el formulario de siempre.
-Future<void> abrirRegistrarAnterior(BuildContext context, int idRutina) =>
-    abrirEntrenar(context, idRutina, modo: Modo.formulario);
+///
+/// Con [fecha] arranca en ese día en vez de en hoy, que es como se llega desde
+/// una celda del calendario (C19).
+Future<void> abrirRegistrarAnterior(
+  BuildContext context,
+  int idRutina, {
+  DateTime? fecha,
+}) => abrirEntrenar(context, idRutina, modo: Modo.formulario, fecha: fecha);
 
 /// Reabre una sesión ya guardada para corregirla.
 Future<void> abrirEditarEntrenamiento(
@@ -91,6 +107,7 @@ class PantallaEntrenar extends ConsumerStatefulWidget {
     this.idEntrenamiento,
     this.modo = Modo.formulario,
     this.borrador,
+    this.fecha,
   });
 
   final int idRutina;
@@ -102,6 +119,9 @@ class PantallaEntrenar extends ConsumerStatefulWidget {
 
   /// Sesión a medias que se retoma. Solo tiene sentido en [Modo.vivo].
   final SesionActiva? borrador;
+
+  /// Día en el que se registra. Sin él es hoy; al editar manda el guardado.
+  final DateTime? fecha;
 
   @override
   ConsumerState<PantallaEntrenar> createState() => _PantallaEntrenarState();
@@ -116,7 +136,15 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
 
   List<EjercicioConFicha>? _ejercicios;
   bool _guardando = false;
-  DateTime _fecha = DateTime.now();
+
+  /// Un día pasado se registra a las 12:00, igual que al elegirlo a mano en
+  /// [_elegirFecha]: así el orden dentro del día no depende de a qué hora uno
+  /// se acordó de anotarlo.
+  late DateTime _fecha = switch (widget.fecha) {
+    null => DateTime.now(),
+    final elegida when _esHoy(elegida) => DateTime.now(),
+    final elegida => DateTime(elegida.year, elegida.month, elegida.day, 12),
+  };
   final _nota = TextEditingController();
 
   /// Cuándo empezó la sesión viva. En formulario no se usa.
@@ -317,14 +345,11 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
     );
     if (elegida == null || !mounted) return;
 
-    bool mismoDia(DateTime a, DateTime b) =>
-        a.year == b.year && a.month == b.month && a.day == b.day;
-
     setState(() {
       _fecha = switch (elegida) {
         // Elegir el mismo día no debe mover la hora de una sesión ya guardada.
-        _ when mismoDia(elegida, _fecha) => _fecha,
-        _ when mismoDia(elegida, ahora) => ahora,
+        _ when _mismoDia(elegida, _fecha) => _fecha,
+        _ when _esHoy(elegida) => ahora,
         _ => DateTime(elegida.year, elegida.month, elegida.day, 12),
       };
     });

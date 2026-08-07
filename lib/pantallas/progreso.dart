@@ -10,12 +10,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
 import '../datos/formato.dart' as formato;
+import '../datos/metricas.dart' as metricas;
+import '../datos/reloj.dart' as reloj;
 import '../estado/providers.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
+import 'entrenar.dart';
 import 'medidas.dart';
 import 'resultado_rutina.dart';
+import 'sesion.dart';
 
 class PantallaProgreso extends ConsumerStatefulWidget {
   const PantallaProgreso({super.key});
@@ -117,34 +121,311 @@ class _Resumen extends ConsumerWidget {
           );
         }
 
-        return ui.Grupo(
-          cabecera: 'Rutinas entrenadas',
-          pie:
-              'Entra en una rutina para ver la evolución del peso en cada '
-              'ejercicio.',
-          filas: [
-            for (final r in conDatos)
-              CupertinoListTile(
-                backgroundColor: context.tarjeta,
-                leading: ui.PuntoColor(
-                  colorDesdeHex(r.color, context.acento),
-                  tamano: 12,
+        return Column(
+          children: [
+            const _Semana(),
+            ui.Grupo(
+              cabecera: 'Rutinas entrenadas',
+              pie:
+                  'Entra en una rutina para ver la evolución del peso en cada '
+                  'ejercicio.',
+              filas: [
+                for (final r in conDatos)
+                  CupertinoListTile(
+                    backgroundColor: context.tarjeta,
+                    leading: ui.PuntoColor(
+                      colorDesdeHex(r.color, context.acento),
+                      tamano: 12,
+                    ),
+                    title: Text(r.nombre, style: ui.estilo(context)),
+                    subtitle: Text(
+                      formato.hace(r.ultimaFecha),
+                      style: ui.estilo(
+                        context,
+                        size: t.footnote,
+                        color: context.textoSec,
+                      ),
+                    ),
+                    trailing: const CupertinoListTileChevron(),
+                    onTap: () => abrirResultadoRutina(context, r.id),
+                  ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+// ── C17: la semana y la racha ────────────────────────────────────────────────
+
+/// Cuántos días sin entrenar hacen falta para decirlo.
+const _diasAviso = 7;
+
+/// La tarjeta que responde a «¿voy bien esta semana?».
+///
+/// Sesiones frente al objetivo de Ajustes, volumen, comparativa con la semana
+/// anterior, racha y los últimos siete días. Todo sale de **una** consulta
+/// (`sesionesRecientesProvider`) más los colores de las rutinas, que ya están
+/// cargados para la leyenda del calendario.
+///
+/// No aparece si no hay ninguna sesión registrada: ahí manda el `EstadoVacio`
+/// de la pestaña, que ya explica por dónde empezar.
+class _Semana extends ConsumerWidget {
+  const _Semana();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sesiones = ref.watch(sesionesRecientesProvider).value ?? const [];
+    if (sesiones.isEmpty) return const SizedBox.shrink();
+
+    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
+    final colores = ref.watch(coloresRutinasProvider).value ?? const {};
+    final objetivo = ajustes.sesionesPorSemana;
+
+    // El «hoy» sale del reloj de la app y no de `DateTime.now()`, que es lo que
+    // permite a los tests fijar la semana en vez de depender de cuándo corran.
+    final hoy = reloj.ahora();
+    final lunes = metricas.lunesDe(hoy);
+    final estaSemana = metricas.resumenSemana(sesiones, lunes);
+    final anterior = metricas.resumenSemana(
+      sesiones,
+      lunes.subtract(const Duration(days: 7)),
+    );
+    final racha = metricas.rachaSemanas(sesiones, objetivo, hoy: hoy);
+
+    // La lista viene de la más reciente a la más antigua, así que la primera es
+    // la última sesión.
+    final ultima = sesiones.first.fecha;
+    final diasSinEntrenar = DateTime(
+      hoy.year,
+      hoy.month,
+      hoy.day,
+    ).difference(DateTime(ultima.year, ultima.month, ultima.day)).inDays;
+
+    return ui.Grupo(
+      cabecera: 'Esta semana',
+      filas: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: t.m, vertical: t.m),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${estaSemana.sesiones} de $objetivo',
+                      style: ui.estilo(context, size: t.title2, weight: t.bold),
+                    ),
+                  ),
+                  Flexible(
+                    child: Text(
+                      formato.peso(estaSemana.volumen, ajustes),
+                      textAlign: TextAlign.right,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: ui.estilo(
+                        context,
+                        size: t.subhead,
+                        color: context.textoSec,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: t.s),
+              ui.BarraProgreso(
+                objetivo == 0 ? 0 : estaSemana.sesiones / objetivo,
+              ),
+              if (!anterior.vacia) ...[
+                const SizedBox(height: t.m),
+                _Comparativa(estaSemana: estaSemana, anterior: anterior),
+              ],
+              if (racha > 0) ...[
+                const SizedBox(height: t.m),
+                Row(
+                  children: [
+                    Icon(
+                      CupertinoIcons.flame_fill,
+                      size: 16,
+                      color: context.acento,
+                    ),
+                    const SizedBox(width: t.xs),
+                    Flexible(
+                      child: Text(
+                        '${formato.plural(racha, 'semana', 'semanas')} '
+                        'seguidas cumpliendo el objetivo',
+                        style: ui.estilo(context, size: t.footnote),
+                      ),
+                    ),
+                  ],
                 ),
-                title: Text(r.nombre, style: ui.estilo(context)),
-                subtitle: Text(
-                  formato.hace(r.ultimaFecha),
+              ],
+              if (diasSinEntrenar > _diasAviso) ...[
+                const SizedBox(height: t.m),
+                Text(
+                  'Hace ${formato.plural(diasSinEntrenar, 'día', 'días')} de '
+                  'tu último entrenamiento',
                   style: ui.estilo(
                     context,
                     size: t.footnote,
                     color: context.textoSec,
                   ),
                 ),
-                trailing: const CupertinoListTileChevron(),
-                onTap: () => abrirResultadoRutina(context, r.id),
-              ),
-          ],
-        );
+              ],
+            ],
+          ),
+        ),
+        _UltimosDias(sesiones: sesiones, colores: colores, hoy: hoy),
+      ],
+    );
+  }
+}
+
+/// La variación frente a la semana anterior, con signo y color.
+///
+/// Sin datos de la semana previa no se pinta —de eso se encarga quien la
+/// monta—: un `+0 %` contra la nada no dice nada.
+class _Comparativa extends StatelessWidget {
+  const _Comparativa({required this.estaSemana, required this.anterior});
+
+  final metricas.ResumenSemana estaSemana;
+  final metricas.ResumenSemana anterior;
+
+  @override
+  Widget build(BuildContext context) {
+    final sesiones = estaSemana.sesiones - anterior.sesiones;
+    final volumen = metricas.variacion(estaSemana.volumen, anterior.volumen);
+
+    String conSigno(num valor) => valor > 0 ? '+$valor' : '$valor';
+
+    return Row(
+      children: [
+        Expanded(
+          child: _Variacion(
+            texto:
+                '${conSigno(sesiones)} '
+                '${sesiones.abs() == 1 ? 'sesión' : 'sesiones'}',
+            signo: sesiones,
+          ),
+        ),
+        if (volumen != null)
+          Expanded(
+            child: _Variacion(
+              texto: '${conSigno((volumen * 100).round())} % de volumen',
+              signo: volumen,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _Variacion extends StatelessWidget {
+  const _Variacion({required this.texto, required this.signo});
+
+  final String texto;
+
+  /// Positivo, negativo o cero; solo se mira el signo.
+  final num signo;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    texto,
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    style: ui.estilo(
+      context,
+      size: t.footnote,
+      color: switch (signo) {
+        > 0 => context.exito,
+        < 0 => context.destructivo,
+        _ => context.textoSec,
       },
+    ),
+  );
+}
+
+/// Siete puntos, uno por día de la semana en curso, con el color de la rutina.
+///
+/// De lunes a domingo, coherente con `formato.diasSemana` y con la semana que
+/// mide la racha.
+class _UltimosDias extends StatelessWidget {
+  const _UltimosDias({
+    required this.sesiones,
+    required this.colores,
+    required this.hoy,
+  });
+
+  final List<SesionConVolumen> sesiones;
+  final Map<int, (String, String)> colores;
+  final DateTime hoy;
+
+  @override
+  Widget build(BuildContext context) {
+    final lunes = metricas.lunesDe(hoy);
+    final dia = DateTime(hoy.year, hoy.month, hoy.day);
+
+    /// La rutina entrenada ese día, si hubo alguna.
+    int? rutinaDe(DateTime cuando) {
+      for (final s in sesiones) {
+        if (s.fecha.year == cuando.year &&
+            s.fecha.month == cuando.month &&
+            s.fecha.day == cuando.day) {
+          return s.idRutina;
+        }
+      }
+      return null;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(
+        left: t.m,
+        right: t.m,
+        top: t.s,
+        bottom: t.m,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          for (final (indice, etiqueta) in formato.diasSemana.indexed)
+            Builder(
+              builder: (_) {
+                final cuando = lunes.add(Duration(days: indice));
+                final idRutina = rutinaDe(cuando);
+                // Los días que aún no han llegado se apagan: no son días sin
+                // entrenar, son días que no han pasado.
+                final futuro = cuando.isAfter(dia);
+
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      etiqueta,
+                      style: ui.estilo(
+                        context,
+                        size: t.caption,
+                        color: futuro ? context.textoTer : context.textoSec,
+                      ),
+                    ),
+                    const SizedBox(height: t.xs),
+                    ui.PuntoColor(
+                      idRutina == null
+                          ? (futuro ? context.relleno : context.separador)
+                          : colorDesdeHex(
+                              colores[idRutina]?.$2,
+                              context.acento,
+                            ),
+                      tamano: 10,
+                    ),
+                  ],
+                );
+              },
+            ),
+        ],
+      ),
     );
   }
 }
@@ -338,6 +619,17 @@ class _Calendario extends ConsumerWidget {
                         dia: dia,
                         esHoy: dia == hoy,
                         colores: coloresDe(dia),
+                        // Los días que aún no han llegado no responden al
+                        // toque: no hay nada que ver ni nada que registrar.
+                        onPulsar: dia.isAfter(hoy)
+                            ? null
+                            : () => _abrirDia(
+                                context,
+                                ref,
+                                dia: dia,
+                                sesiones: entrenamientos[dia] ?? const [],
+                                colores: colores,
+                              ),
                       ),
                   ],
                 ),
@@ -389,8 +681,117 @@ class _Calendario extends ConsumerWidget {
   }
 }
 
+/// Lo que pasa al pulsar un día del calendario (C19).
+///
+/// Con entrenamientos, una hoja con las sesiones de ese día que lleva al
+/// detalle de A2 —donde ya se puede editar y eliminar—, así no se duplica
+/// interfaz. Sin ellos, y siendo un día pasado, ofrece registrar uno con esa
+/// fecha ya puesta.
+Future<void> _abrirDia(
+  BuildContext context,
+  WidgetRef ref, {
+  required DateTime dia,
+  required List<SesionDelDia> sesiones,
+  required Map<int, (String, String)> colores,
+}) async {
+  final ajustes = ref.read(ajustesProvider).value ?? const Ajustes();
+
+  if (sesiones.isEmpty) {
+    await _registrarEnDia(context, ref, dia);
+    return;
+  }
+
+  final elegida = await showCupertinoModalPopup<int>(
+    context: context,
+    builder: (hoja) => CupertinoActionSheet(
+      title: Text(formato.fechaLarga(dia)),
+      message: Text(formato.plural(sesiones.length, 'sesión', 'sesiones')),
+      actions: [
+        for (final s in sesiones)
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(hoja, s.id),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ui.PuntoColor(
+                      colorDesdeHex(colores[s.idRutina]?.$2, hoja.acento),
+                    ),
+                    const SizedBox(width: t.s),
+                    Flexible(
+                      child: Text(
+                        colores[s.idRutina]?.$1 ?? 'Sesión',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: t.xs),
+                Text(
+                  [
+                    formato.hora(s.fecha),
+                    if (s.duracionSeg case final segundos?)
+                      formato.duracion(segundos),
+                    formato.plural(s.nEjercicios, 'ejercicio', 'ejercicios'),
+                    formato.peso(s.volumen, ajustes),
+                  ].join(' · '),
+                  textAlign: TextAlign.center,
+                  style: ui.estilo(
+                    hoja,
+                    size: t.footnote,
+                    color: hoja.textoSec,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+      cancelButton: CupertinoActionSheetAction(
+        isDefaultAction: true,
+        onPressed: () => Navigator.pop(hoja),
+        child: const Text('Cancelar'),
+      ),
+    ),
+  );
+
+  if (elegida == null || !context.mounted) return;
+  await abrirSesion(context, elegida);
+}
+
+/// Ofrece registrar un entrenamiento en un día que quedó vacío.
+///
+/// Desde el calendario no hay rutina de contexto —a diferencia de cuando se
+/// entra desde la propia rutina—, así que primero hay que elegirla.
+Future<void> _registrarEnDia(
+  BuildContext context,
+  WidgetRef ref,
+  DateTime dia,
+) async {
+  final rutinas = ref.read(resumenRutinasProvider).value ?? const [];
+  if (rutinas.isEmpty) {
+    ui.aviso(context, 'Crea antes una rutina');
+    return;
+  }
+
+  final confirmado = await ui.elegirEnHoja<int>(
+    context,
+    titulo: formato.fechaLarga(dia),
+    mensaje: 'Registrar un entrenamiento en este día',
+    opciones: [for (final r in rutinas) (r.id, r.nombre)],
+  );
+  if (confirmado == null || !context.mounted) return;
+
+  await abrirRegistrarAnterior(context, confirmado.$1, fecha: dia);
+}
+
 class _Celda extends StatelessWidget {
-  const _Celda({required this.dia, required this.esHoy, required this.colores});
+  const _Celda({
+    required this.dia,
+    required this.esHoy,
+    required this.colores,
+    required this.onPulsar,
+  });
 
   final DateTime dia;
   final bool esHoy;
@@ -398,10 +799,13 @@ class _Celda extends StatelessWidget {
   /// Un color por rutina distinta entrenada ese día; vacío si no se entrenó.
   final List<Color> colores;
 
+  /// `null` en los días futuros, que no responden al toque.
+  final VoidCallback? onPulsar;
+
   @override
   Widget build(BuildContext context) {
     final entrenado = colores.isNotEmpty;
-    return DecoratedBox(
+    final circulo = DecoratedBox(
       decoration: BoxDecoration(
         // Con una sola rutina basta el relleno de siempre; con varias hay que
         // pintar los sectores, y entonces el fondo lo pone el pintor.
@@ -427,6 +831,17 @@ class _Celda extends StatelessWidget {
           ),
         ),
       ),
+    );
+
+    // `CupertinoButton` en vez del `GestureDetector` que pedía la
+    // especificación: la atenuación al pulsar la trae de serie y con
+    // `onPressed: null` un día futuro queda inerte, sin condicionales.
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      borderRadius: BorderRadius.circular(100),
+      onPressed: onPulsar,
+      child: SizedBox.expand(child: circulo),
     );
   }
 }

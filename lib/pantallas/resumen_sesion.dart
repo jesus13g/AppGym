@@ -156,11 +156,7 @@ class _Contenido extends StatelessWidget {
                   leadingSize: 24,
                   title: Text(r.nombre, style: ui.estilo(context)),
                   subtitle: Text(
-                    switch (r.pesoAnterior) {
-                      null => 'Primera vez que lo registras',
-                      final anterior =>
-                        'Antes: ${formato.peso(anterior, ajustes)}',
-                    },
+                    _detalle(r, ajustes),
                     style: ui.estilo(
                       context,
                       size: t.footnote,
@@ -168,7 +164,7 @@ class _Contenido extends StatelessWidget {
                     ),
                   ),
                   additionalInfo: Text(
-                    formato.peso(r.pesoMaximo, ajustes),
+                    _cifra(r, ajustes),
                     style: ui.estilo(context, weight: t.semibold),
                   ),
                 ),
@@ -202,6 +198,40 @@ class _Contenido extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Qué récord se ha batido y contra qué, para el subtítulo de la fila.
+///
+/// Se baten los tres a la vez con más frecuencia de la que parece —subir el
+/// peso suele subir también el 1RM y el volumen—, así que se enumeran en vez de
+/// quedarse solo con el primero.
+String _detalle(RecordSesion record, Ajustes ajustes) {
+  String contra(double? anterior) => anterior == null
+      ? 'primera vez'
+      : 'antes ${formato.peso(anterior, ajustes)}';
+
+  final partes = [
+    for (final tipo in record.batidos)
+      switch (tipo) {
+        TipoRecord.peso => 'Peso (${contra(record.pesoAnterior)})',
+        TipoRecord.unoRm => '1RM (${contra(record.unoRmAnterior)})',
+        TipoRecord.volumen => 'Volumen (${contra(record.volumenAnterior)})',
+      },
+  ];
+  return partes.join(' · ');
+}
+
+/// La cifra que se enseña a la derecha: la del récord más significativo de los
+/// batidos, en el orden peso → 1RM → volumen.
+String _cifra(RecordSesion record, Ajustes ajustes) {
+  final batidos = record.batidos;
+  if (batidos.contains(TipoRecord.peso)) {
+    return formato.peso(record.pesoMaximo, ajustes);
+  }
+  if (batidos.contains(TipoRecord.unoRm) && record.mejor1RM != null) {
+    return formato.peso(record.mejor1RM!, ajustes);
+  }
+  return formato.peso(record.volumen, ajustes);
 }
 
 class _Dato extends StatelessWidget {
