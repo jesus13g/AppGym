@@ -13,8 +13,14 @@ library;
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
+import 'ajustes.dart';
 import 'esquemas.dart';
 import 'respaldo.dart';
+
+// Los tipos de las preferencias se reexportan para que las pantallas sigan
+// pidiéndolos donde ya los pedían. Las claves y los valores admitidos viven en
+// `ajustes.dart` y solo los necesita la pantalla de Ajustes.
+export 'ajustes.dart' show Ajustes, EscalaEsfuerzo, Tema, Unidad;
 
 part 'bd.g.dart';
 
@@ -54,6 +60,108 @@ class Entrenamientos extends Table {
   ///
   /// Es la información que explica un bajón en el gráfico tres semanas después.
   TextColumn get nota => text().nullable()();
+
+  /// Cuánto duró, en segundos, si se registró con la sesión viva.
+  ///
+  /// Nulo en las sesiones anotadas a posteriori con el formulario: ahí no hay
+  /// cronómetro que valga y un cero mentiría.
+  IntColumn get duracionSeg => integer().nullable()();
+}
+
+/// Borrador de la sesión que se está entrenando ahora mismo.
+///
+/// Es lo que permite que matar la app a mitad de entrenamiento no se lleve por
+/// delante la hora que llevabas anotando. Como mucho hay una fila.
+///
+/// El estado va como JSON y no normalizado a propósito: es un dato efímero, se
+/// reescribe entero en cada cambio y nadie lo consulta por partes. Normalizarlo
+/// solo añadiría una tabla de series que hay que mantener en paralelo con la de
+/// verdad.
+@DataClassName('SesionActiva')
+class SesionesActivas extends Table {
+  @override
+  String get tableName => 'sesiones_activas';
+
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get idRutina =>
+      integer().references(Rutinas, #id, onDelete: KeyAction.cascade)();
+  DateTimeColumn get inicio => dateTime()();
+  DateTimeColumn get actualizado => dateTime()();
+
+  /// JSON con las series y cuáles van marcadas.
+  TextColumn get estado => text()();
+}
+
+/// Ejercicio del catálogo marcado con estrella.
+///
+/// **Sin clave foránea a propósito.** `sembrarCatalogo` borra y reinserta el
+/// catálogo entero cuando el dataset cambia, y con la clave puesta esa
+/// operación fallaría —o se llevaría por delante los favoritos— en cuanto
+/// hubiera uno guardado. Un favorito cuyo id ya no exista se cae solo del
+/// `join` de [AppBD.favoritos], que es el peor caso admisible.
+@DataClassName('Favorito')
+class Favoritos extends Table {
+  TextColumn get idCatalogo => text()();
+  DateTimeColumn get creado => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {idCatalogo};
+}
+
+/// Ficha abierta recientemente. Se conservan las 10 últimas.
+///
+/// Sin clave foránea por lo mismo que [Favoritos].
+@DataClassName('Visto')
+class Vistos extends Table {
+  TextColumn get idCatalogo => text()();
+  DateTimeColumn get fecha => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {idCatalogo};
+}
+
+/// Una medida del cuerpo con su fecha.
+///
+/// Tabla genérica en vez de una columna por medida: añadir «cuello» dentro de
+/// un año no debería costar una migración.
+@DataClassName('Medida')
+class Medidas extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  /// Siempre a medianoche: una entrada por día y tipo.
+  DateTimeColumn get fecha => dateTime()();
+
+  /// Uno de [tiposMedida].
+  TextColumn get tipo => text()();
+
+  /// Kilos, centímetros o por ciento, según el tipo.
+  RealColumn get valor => real()();
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {fecha, tipo},
+  ];
+}
+
+/// Las medidas que se pueden registrar, con su unidad y su etiqueta.
+///
+/// El peso corporal va primero porque es el que da contexto a las cargas: subir
+/// 5 kg en press perdiendo 3 kg de peso no es lo mismo que subirlos ganando 4.
+const tiposMedida = <(String, String, String)>[
+  ('peso', 'Peso corporal', 'kg'),
+  ('grasa', 'Grasa corporal', '%'),
+  ('cintura', 'Cintura', 'cm'),
+  ('pecho', 'Pecho', 'cm'),
+  ('brazo', 'Brazo', 'cm'),
+  ('muslo', 'Muslo', 'cm'),
+];
+
+/// Etiqueta y unidad de un tipo de medida.
+(String, String) etiquetaMedida(String tipo) {
+  for (final (clave, etiqueta, unidad) in tiposMedida) {
+    if (clave == tipo) return (etiqueta, unidad);
+  }
+  return (tipo, '');
 }
 
 /// Preferencias de la app, en clave/valor.
@@ -79,6 +187,9 @@ class AjustesTabla extends Table {
 @TableIndex(name: 'idx_catalogo_busqueda', columns: {#busqueda})
 @TableIndex(name: 'idx_catalogo_body_part', columns: {#bodyPart})
 @TableIndex(name: 'idx_catalogo_equipment', columns: {#equipment})
+// `target` es la clasificación más útil para buscar —abs 169, pectorals 158,
+// biceps 151— y hasta ahora era la única de las tres sin índice.
+@TableIndex(name: 'idx_catalogo_target', columns: {#target})
 class CatalogoEjercicios extends Table {
   /// Identificador del dataset original ("0001").
   TextColumn get id => text()();
@@ -127,6 +238,12 @@ class Ejercicios extends Table {
   /// antes o después del press. Se desempata por `id` por si dos filas
   /// comparten posición.
   IntColumn get orden => integer().withDefault(const Constant(0))();
+
+  /// Descanso propio, en segundos. Nulo significa «usa el valor global».
+  ///
+  /// Los descansos de sentadilla y de curl de bíceps no son iguales, y obligar
+  /// a que lo sean deja el temporizador inservible para la mitad de la rutina.
+  IntColumn get descansoSeg => integer().nullable()();
 }
 
 /// Una serie registrada: una fila por serie hecha.
@@ -377,29 +494,27 @@ class ValoresSerie {
       '${nota == null ? '' : ', «$nota»'})';
 }
 
-/// Escala con la que se pide el esfuerzo al registrar.
+/// Un ejercicio en el que la sesión recién cerrada batió un récord.
 ///
-/// Solo cambia cómo se muestra: en la base siempre se guarda RPE.
-enum EscalaEsfuerzo {
-  /// 6–10, donde 10 es el fallo.
-  rpe,
-
-  /// Repeticiones en recámara: `RIR = 10 − RPE`, así que 0 es el fallo.
-  rir,
-}
-
-/// Preferencias de la app, ya interpretadas.
-class Ajustes {
-  const Ajustes({
-    this.esfuerzoActivo = false,
-    this.escala = EscalaEsfuerzo.rpe,
+/// Se calcula al terminar para el resumen de cierre: es la respuesta a «¿ha
+/// servido de algo lo de hoy?», y sale de comparar con lo que había **antes**
+/// de esta misma sesión.
+class RecordSesion {
+  const RecordSesion({
+    required this.nombre,
+    required this.pesoMaximo,
+    required this.mejor1RM,
+    required this.pesoAnterior,
   });
 
-  /// Por defecto desactivado: quien no use el RPE no debe verlo estorbando en
-  /// el registro.
-  final bool esfuerzoActivo;
+  final String nombre;
+  final double pesoMaximo;
 
-  final EscalaEsfuerzo escala;
+  /// 1RM estimado por Epley: `peso × (1 + repeticiones / 30)`.
+  final double mejor1RM;
+
+  /// El mejor peso anterior a esta sesión, o `null` si es la primera vez.
+  final double? pesoAnterior;
 }
 
 @DriftDatabase(
@@ -410,6 +525,10 @@ class Ajustes {
     Ejercicios,
     SeriesTabla,
     AjustesTabla,
+    SesionesActivas,
+    Favoritos,
+    Vistos,
+    Medidas,
   ],
 )
 class AppBD extends _$AppBD {
@@ -430,7 +549,7 @@ class AppBD extends _$AppBD {
       );
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -438,7 +557,13 @@ class AppBD extends _$AppBD {
     // Los pasos se escriben contra el esquema *de esa versión* (`esquemas.dart`,
     // generado con `drift_dev schema steps`), no contra las tablas de arriba:
     // así una migración vieja no se rompe cuando el modelo actual cambie.
-    onUpgrade: stepByStep(from1To2: _de1A2, from2To3: _de2A3, from3To4: _de3A4),
+    onUpgrade: stepByStep(
+      from1To2: _de1A2,
+      from2To3: _de2A3,
+      from3To4: _de3A4,
+      from4To5: _de4A5,
+      from5To6: _de5A6,
+    ),
     beforeOpen: (details) async {
       // Sin esto SQLite ignora las claves foráneas y los ON DELETE CASCADE
       // no llegan a ejecutarse.
@@ -488,6 +613,29 @@ class AppBD extends _$AppBD {
     await m.createTable(esquema.ajustes);
   }
 
+  /// v4 → v5: el descanso por ejercicio, la duración y el borrador en curso.
+  ///
+  /// Solo añade. Las sesiones ya guardadas se quedan con `duracionSeg` nulo,
+  /// que es la verdad: nadie las cronometró.
+  Future<void> _de4A5(Migrator m, Schema5 esquema) async {
+    await m.addColumn(esquema.ejercicios, esquema.ejercicios.descansoSeg);
+    await m.addColumn(
+      esquema.entrenamientos,
+      esquema.entrenamientos.duracionSeg,
+    );
+    await m.createTable(esquema.sesionesActivas);
+  }
+
+  /// v5 → v6: favoritos, vistos, medidas y el índice por músculo objetivo.
+  ///
+  /// Solo añade tablas y un índice; no hay nada que transformar.
+  Future<void> _de5A6(Migrator m, Schema6 esquema) async {
+    await m.createTable(esquema.favoritos);
+    await m.createTable(esquema.vistos);
+    await m.createTable(esquema.medidas);
+    await m.createIndex(esquema.idxCatalogoTarget);
+  }
+
   /// v2 → v3: los ejercicios ganan su posición dentro de la rutina.
   ///
   /// Las rutinas existentes conservan el orden que tenían, que era el de
@@ -526,6 +674,55 @@ class AppBD extends _$AppBD {
         color: Value(coloresRutina[usadas % coloresRutina.length]),
       ),
     );
+  }
+
+  /// Crea una rutina con sus ejercicios de golpe, en una transacción.
+  ///
+  /// [deCatalogo] son pares `(idCatalogo, nombre)` en el orden en que deben
+  /// quedar. Es lo que usan las plantillas y la importación; devuelve `null` si
+  /// el nombre ya está cogido, igual que [insertarRutina].
+  Future<int?> crearRutinaConEjercicios(
+    String nombre,
+    List<(String?, String)> deCatalogo,
+  ) => transaction(() async {
+    final id = await insertarRutina(nombre);
+    if (id == null) return null;
+
+    for (final (idCatalogo, nombreEjercicio) in deCatalogo) {
+      await insertarEjercicio(id, nombreEjercicio, idCatalogo: idCatalogo);
+    }
+    return id;
+  });
+
+  /// Copia una rutina con sus ejercicios y su orden, **sin el histórico**.
+  ///
+  /// «Empuje A» y «Empuje B» comparten el 80 % de los ejercicios y hoy hay que
+  /// construirlas dos veces desde cero. Lo que no se copia son las sesiones: la
+  /// rutina nueva no se ha entrenado nunca, y arrastrar el histórico de la
+  /// original falsearía su gráfico desde el primer día.
+  ///
+  /// Devuelve el id de la copia, o `null` si la rutina no existe o el nombre
+  /// propuesto ya está cogido.
+  Future<int?> duplicarRutina(int idRutina, {String? nuevoNombre}) async {
+    final original = await rutina(idRutina);
+    if (original == null) return null;
+
+    final fuente = await ejerciciosDeRutina(idRutina);
+    final copia = await crearRutinaConEjercicios(
+      nuevoNombre ?? '${original.nombre} (copia)',
+      [for (final e in fuente) (e.ejercicio.idCatalogo, e.nombre)],
+    );
+    if (copia == null) return null;
+
+    // El descanso propio de cada ejercicio viaja con él: forma parte de cómo se
+    // entrena esa rutina tanto como el orden.
+    final destino = await ejerciciosDeRutina(copia);
+    for (final (indice, e) in destino.indexed) {
+      if (indice >= fuente.length) break;
+      final descanso = fuente[indice].ejercicio.descansoSeg;
+      if (descanso != null) await fijarDescansoEjercicio(e.id, descanso);
+    }
+    return copia;
   }
 
   /// Elimina una rutina con sus entrenamientos y ejercicios (por el cascade).
@@ -773,11 +970,12 @@ class AppBD extends _$AppBD {
   ///
   /// [texto] se busca palabra a palabra en la columna `busqueda`, que guarda el
   /// nombre en inglés más las traducciones, normalizado y sin acentos.
-  /// [bodyPart] y [equipment] son los valores originales en inglés.
+  /// [bodyPart], [equipment] y [target] son los valores originales en inglés.
   Future<List<FichaCatalogo>> buscarCatalogo({
     String? texto,
     String? bodyPart,
     String? equipment,
+    String? target,
     int limite = 40,
     int desplazamiento = 0,
   }) {
@@ -794,11 +992,199 @@ class AppBD extends _$AppBD {
     if (equipment != null) {
       consulta.where((c) => c.equipment.equals(equipment));
     }
+    if (target != null) {
+      consulta.where((c) => c.target.equals(target));
+    }
     consulta
       ..orderBy([(c) => OrderingTerm(expression: c.nombre)])
       ..limit(limite, offset: desplazamiento);
     return consulta.get();
   }
+
+  /// Músculos objetivo presentes en el catálogo, con cuántos ejercicios tiene
+  /// cada uno.
+  ///
+  /// El recuento es lo que hace útil el filtro: en la hoja se lee «Bíceps 151»
+  /// y se sabe de antemano si merece la pena entrar.
+  Future<List<(String, int)>> objetivosDisponibles() async {
+    final cuenta = catalogoEjercicios.id.count();
+    final consulta = selectOnly(catalogoEjercicios)
+      ..addColumns([catalogoEjercicios.target, cuenta])
+      ..where(catalogoEjercicios.target.equals('').not())
+      ..groupBy([catalogoEjercicios.target]);
+
+    final filas = await consulta.get();
+    return [
+      for (final f in filas)
+        if (f.read(catalogoEjercicios.target) case final valor?)
+          (valor, f.read(cuenta) ?? 0),
+    ]..sort((a, b) => a.$1.compareTo(b.$1));
+  }
+
+  // ── Favoritos y vistos recientemente ───────────────────────────────────────
+
+  /// Marca o desmarca un ejercicio del catálogo como favorito.
+  Future<void> marcarFavorito(String idCatalogo, bool valor) async {
+    if (!valor) {
+      await (delete(
+        favoritos,
+      )..where((f) => f.idCatalogo.equals(idCatalogo))).go();
+      return;
+    }
+    await into(favoritos).insertOnConflictUpdate(
+      FavoritosCompanion.insert(idCatalogo: idCatalogo, creado: DateTime.now()),
+    );
+  }
+
+  /// Los favoritos, del más reciente al más antiguo.
+  ///
+  /// No se llama `favoritos` porque ese nombre ya lo ocupa el accesor que drift
+  /// genera para la tabla.
+  Future<List<FichaCatalogo>> fichasFavoritas() async {
+    final filas =
+        await (select(favoritos)..orderBy([
+              (f) =>
+                  OrderingTerm(expression: f.creado, mode: OrderingMode.desc),
+            ]))
+            .join([
+              // `innerJoin`, no `leftOuterJoin`: un favorito cuyo id ya no esté
+              // en el catálogo —porque el dataset cambió— sencillamente no se
+              // pinta, en vez de aparecer como una fila vacía.
+              innerJoin(
+                catalogoEjercicios,
+                catalogoEjercicios.id.equalsExp(favoritos.idCatalogo),
+              ),
+            ])
+            .get();
+    return [for (final f in filas) f.readTable(catalogoEjercicios)];
+  }
+
+  /// Ids marcados como favoritos, para pintar la estrella en la lista.
+  Future<Set<String>> idsFavoritos() async {
+    final filas = await select(favoritos).get();
+    return {for (final f in filas) f.idCatalogo};
+  }
+
+  /// Anota que se ha abierto una ficha y conserva solo las 10 últimas.
+  ///
+  /// La poda va aquí y no en la lectura para que la tabla no crezca sin límite
+  /// con cada ficha que se abre.
+  ///
+  /// Se borra y se reinserta en vez de hacer *upsert*: drift guarda las fechas
+  /// con precisión de **segundo**, así que dos fichas abiertas seguidas empatan
+  /// y el orden quedaría al azar. Reinsertando, la recién vista es siempre la
+  /// del `rowid` más alto, y ese es el desempate.
+  Future<void> registrarVisto(String idCatalogo, {int conservar = 10}) =>
+      transaction(() async {
+        await (delete(
+          vistos,
+        )..where((v) => v.idCatalogo.equals(idCatalogo))).go();
+        await into(vistos).insert(
+          VistosCompanion.insert(idCatalogo: idCatalogo, fecha: DateTime.now()),
+        );
+        await customStatement(
+          '''
+          DELETE FROM vistos WHERE rowid NOT IN (
+            SELECT rowid FROM vistos ORDER BY fecha DESC, rowid DESC LIMIT ?
+          )
+          ''',
+          [conservar],
+        );
+      });
+
+  /// Las últimas fichas abiertas, de la más reciente a la más antigua.
+  Future<List<FichaCatalogo>> vistosRecientes({int limite = 10}) async {
+    // Con `customSelect` porque el desempate es por `rowid`, que no es una
+    // columna del modelo pero sí la que ordena bien dentro del mismo segundo.
+    final filas = await customSelect(
+      '''
+      SELECT c.* FROM vistos v
+      JOIN catalogo_ejercicios c ON c.id = v.id_catalogo
+      ORDER BY v.fecha DESC, v.rowid DESC
+      LIMIT ?
+      ''',
+      variables: [Variable.withInt(limite)],
+      readsFrom: {vistos, catalogoEjercicios},
+    ).get();
+    return [for (final f in filas) catalogoEjercicios.map(f.data)];
+  }
+
+  /// Rutinas en las que ya está ese ejercicio del catálogo.
+  ///
+  /// Es lo que responde «¿lo tengo ya en algún sitio?» sin salir de la ficha.
+  Future<List<Rutina>> rutinasQueContienen(String idCatalogo) async {
+    final filas =
+        await (select(
+          ejercicios,
+        )..where((e) => e.idCatalogo.equals(idCatalogo))).join([
+          innerJoin(rutinas, rutinas.id.equalsExp(ejercicios.idRutina)),
+        ]).get();
+
+    final porId = {
+      for (final f in filas) f.readTable(rutinas).id: f.readTable(rutinas),
+    };
+    return porId.values.toList()..sort((a, b) => a.id.compareTo(b.id));
+  }
+
+  // ── Medidas del cuerpo ─────────────────────────────────────────────────────
+
+  /// Registra una medida. Repetir el mismo día y tipo sustituye el valor.
+  ///
+  /// La fecha se lleva a medianoche antes de guardar: es lo que hace que la
+  /// clave única `(fecha, tipo)` signifique de verdad «una por día».
+  /// El `onConflict` apunta a la clave única `(fecha, tipo)` y no a la
+  /// primaria: la primaria es el `id` autoincremental, que nunca choca, de modo
+  /// que un `insertOnConflictUpdate` normal reventaría contra el índice único
+  /// en vez de sustituir el valor del día.
+  Future<void> registrarMedida(DateTime fecha, String tipo, double valor) {
+    final dia = DateTime(fecha.year, fecha.month, fecha.day);
+    return into(medidas).insert(
+      MedidasCompanion.insert(fecha: dia, tipo: tipo, valor: valor),
+      onConflict: DoUpdate(
+        (_) => MedidasCompanion(valor: Value(valor)),
+        target: [medidas.fecha, medidas.tipo],
+      ),
+    );
+  }
+
+  /// Una medida a lo largo del tiempo, de la más antigua a la más reciente.
+  Future<List<Medida>> serieMedida(
+    String tipo, {
+    DateTime? desde,
+    DateTime? hasta,
+  }) {
+    final consulta = select(medidas)..where((m) => m.tipo.equals(tipo));
+    if (desde != null) {
+      consulta.where((m) => m.fecha.isBiggerOrEqualValue(desde));
+    }
+    if (hasta != null) consulta.where((m) => m.fecha.isSmallerThanValue(hasta));
+    consulta.orderBy([(m) => OrderingTerm(expression: m.fecha)]);
+    return consulta.get();
+  }
+
+  Future<Medida?> ultimaMedida(String tipo) =>
+      (select(medidas)
+            ..where((m) => m.tipo.equals(tipo))
+            ..orderBy([
+              (m) => OrderingTerm(expression: m.fecha, mode: OrderingMode.desc),
+            ])
+            ..limit(1))
+          .getSingleOrNull();
+
+  Future<void> borrarMedida(DateTime fecha, String tipo) =>
+      (delete(medidas)..where(
+            (m) =>
+                m.fecha.equals(DateTime(fecha.year, fecha.month, fecha.day)) &
+                m.tipo.equals(tipo),
+          ))
+          .go();
+
+  Future<List<Medida>> todasLasMedidas() =>
+      (select(medidas)..orderBy([
+            (m) => OrderingTerm(expression: m.fecha),
+            (m) => OrderingTerm(expression: m.tipo),
+          ]))
+          .get();
 
   Future<FichaCatalogo?> ficha(String idCatalogo) => (select(
     catalogoEjercicios,
@@ -831,26 +1217,37 @@ class AppBD extends _$AppBD {
   /// [series] va de id de ejercicio a la lista de series que se hicieron, en
   /// orden. Un ejercicio con la lista vacía sencillamente no se guarda, que es
   /// lo que sustituye al antiguo interruptor de «incluir ejercicio».
-  Future<bool> insertarEntrenamiento(
+  ///
+  /// Con [descartarBorrador] se borra en la **misma transacción** el borrador
+  /// de la sesión viva. Si fueran dos operaciones habría un instante con la
+  /// sesión ya guardada y el borrador todavía vivo, y reabrir la app justo ahí
+  /// preguntaría por un entrenamiento en curso que ya no existe.
+  ///
+  /// Devuelve el id de la sesión creada, o `null` si no había ninguna serie.
+  Future<int?> insertarEntrenamiento(
     int idRutina,
     DateTime fecha,
     Map<int, List<ValoresSerie>> series, {
     String? nota,
+    int? duracionSeg,
+    bool descartarBorrador = false,
   }) async {
     final conSeries = _soloConSeries(series);
-    if (conSeries.isEmpty) return false;
+    if (conSeries.isEmpty) return null;
 
-    await transaction(() async {
+    return transaction(() async {
       final idEntrenamiento = await into(entrenamientos).insert(
         EntrenamientosCompanion.insert(
           idRutina: idRutina,
           fecha: fecha,
           nota: Value(_limpiar(nota)),
+          duracionSeg: Value(duracionSeg),
         ),
       );
       await _insertarSeries(idEntrenamiento, conSeries);
+      if (descartarBorrador) await delete(sesionesActivas).go();
+      return idEntrenamiento;
     });
-    return true;
   }
 
   /// Una nota en blanco es no tener nota: así el icono del historial no
@@ -879,6 +1276,8 @@ class AppBD extends _$AppBD {
     Map<int, List<ValoresSerie>> series, {
     String? nota,
   }) async {
+    // La duración no se toca al editar: se cronometró aquel día y corregir un
+    // peso tres semanas después no cambia lo que duró la sesión.
     final conSeries = _soloConSeries(series);
     if (conSeries.isEmpty) return false;
 
@@ -1174,6 +1573,49 @@ class AppBD extends _$AppBD {
     );
   }
 
+  /// Ejercicios en los que la sesión [idEntrenamiento] batió el peso máximo.
+  ///
+  /// La comparación es contra lo anterior **a esta sesión** dentro de la misma
+  /// rutina, así que llamarlo dos veces devuelve lo mismo: no depende de cuándo
+  /// se pregunte. Un ejercicio estrenado ese día también cuenta como récord,
+  /// con [RecordSesion.pesoAnterior] nulo. El calentamiento no entra.
+  Future<List<RecordSesion>> recordsDeSesion(int idEntrenamiento) async {
+    final filas = await customSelect(
+      '''
+      SELECT ej.nombre                              AS nombre,
+             MAX(s.peso)                            AS maximo,
+             MAX(s.peso * (1 + s.repeticiones / 30.0)) AS mejor_1rm,
+             (SELECT MAX(sp.peso)
+                FROM serie sp
+                JOIN entrenamientos ep ON ep.id = sp.id_entrenamiento
+               WHERE sp.id_ejercicio = s.id_ejercicio
+                 AND sp.calentamiento = 0
+                 AND ep.id_rutina = e.id_rutina
+                 AND (ep.fecha < e.fecha
+                      OR (ep.fecha = e.fecha AND ep.id < e.id))) AS anterior
+      FROM serie s
+      JOIN entrenamientos e ON e.id = s.id_entrenamiento
+      JOIN ejercicios ej    ON ej.id = s.id_ejercicio
+      WHERE s.id_entrenamiento = ? AND s.calentamiento = 0
+      GROUP BY s.id_ejercicio
+      HAVING anterior IS NULL OR MAX(s.peso) > anterior
+      ORDER BY ej.orden, ej.id
+      ''',
+      variables: [Variable.withInt(idEntrenamiento)],
+      readsFrom: {seriesTabla, entrenamientos, ejercicios},
+    ).get();
+
+    return [
+      for (final f in filas)
+        RecordSesion(
+          nombre: f.read<String>('nombre'),
+          pesoMaximo: f.read<double>('maximo'),
+          mejor1RM: f.read<double>('mejor_1rm'),
+          pesoAnterior: f.read<double?>('anterior'),
+        ),
+    ];
+  }
+
   /// Fecha del último entrenamiento de una rutina.
   Future<DateTime?> ultimoEntrenamientoRutina(int idRutina) {
     final maxima = entrenamientos.fecha.max();
@@ -1193,27 +1635,65 @@ class AppBD extends _$AppBD {
 
   // ── Ajustes ────────────────────────────────────────────────────────────────
 
-  /// Clave del interruptor de esfuerzo percibido.
-  static const claveEsfuerzoActivo = 'esfuerzo_activo';
-
-  /// Clave de la escala con la que se muestra el esfuerzo.
-  static const claveEsfuerzoEscala = 'esfuerzo_escala';
-
   /// Las preferencias, ya interpretadas y con sus valores por defecto.
-  Future<Ajustes> ajustes() async {
+  ///
+  /// Se leen en casi cada pantalla, así que van todas de una vez: quien las
+  /// necesite mira el `ajustesProvider`, que las tiene en memoria.
+  Future<Ajustes> ajustes() async => Ajustes.desdeMapa(await ajustesCrudos());
+
+  /// Las filas tal cual. Solo lo usa la copia de seguridad.
+  Future<Map<String, String>> ajustesCrudos() async {
     final filas = await select(ajustesTabla).get();
-    final valores = {for (final f in filas) f.clave: f.valor};
-    return Ajustes(
-      esfuerzoActivo: valores[claveEsfuerzoActivo] == '1',
-      escala: valores[claveEsfuerzoEscala] == 'rir'
-          ? EscalaEsfuerzo.rir
-          : EscalaEsfuerzo.rpe,
-    );
+    return {for (final f in filas) f.clave: f.valor};
   }
 
   Future<void> fijarAjuste(String clave, String valor) =>
       into(ajustesTabla).insertOnConflictUpdate(
         AjustesTablaCompanion.insert(clave: clave, valor: valor),
+      );
+
+  /// Escribe varias preferencias de golpe, en una transacción.
+  Future<void> fijarAjustes(Map<String, String> valores) =>
+      transaction(() async {
+        for (final entrada in valores.entries) {
+          await fijarAjuste(entrada.key, entrada.value);
+        }
+      });
+
+  // ── Sesión en curso ────────────────────────────────────────────────────────
+
+  /// Guarda (o pisa) el borrador de la sesión que se está entrenando.
+  ///
+  /// Como mucho hay una fila: si ya había un borrador de otra rutina, este lo
+  /// sustituye. Empezar un entrenamiento nuevo con otro a medias es una
+  /// decisión del usuario, no un caso que haya que conservar por duplicado.
+  Future<void> guardarSesionActiva(
+    int idRutina,
+    DateTime inicio,
+    String estadoJson,
+  ) => transaction(() async {
+    await delete(sesionesActivas).go();
+    await into(sesionesActivas).insert(
+      SesionesActivasCompanion.insert(
+        idRutina: idRutina,
+        inicio: inicio,
+        actualizado: DateTime.now(),
+        estado: estadoJson,
+      ),
+    );
+  });
+
+  Future<SesionActiva?> sesionActiva() =>
+      (select(sesionesActivas)..limit(1)).getSingleOrNull();
+
+  Future<void> descartarSesionActiva() => delete(sesionesActivas).go();
+
+  // ── Descanso por ejercicio ─────────────────────────────────────────────────
+
+  /// Fija el descanso propio de un ejercicio. `null` vuelve al valor global.
+  Future<void> fijarDescansoEjercicio(int idEjercicio, int? segundos) =>
+      (update(ejercicios)..where((e) => e.id.equals(idEjercicio))).write(
+        EjerciciosCompanion(descansoSeg: Value(segundos)),
       );
 
   /// Sesiones de cada día dentro del rango pedido, en orden.
@@ -1250,4 +1730,126 @@ class AppBD extends _$AppBD {
     }
     return porDia;
   }
+
+  // ── Volcado completo, para la copia de seguridad ───────────────────────────
+
+  /// Sesiones de una rutina, de la más antigua a la más reciente.
+  Future<List<Entrenamiento>> entrenamientosDeRutina(int idRutina) =>
+      (select(entrenamientos)
+            ..where((e) => e.idRutina.equals(idRutina))
+            ..orderBy([
+              (e) => OrderingTerm(expression: e.fecha),
+              (e) => OrderingTerm(expression: e.id),
+            ]))
+          .get();
+
+  /// Todas las series de una rutina, agrupadas por sesión.
+  ///
+  /// Una consulta para la rutina entera: exportar con [sesion] por cada
+  /// entrenamiento serían tantas consultas como sesiones tenga el histórico.
+  Future<Map<int, List<Serie>>> seriesPorEntrenamiento(int idRutina) async {
+    final filas =
+        await (select(seriesTabla)..orderBy([
+              (s) => OrderingTerm(expression: s.idEjercicio),
+              (s) => OrderingTerm(expression: s.nSerie),
+            ]))
+            .join([
+              innerJoin(
+                entrenamientos,
+                entrenamientos.id.equalsExp(seriesTabla.idEntrenamiento) &
+                    entrenamientos.idRutina.equals(idRutina),
+              ),
+            ])
+            .get();
+
+    final porSesion = <int, List<Serie>>{};
+    for (final f in filas) {
+      final serie = f.readTable(seriesTabla);
+      (porSesion[serie.idEntrenamiento] ??= []).add(serie);
+    }
+    return porSesion;
+  }
+
+  // ── Restauración de una copia de seguridad ─────────────────────────────────
+  //
+  // Escriben lo que viene del fichero **tal cual**, sin las reglas que aplican
+  // los métodos normales: la copia ya trae su color, su orden y sus fechas, y
+  // recalcularlos aquí sería reinterpretar los datos del usuario. Quien las
+  // llama es `copia.dart`, siempre dentro de una `transaction()`.
+
+  Future<int> restaurarRutina(String nombre, String? color) => into(
+    rutinas,
+  ).insert(RutinasCompanion.insert(nombre: nombre, color: Value(color)));
+
+  Future<int> restaurarEjercicio(
+    int idRutina, {
+    required String nombre,
+    required int orden,
+    String? idCatalogo,
+    String? descripcion,
+    int? descansoSeg,
+  }) => into(ejercicios).insert(
+    EjerciciosCompanion.insert(
+      idRutina: idRutina,
+      nombre: nombre,
+      orden: Value(orden),
+      idCatalogo: Value(idCatalogo),
+      descripcion: Value(descripcion),
+      descansoSeg: Value(descansoSeg),
+    ),
+  );
+
+  Future<int> restaurarEntrenamiento(
+    int idRutina,
+    DateTime fecha, {
+    String? nota,
+    int? duracionSeg,
+  }) => into(entrenamientos).insert(
+    EntrenamientosCompanion.insert(
+      idRutina: idRutina,
+      fecha: fecha,
+      nota: Value(_limpiar(nota)),
+      duracionSeg: Value(duracionSeg),
+    ),
+  );
+
+  /// Series de una sesión restaurada, por id de ejercicio.
+  Future<void> restaurarSeries(
+    int idEntrenamiento,
+    Map<int, List<ValoresSerie>> series,
+  ) => _insertarSeries(idEntrenamiento, _soloConSeries(series));
+
+  Future<Set<String>> nombresDeRutinas() async {
+    final filas = await todasLasRutinas();
+    return {for (final r in filas) r.nombre};
+  }
+
+  /// De los ids propuestos, los que existen de verdad en el catálogo.
+  ///
+  /// Una copia hecha con otra versión del dataset puede traer ids que aquí ya
+  /// no están; esos ejercicios se importan como personalizados en vez de
+  /// perderse o de dejar una referencia rota.
+  Future<Set<String>> idsDeCatalogoExistentes(Set<String> candidatos) async {
+    if (candidatos.isEmpty) return const {};
+    final consulta = selectOnly(catalogoEjercicios)
+      ..addColumns([catalogoEjercicios.id])
+      ..where(catalogoEjercicios.id.isIn(candidatos));
+    final filas = await consulta.get();
+    return {for (final f in filas) ?f.read(catalogoEjercicios.id)};
+  }
+
+  /// Borra todo lo que es del usuario y **conserva el catálogo**.
+  ///
+  /// El catálogo son 1.324 filas regenerables desde el asset, así que borrarlo
+  /// solo serviría para que el siguiente arranque tardara más. Lo demás —
+  /// rutinas con su cascade, medidas, favoritos, vistos, el borrador en curso y
+  /// las preferencias— sí se va, en una sola transacción.
+  Future<void> borrarTodosLosDatos() => transaction(() async {
+    await delete(sesionesActivas).go();
+    await delete(rutinas).go();
+    await delete(medidas).go();
+    await delete(favoritos).go();
+    await delete(vistos).go();
+    await delete(ajustesTabla).go();
+  });
 }

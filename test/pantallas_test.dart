@@ -4,19 +4,28 @@
 /// pantallas se ejercitan de verdad —consultas incluidas— sin tocar disco.
 library;
 
+import 'package:appgym/datos/ajustes.dart';
 import 'package:appgym/datos/bd.dart';
 import 'package:appgym/datos/formato.dart' as formato;
+import 'package:appgym/datos/reloj.dart' as reloj;
+import 'package:appgym/estado/descanso.dart';
+import 'package:appgym/main.dart';
 import 'package:appgym/datos/semilla.dart';
 import 'package:appgym/estado/providers.dart';
 import 'package:appgym/pantallas/catalogo.dart';
 import 'package:appgym/pantallas/entrenar.dart';
+import 'package:appgym/pantallas/ficha.dart';
 import 'package:appgym/pantallas/historial.dart';
+import 'package:appgym/pantallas/medidas.dart';
+import 'package:appgym/pantallas/progreso.dart';
+import 'package:appgym/pantallas/resumen_sesion.dart';
 import 'package:appgym/pantallas/rutina.dart';
 import 'package:appgym/pantallas/rutinas.dart';
 import 'package:appgym/pantallas/sesion.dart';
 import 'package:appgym/tema/ui.dart' as ui;
 import 'package:drift/native.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -74,6 +83,43 @@ void _comoUnMovil(WidgetTester tester) {
   addTearDown(tester.view.resetDevicePixelRatio);
 }
 
+/// Asienta la pantalla a base de fotogramas sueltos.
+///
+/// En la sesión viva no se puede usar `pumpAndSettle`: el cronómetro y el
+/// descanso son `Timer.periodic` que repintan para siempre, así que «esperar a
+/// que no queden fotogramas» no termina nunca.
+Future<void> _asentar(WidgetTester tester, {int veces = 8}) async {
+  for (var i = 0; i < veces; i++) {
+    await tester.pump(const Duration(milliseconds: 20));
+  }
+}
+
+/// Un reloj que solo avanza cuando se le dice.
+///
+/// El descanso y el cronómetro se calculan contra la hora real —para que
+/// suspender la app no los desfase—, así que `tester.pump` por sí solo no los
+/// mueve: adelanta los `Timer`, no el calendario. Con esto se adelantan los
+/// dos a la vez.
+class _RelojFalso {
+  DateTime _ahora = DateTime(2026, 8, 1, 18);
+
+  /// Lo instala y programa su retirada al acabar el test.
+  void instalar() {
+    reloj.fijarReloj(() => _ahora);
+    addTearDown(() => reloj.fijarReloj(null));
+  }
+
+  /// Adelanta el reloj y deja que los `Timer` se pongan al día.
+  Future<void> avanzar(WidgetTester tester, Duration cuanto) async {
+    _ahora = _ahora.add(cuanto);
+    await tester.pump(cuanto);
+  }
+}
+
+/// Deja que se cierre el aviso flotante, que se retira con un `Timer`.
+Future<void> _cerrarAviso(WidgetTester tester) =>
+    tester.pump(const Duration(seconds: 2));
+
 void main() {
   late AppBD bd;
 
@@ -112,6 +158,10 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Crear rutina'));
+      await tester.pumpAndSettle();
+
+      // El «+» ofrece antes las plantillas; «En blanco» es el camino de siempre.
+      await tester.tap(find.text('En blanco'));
       await tester.pumpAndSettle();
 
       await tester.enterText(find.byType(CupertinoTextField), 'Full body');
@@ -292,8 +342,8 @@ void main() {
     testWidgets('activado en Ajustes, se elige y se guarda como RPE', (
       tester,
     ) async {
-      await bd.fijarAjuste(AppBD.claveEsfuerzoActivo, '1');
-      await bd.fijarAjuste(AppBD.claveEsfuerzoEscala, 'rir');
+      await bd.fijarAjuste(Claves.esfuerzoActivo, '1');
+      await bd.fijarAjuste(Claves.esfuerzoEscala, 'rir');
 
       _comoUnMovil(tester);
       await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
@@ -335,7 +385,7 @@ void main() {
     testWidgets('el detalle enseña la nota y el esfuerzo de cada serie', (
       tester,
     ) async {
-      await bd.fijarAjuste(AppBD.claveEsfuerzoActivo, '1');
+      await bd.fijarAjuste(Claves.esfuerzoActivo, '1');
       await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
         idEjercicio: const [
           ValoresSerie(
@@ -562,6 +612,791 @@ void main() {
 
       expect(await bd.contarEntrenamientosRutina(idRutina), 0);
       expect(find.text('Todavía no hay sesiones'), findsOneWidget);
+    });
+  });
+  // ── B7 y B8: descanso y sesión viva ────────────────────────────────────────
+
+  group('sesión viva', () {
+    late int idRutina;
+    late int idEjercicio;
+    late _RelojFalso cronometro;
+
+    setUp(() async {
+      cronometro = _RelojFalso()..instalar();
+      idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarEjercicio(idRutina, 'Press banca');
+      idEjercicio = (await bd.ejerciciosDeRutina(idRutina)).single.id;
+    });
+
+    testWidgets('arranca con cronómetro y las series por marcar', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(
+        _app(bd, PantallaEntrenar(idRutina: idRutina, modo: Modo.vivo)),
+      );
+      await _asentar(tester);
+
+      expect(find.text('Entrenando'), findsOneWidget);
+      expect(find.textContaining('0 / 4 series · 0:0'), findsOneWidget);
+      // Un check por serie, ninguno marcado.
+      expect(find.byType(ui.CheckSerie), findsNWidgets(4));
+      expect(find.byIcon(CupertinoIcons.checkmark_circle_fill), findsNothing);
+      // Y todavía no hay descanso que mostrar.
+      expect(find.byType(ui.BarraDescanso), findsNothing);
+    });
+
+    testWidgets('seis series marcables caben en un móvil', (tester) async {
+      // Seis series con su check: es la fila más apretada de la app, y donde
+      // los desbordes se ven antes.
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [
+          ValoresSerie(repeticiones: 12, peso: 40, calentamiento: true),
+          ValoresSerie(repeticiones: 10, peso: 60),
+          ValoresSerie(repeticiones: 10, peso: 60),
+          ValoresSerie(repeticiones: 8, peso: 65),
+          ValoresSerie(repeticiones: 6, peso: 70),
+          ValoresSerie(repeticiones: 6, peso: 72.5),
+        ],
+      });
+
+      _comoUnMovil(tester);
+      await tester.pumpWidget(
+        _app(bd, PantallaEntrenar(idRutina: idRutina, modo: Modo.vivo)),
+      );
+      await _asentar(tester);
+
+      expect(find.byType(ui.CheckSerie), findsNWidgets(6));
+      expect(find.byType(ui.SelectorEnLinea), findsNWidgets(12));
+      expect(find.text('72,5 kg'), findsOneWidget);
+    });
+
+    testWidgets('marcar una serie arranca el descanso', (tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(
+        _app(bd, PantallaEntrenar(idRutina: idRutina, modo: Modo.vivo)),
+      );
+      await _asentar(tester);
+
+      await tester.tap(find.byType(ui.CheckSerie).first);
+      await _asentar(tester);
+
+      expect(find.text('1 / 4 series · 0:00'), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.checkmark_circle_fill), findsOneWidget);
+
+      // Y con la serie hecha aparece la barra con los 90 s por defecto.
+      expect(find.byType(ui.BarraDescanso), findsOneWidget);
+      expect(find.text('1:30'), findsOneWidget);
+      expect(find.text('Saltar'), findsOneWidget);
+    });
+
+    testWidgets('+15 s y −15 s ajustan sin reiniciar la cuenta', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(
+        _app(bd, PantallaEntrenar(idRutina: idRutina, modo: Modo.vivo)),
+      );
+      await _asentar(tester);
+
+      await tester.tap(find.byType(ui.CheckSerie).first);
+      await _asentar(tester);
+
+      // Diez segundos consumidos: quedan 80.
+      await cronometro.avanzar(tester, const Duration(seconds: 10));
+      expect(find.text('1:20'), findsOneWidget);
+
+      await tester.tap(find.text('+15 s'));
+      await tester.pump();
+      // 80 + 15, no 90 + 15: ajustar no reinicia.
+      expect(find.text('1:35'), findsOneWidget);
+
+      await tester.tap(find.text('−15 s'));
+      await tester.pump();
+      expect(find.text('1:20'), findsOneWidget);
+    });
+
+    testWidgets('al pasarse, el contador sube en vez de bajar', (tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(
+        _app(bd, PantallaEntrenar(idRutina: idRutina, modo: Modo.vivo)),
+      );
+      await _asentar(tester);
+
+      await tester.tap(find.byType(ui.CheckSerie).first);
+      await _asentar(tester);
+
+      await cronometro.avanzar(tester, const Duration(seconds: 95));
+      // El signo delante es lo que distingue «faltan 5» de «te has pasado 5».
+      expect(find.text('+0:05'), findsOneWidget);
+    });
+
+    testWidgets('saltar retira la barra', (tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(
+        _app(bd, PantallaEntrenar(idRutina: idRutina, modo: Modo.vivo)),
+      );
+      await _asentar(tester);
+
+      await tester.tap(find.byType(ui.CheckSerie).first);
+      await _asentar(tester);
+      expect(find.byType(ui.BarraDescanso), findsOneWidget);
+
+      await tester.tap(find.text('Saltar'));
+      await _asentar(tester);
+      expect(find.byType(ui.BarraDescanso), findsNothing);
+    });
+
+    testWidgets('cerrar la pantalla cancela el reloj del descanso', (
+      tester,
+    ) async {
+      // Si el `Timer` quedara vivo, este test fallaría solo con «A Timer is
+      // still pending even after the widget tree was disposed»: es el motivo de
+      // que exista.
+      _comoUnMovil(tester);
+      await tester.pumpWidget(
+        _app(bd, PantallaEntrenar(idRutina: idRutina, modo: Modo.vivo)),
+      );
+      await _asentar(tester);
+
+      await tester.tap(find.byType(ui.CheckSerie).first);
+      await _asentar(tester);
+      expect(find.byType(ui.BarraDescanso), findsOneWidget);
+
+      await tester.pumpWidget(_app(bd, const PantallaRutinas()));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('terminar guarda solo lo marcado, con su duración', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(
+        _app(bd, PantallaEntrenar(idRutina: idRutina, modo: Modo.vivo)),
+      );
+      await _asentar(tester);
+
+      await tester.tap(find.byType(ui.CheckSerie).at(0));
+      await _asentar(tester);
+      await tester.tap(find.byType(ui.CheckSerie).at(1));
+      await _asentar(tester);
+
+      // Media hora de sesión.
+      await cronometro.avanzar(tester, const Duration(minutes: 30));
+      await tester.tap(find.text('Terminar'));
+      await _asentar(tester, veces: 12);
+
+      final sesion = (await bd.sesion(1))!;
+      // Dos de las cuatro: las que quedaron sin marcar eran el plan, no el
+      // entrenamiento.
+      expect(sesion.ejercicios.single.series, hasLength(2));
+      expect(sesion.entrenamiento.duracionSeg, closeTo(1800, 5));
+      // Y el borrador no sobrevive a confirmar.
+      expect(await bd.sesionActiva(), isNull);
+    });
+
+    testWidgets('sin ninguna serie marcada no se guarda nada', (tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(
+        _app(bd, PantallaEntrenar(idRutina: idRutina, modo: Modo.vivo)),
+      );
+      await _asentar(tester);
+
+      await tester.tap(find.text('Terminar'));
+      await _asentar(tester);
+
+      expect(await bd.contarEntrenamientosRutina(idRutina), 0);
+      expect(find.text('Marca al menos una serie'), findsOneWidget);
+      await _cerrarAviso(tester);
+    });
+
+    testWidgets('el borrador se escribe y se recupera con lo ya marcado', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(
+        _app(bd, PantallaEntrenar(idRutina: idRutina, modo: Modo.vivo)),
+      );
+      await _asentar(tester);
+
+      await tester.tap(find.byType(ui.CheckSerie).first);
+      // El borrador se escribe con dos segundos de retraso, para no tocar disco
+      // en cada toque de un selector.
+      await cronometro.avanzar(tester, const Duration(seconds: 3));
+      await _asentar(tester);
+
+      final borrador = await bd.sesionActiva();
+      expect(borrador, isNotNull);
+      expect(borrador!.idRutina, idRutina);
+
+      // Y al reabrir con ese borrador, la serie sigue marcada.
+      await tester.pumpWidget(
+        _app(
+          bd,
+          PantallaEntrenar(
+            idRutina: idRutina,
+            modo: Modo.vivo,
+            borrador: borrador,
+          ),
+        ),
+      );
+      await _asentar(tester);
+
+      expect(find.byIcon(CupertinoIcons.checkmark_circle_fill), findsOneWidget);
+      expect(find.textContaining('1 / 4 series'), findsOneWidget);
+    });
+
+    testWidgets('el formulario sigue sin cronómetro ni checks', (tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(
+        _app(bd, PantallaEntrenar(idRutina: idRutina, modo: Modo.formulario)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Registrar sesión'), findsOneWidget);
+      expect(find.byType(ui.CheckSerie), findsNothing);
+      expect(find.text('Guardar entrenamiento'), findsOneWidget);
+      // La fecha se elige, que es de lo que va el formulario.
+      expect(find.text(formato.fechaLarga(DateTime.now())), findsOneWidget);
+    });
+
+    testWidgets('el descanso propio de un ejercicio manda sobre el global', (
+      tester,
+    ) async {
+      await bd.fijarDescansoEjercicio(idEjercicio, 45);
+
+      _comoUnMovil(tester);
+      await tester.pumpWidget(
+        _app(bd, PantallaEntrenar(idRutina: idRutina, modo: Modo.vivo)),
+      );
+      await _asentar(tester);
+
+      expect(find.text('45 s'), findsOneWidget);
+
+      await tester.tap(find.byType(ui.CheckSerie).first);
+      await _asentar(tester);
+      expect(find.text('0:45'), findsOneWidget);
+    });
+  });
+
+  // ── B8: resumen de cierre ──────────────────────────────────────────────────
+
+  group('resumen de cierre', () {
+    testWidgets('enseña las cifras y los récords batidos', (tester) async {
+      final idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarEjercicio(idRutina, 'Press banca');
+      final idEjercicio = (await bd.ejerciciosDeRutina(idRutina)).single.id;
+
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
+      });
+      final id = (await bd.insertarEntrenamiento(
+        idRutina,
+        DateTime(2026, 3, 8),
+        {
+          idEjercicio: const [
+            ValoresSerie(repeticiones: 8, peso: 65),
+            ValoresSerie(repeticiones: 8, peso: 65),
+          ],
+        },
+        duracionSeg: 2052,
+      ))!;
+
+      _comoUnMovil(tester);
+      await tester.pumpWidget(
+        _app(bd, PantallaResumenSesion(idEntrenamiento: id)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('¡Sesión guardada!'), findsOneWidget);
+      expect(find.text('2'), findsOneWidget);
+      expect(find.text('1.040 kg'), findsNothing);
+      expect(find.text('34:12'), findsOneWidget);
+      // Récord: 65 kg contra los 60 de la semana anterior.
+      expect(find.text('Récords'.toUpperCase()), findsOneWidget);
+      expect(find.text('Antes: 60 kg'), findsOneWidget);
+    });
+  });
+
+  // ── B9: unidades, paso y tema ──────────────────────────────────────────────
+
+  group('ajustes en el registro', () {
+    late int idRutina;
+    late int idEjercicio;
+
+    setUp(() async {
+      idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarEjercicio(idRutina, 'Press banca');
+      idEjercicio = (await bd.ejerciciosDeRutina(idRutina)).single.id;
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
+      });
+    });
+
+    testWidgets('en libras el registro enseña los pesos convertidos', (
+      tester,
+    ) async {
+      await bd.fijarAjuste(Claves.unidad, 'lb');
+
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      // 60 kg son 132,28 lb, que con el paso de 2,5 se cuadran en 132,5.
+      expect(find.text('132,5 lb'), findsOneWidget);
+      expect(find.textContaining('kg'), findsNothing);
+    });
+
+    testWidgets('cambiar a libras no toca lo guardado', (tester) async {
+      await bd.fijarAjuste(Claves.unidad, 'lb');
+
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Guardar entrenamiento'));
+      await tester.pumpAndSettle();
+
+      // Se ve en libras y se guarda en kilos. Y como nadie ha tocado el
+      // selector, el valor no pasa siquiera por la conversión: sale intacto.
+      final series = await bd.seriesConFecha(idRutina, idEjercicio);
+      expect(series.last.peso, 60);
+    });
+
+    testWidgets('el paso del peso se respeta al pulsar +', (tester) async {
+      await bd.fijarAjuste(Claves.pasoPeso, '1.25');
+
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      expect(find.text('60,00 kg'), findsOneWidget);
+      // El «+» del peso es el segundo de la fila.
+      await tester.tap(find.byIcon(CupertinoIcons.plus).at(1));
+      await tester.pumpAndSettle();
+
+      expect(find.text('61,25 kg'), findsOneWidget);
+    });
+
+    testWidgets('las series y repeticiones por defecto salen de Ajustes', (
+      tester,
+    ) async {
+      await bd.fijarAjustes({Claves.series: '2', Claves.repeticiones: '15'});
+      // Una rutina sin histórico, que es cuando se usan los valores de fábrica.
+      final otra = (await bd.insertarRutina('Pierna'))!;
+      await bd.insertarEjercicio(otra, 'Sentadilla');
+
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: otra)));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ui.SelectorEnLinea), findsNWidgets(4));
+      expect(find.text('15'), findsNWidgets(2));
+    });
+
+    testWidgets('el histórico también se lee en la unidad activa', (
+      tester,
+    ) async {
+      await bd.fijarAjuste(Claves.unidad, 'lb');
+
+      _comoUnMovil(tester);
+      await tester.pumpWidget(
+        _app(bd, const PantallaSesion(idEntrenamiento: 1)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('132,3 lb'), findsOneWidget);
+      expect(find.textContaining('kg'), findsNothing);
+    });
+  });
+
+  // ── B12: favoritos y añadir a rutina desde el catálogo ─────────────────────
+
+  group('catálogo del usuario', () {
+    setUp(() => sembrarCatalogo(bd, datos: _catalogoFalso));
+
+    testWidgets('los favoritos salen arriba cuando no hay búsqueda', (
+      tester,
+    ) async {
+      await bd.marcarFavorito('0002', true);
+
+      await tester.pumpWidget(_app(bd, const PantallaCatalogo()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Favoritos'.toUpperCase()), findsOneWidget);
+      expect(find.text('TODOS LOS EJERCICIOS'), findsOneWidget);
+      // Una vez en favoritos y otra en la lista completa.
+      expect(find.text('dumbbell curl'), findsNWidgets(2));
+    });
+
+    testWidgets('sin favoritos ni vistos, la cabecera no estorba', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_app(bd, const PantallaCatalogo()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Favoritos'.toUpperCase()), findsNothing);
+      expect(find.text('TODOS LOS EJERCICIOS'), findsNothing);
+      expect(find.text('dumbbell curl'), findsOneWidget);
+    });
+
+    testWidgets('con búsqueda activa desaparecen los destacados', (
+      tester,
+    ) async {
+      await bd.marcarFavorito('0002', true);
+
+      await tester.pumpWidget(_app(bd, const PantallaCatalogo()));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(CupertinoSearchTextField), 'barbell');
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Favoritos'.toUpperCase()), findsNothing);
+      expect(find.text('barbell bench press'), findsOneWidget);
+    });
+
+    testWidgets('la estrella marca y desmarca desde la lista', (tester) async {
+      await tester.pumpWidget(_app(bd, const PantallaCatalogo()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(CupertinoIcons.star).first);
+      await tester.pumpAndSettle();
+
+      expect(await bd.idsFavoritos(), hasLength(1));
+      expect(find.byIcon(CupertinoIcons.star_fill), findsOneWidget);
+    });
+
+    testWidgets('con una sola rutina, el «+» añade sin preguntar', (
+      tester,
+    ) async {
+      final idRutina = (await bd.insertarRutina('Empuje'))!;
+
+      await tester.pumpWidget(_app(bd, const PantallaCatalogo()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(CupertinoIcons.plus_circle).first);
+      await tester.pumpAndSettle();
+
+      final ejercicios = await bd.ejerciciosDeRutina(idRutina);
+      expect(ejercicios.single.nombre, 'barbell bench press');
+      expect(ejercicios.single.ejercicio.idCatalogo, '0001');
+      await _cerrarAviso(tester);
+    });
+
+    testWidgets('con varias rutinas pregunta a cuál', (tester) async {
+      await bd.insertarRutina('Empuje');
+      final pierna = (await bd.insertarRutina('Pierna'))!;
+
+      await tester.pumpWidget(_app(bd, const PantallaCatalogo()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(CupertinoIcons.plus_circle).first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Añadir «barbell bench press»'), findsOneWidget);
+      await tester.tap(find.text('Pierna'));
+      await tester.pumpAndSettle();
+
+      expect(await bd.ejerciciosDeRutina(pierna), hasLength(1));
+      await _cerrarAviso(tester);
+    });
+
+    testWidgets('sin ninguna rutina, avisa en vez de no hacer nada', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_app(bd, const PantallaCatalogo()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(CupertinoIcons.plus_circle).first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Crea antes una rutina'), findsOneWidget);
+      await _cerrarAviso(tester);
+    });
+
+    testWidgets('el filtro por músculo trae solo los de ese objetivo', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_app(bd, const PantallaCatalogo()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Músculo'));
+      await tester.pumpAndSettle();
+      // Con su recuento, que es lo que dice si merece la pena entrar.
+      await tester.tap(find.text('Bíceps · 1'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('dumbbell curl'), findsOneWidget);
+      expect(find.text('barbell bench press'), findsNothing);
+    });
+
+    testWidgets('abrir una ficha la deja en vistos recientemente', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _app(bd, const PantallaFicha(idCatalogo: '0001')),
+      );
+      await tester.pumpAndSettle();
+
+      expect((await bd.vistosRecientes()).single.id, '0001');
+      // Y la ficha ofrece añadirlo sin salir de ahí.
+      expect(find.text('Añadir a una rutina'), findsOneWidget);
+    });
+
+    testWidgets('la ficha dice en qué rutinas ya está', (tester) async {
+      final idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarEjercicio(idRutina, 'Press', idCatalogo: '0001');
+
+      await tester.pumpWidget(
+        _app(bd, const PantallaFicha(idCatalogo: '0001')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ya está en: Empuje'), findsOneWidget);
+    });
+  });
+
+  // ── B13: peso corporal y medidas ───────────────────────────────────────────
+
+  group('medidas del cuerpo', () {
+    testWidgets('la pestaña Cuerpo ofrece registrar el peso', (tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, const PantallaProgreso()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Cuerpo'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Registrar tu peso'), findsOneWidget);
+      expect(find.text('Peso corporal'), findsOneWidget);
+      expect(find.text('Sin registros'), findsNWidgets(tiposMedida.length));
+    });
+
+    testWidgets('con el peso reciente no insiste', (tester) async {
+      await bd.registrarMedida(DateTime.now(), 'peso', 78.4);
+
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, const PantallaProgreso()));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cuerpo'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Registrar tu peso'), findsNothing);
+      expect(find.text('78,4 kg'), findsOneWidget);
+    });
+
+    testWidgets('registrar dos veces el mismo día deja un solo valor', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, const PantallaMedidas()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Registrar'));
+      await tester.pumpAndSettle();
+      // Con coma decimal, que es lo que escribe un teclado español.
+      await tester.enterText(find.byType(CupertinoTextField), '78,4');
+      await tester.tap(find.text('Guardar'));
+      await tester.pumpAndSettle();
+
+      expect((await bd.serieMedida('peso')).single.valor, closeTo(78.4, 1e-9));
+
+      await tester.tap(find.byIcon(CupertinoIcons.add));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(CupertinoTextField), '78,9');
+      await tester.tap(find.text('Guardar'));
+      await tester.pumpAndSettle();
+
+      final serie = await bd.serieMedida('peso');
+      expect(serie, hasLength(1));
+      expect(serie.single.valor, closeTo(78.9, 1e-9));
+    });
+
+    testWidgets('un texto que no es un número no guarda nada', (tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, const PantallaMedidas()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Registrar'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(CupertinoTextField), 'bastante');
+      await tester.tap(find.text('Guardar'));
+      await tester.pumpAndSettle();
+
+      expect(await bd.serieMedida('peso'), isEmpty);
+      expect(find.textContaining('Escribe un número'), findsOneWidget);
+      await _cerrarAviso(tester);
+    });
+
+    testWidgets('en libras el peso corporal también se convierte', (
+      tester,
+    ) async {
+      await bd.fijarAjuste(Claves.unidad, 'lb');
+      await bd.registrarMedida(DateTime(2026, 8, 1), 'peso', 78.4);
+
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, const PantallaMedidas()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('172,8 lb'), findsOneWidget);
+    });
+
+    testWidgets('la cintura se mide en centímetros, no en la unidad activa', (
+      tester,
+    ) async {
+      await bd.fijarAjuste(Claves.unidad, 'lb');
+      await bd.registrarMedida(DateTime(2026, 8, 1), 'cintura', 82);
+
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, const PantallaMedidas(tipo: 'cintura')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('82 cm'), findsOneWidget);
+    });
+  });
+
+  // ── B11: duplicar rutina ───────────────────────────────────────────────────
+
+  group('duplicar rutina', () {
+    testWidgets('desde el menú, copia los ejercicios y abre la copia', (
+      tester,
+    ) async {
+      final idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarEjercicio(idRutina, 'Press banca');
+      await bd.insertarEjercicio(idRutina, 'Aperturas');
+
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaRutina(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(CupertinoIcons.ellipsis));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Duplicar rutina'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Empuje (copia)'), findsOneWidget);
+      await tester.tap(find.text('Duplicar'));
+      await tester.pumpAndSettle();
+
+      final rutinas = await bd.todasLasRutinas();
+      expect(rutinas.map((r) => r.nombre), ['Empuje', 'Empuje (copia)']);
+      expect(await bd.ejerciciosDeRutina(rutinas.last.id), hasLength(2));
+    });
+  });
+  // ── B7: el aviso al terminar el descanso ───────────────────────────────────
+
+  group('aviso del descanso', () {
+    /// Anota lo que la app le pide al sistema: el pitido y la vibración van por
+    /// el mismo canal de plataforma.
+    List<String> espiarPlataforma(WidgetTester tester) {
+      final llamadas = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (llamada) async {
+          llamadas.add('${llamada.method}:${llamada.arguments}');
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      return llamadas;
+    }
+
+    testWidgets('con el sonido activado suena y vibra', (tester) async {
+      final llamadas = espiarPlataforma(tester);
+      final contenedor = ProviderContainer(
+        overrides: [bdProvider.overrideWithValue(bd)],
+      );
+      addTearDown(contenedor.dispose);
+      await contenedor.read(ajustesProvider.future);
+
+      contenedor.read(descansoProvider.notifier).avisar();
+      await tester.pump();
+
+      expect(llamadas, contains('SystemSound.play:SystemSoundType.alert'));
+      expect(
+        llamadas,
+        contains('HapticFeedback.vibrate:HapticFeedbackType.heavyImpact'),
+      );
+    });
+
+    testWidgets('con el sonido desactivado no suena, pero sí vibra', (
+      tester,
+    ) async {
+      await bd.fijarAjuste(Claves.sonidoDescanso, '0');
+
+      final llamadas = espiarPlataforma(tester);
+      final contenedor = ProviderContainer(
+        overrides: [bdProvider.overrideWithValue(bd)],
+      );
+      addTearDown(contenedor.dispose);
+      await contenedor.read(ajustesProvider.future);
+
+      contenedor.read(descansoProvider.notifier).avisar();
+      await tester.pump();
+
+      expect(
+        llamadas,
+        isNot(contains('SystemSound.play:SystemSoundType.alert')),
+      );
+      // La vibración va siempre: es lo que se nota con el móvil en el bolsillo.
+      expect(
+        llamadas,
+        contains('HapticFeedback.vibrate:HapticFeedbackType.heavyImpact'),
+      );
+    });
+  });
+
+  // ── B9: el tema forzado ────────────────────────────────────────────────────
+
+  group('tema de la app', () {
+    /// El brillo con el que la app pinta, leído desde dentro del árbol.
+    Future<Brightness> brilloDe(WidgetTester tester, AppBD bd) async {
+      late Brightness visto;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [bdProvider.overrideWithValue(bd)],
+          child: const AppGym(),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      // Cualquier punto del árbol vale: lo que se comprueba es que el ajuste
+      // llega a la raíz y de ahí a todo lo que resuelve la extensión `Paleta`.
+      final contexto = tester.element(find.byType(CupertinoPageScaffold).first);
+      visto = CupertinoTheme.brightnessOf(contexto);
+      return visto;
+    }
+
+    testWidgets('con «Sistema» sigue al móvil', (tester) async {
+      tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+      addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+
+      expect(await brilloDe(tester, bd), Brightness.light);
+    });
+
+    testWidgets('forzar oscuro tiñe la app con el sistema en claro', (
+      tester,
+    ) async {
+      tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+      addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+      await bd.fijarAjuste(Claves.tema, 'oscuro');
+
+      expect(await brilloDe(tester, bd), Brightness.dark);
+    });
+
+    testWidgets('forzar claro tiñe la app con el sistema en oscuro', (
+      tester,
+    ) async {
+      tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+      addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+      await bd.fijarAjuste(Claves.tema, 'claro');
+
+      expect(await brilloDe(tester, bd), Brightness.light);
     });
   });
 }

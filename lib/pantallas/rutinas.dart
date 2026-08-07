@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
 import '../datos/formato.dart' as formato;
+import '../datos/plantillas.dart';
 import '../estado/providers.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
@@ -15,6 +16,122 @@ import 'rutina.dart';
 
 class PantallaRutinas extends ConsumerWidget {
   const PantallaRutinas({super.key});
+
+  /// Punto de entrada del «+»: en blanco o desde una plantilla.
+  ///
+  /// Construir una rutina de ocho ejercicios a mano son ocho búsquedas en el
+  /// catálogo, así que la lista de plantillas se ofrece antes que el diálogo
+  /// del nombre y no escondida detrás de él.
+  Future<void> _nueva(BuildContext context, WidgetRef ref) async {
+    final plantillas = await cargarPlantillas();
+    if (!context.mounted) return;
+
+    final elegida = await showCupertinoModalPopup<int>(
+      context: context,
+      builder: (hoja) => CupertinoActionSheet(
+        title: const Text('Nueva rutina'),
+        message: const Text(
+          'Las plantillas se pueden editar después: son un punto de partida, '
+          'no un carril.',
+        ),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(hoja, -1),
+            child: const Text('En blanco'),
+          ),
+          for (final (indice, p) in plantillas.indexed)
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.pop(hoja, indice),
+              child: Column(
+                children: [
+                  Text(p.nombre),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${p.resumen} · '
+                    '${formato.plural(p.nEjercicios, 'ejercicio', 'ejercicios')}',
+                    textAlign: TextAlign.center,
+                    style: ui.estilo(
+                      hoja,
+                      size: t.footnote,
+                      color: hoja.textoSec,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(hoja),
+          child: const Text('Cancelar'),
+        ),
+      ),
+    );
+    if (elegida == null || !context.mounted) return;
+
+    if (elegida < 0) {
+      await _crear(context, ref);
+    } else {
+      await _desdePlantilla(context, ref, plantillas[elegida]);
+    }
+  }
+
+  /// Enseña lo que va a crear y, si se acepta, lo crea.
+  Future<void> _desdePlantilla(
+    BuildContext context,
+    WidgetRef ref,
+    Plantilla plantilla,
+  ) async {
+    final confirmado = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (dialogo) => CupertinoAlertDialog(
+        title: Text(plantilla.nombre),
+        content: Padding(
+          padding: const EdgeInsets.only(top: t.s),
+          child: Column(
+            children: [
+              Text(plantilla.descripcion, textAlign: TextAlign.center),
+              const SizedBox(height: t.m),
+              for (final r in plantilla.rutinas)
+                Text(
+                  '${r.nombre} · '
+                  '${formato.plural(r.ejercicios.length, 'ejercicio', 'ejercicios')}',
+                  textAlign: TextAlign.center,
+                  style: ui.estilo(dialogo, size: t.footnote),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(dialogo, false),
+            child: const Text('Cancelar'),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.pop(dialogo, true),
+            child: const Text('Crear'),
+          ),
+        ],
+      ),
+    );
+    if (confirmado != true || !context.mounted) return;
+
+    final creadas = await crearRutinasDesdePlantilla(
+      ref.read(bdProvider),
+      plantilla,
+    );
+    if (!context.mounted) return;
+
+    invalidarRutinas(ref);
+    if (creadas.isEmpty) {
+      ui.aviso(context, 'Ya tienes rutinas con esos nombres');
+      return;
+    }
+    if (creadas.length < plantilla.rutinas.length) {
+      ui.aviso(context, 'Algunas rutinas ya existían y no se han duplicado');
+    }
+    await abrirRutina(context, creadas.first);
+  }
 
   Future<void> _crear(BuildContext context, WidgetRef ref) async {
     final nombre = await ui.dialogoTexto(
@@ -66,7 +183,7 @@ class PantallaRutinas extends ConsumerWidget {
                 CupertinoButton(
                   padding: EdgeInsets.zero,
                   minimumSize: Size.zero,
-                  onPressed: () => _crear(context, ref),
+                  onPressed: () => _nueva(context, ref),
                   child: const Icon(CupertinoIcons.add, size: 22),
                 ),
               ],
@@ -91,7 +208,7 @@ class PantallaRutinas extends ConsumerWidget {
                       accion: ui.BotonPrincipal(
                         'Crear rutina',
                         icono: CupertinoIcons.add,
-                        onPressed: () => _crear(context, ref),
+                        onPressed: () => _nueva(context, ref),
                       ),
                     )
                   : _Lista(

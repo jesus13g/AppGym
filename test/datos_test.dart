@@ -4,6 +4,7 @@
 /// estado. Esto es lo que en el proyecto Flet no se podía hacer.
 library;
 
+import 'package:appgym/datos/ajustes.dart';
 import 'package:appgym/datos/bd.dart';
 import 'package:appgym/datos/formato.dart';
 import 'package:appgym/datos/i18n.dart';
@@ -261,12 +262,12 @@ void main() {
     );
 
     test('se guardan y se sobrescriben por clave', () async {
-      await bd.fijarAjuste(AppBD.claveEsfuerzoActivo, '1');
-      await bd.fijarAjuste(AppBD.claveEsfuerzoEscala, 'rir');
+      await bd.fijarAjuste(Claves.esfuerzoActivo, '1');
+      await bd.fijarAjuste(Claves.esfuerzoEscala, 'rir');
       expect((await bd.ajustes()).esfuerzoActivo, isTrue);
       expect((await bd.ajustes()).escala, EscalaEsfuerzo.rir);
 
-      await bd.fijarAjuste(AppBD.claveEsfuerzoEscala, 'rpe');
+      await bd.fijarAjuste(Claves.esfuerzoEscala, 'rpe');
       expect((await bd.ajustes()).escala, EscalaEsfuerzo.rpe);
     });
 
@@ -357,7 +358,7 @@ void main() {
     test('un entrenamiento sin series no se guarda', () async {
       expect(
         await bd.insertarEntrenamiento(idRutina, DateTime.now(), {}),
-        isFalse,
+        isNull,
       );
       // Un ejercicio con la lista vacía tampoco: es lo que sustituye al
       // interruptor de «incluir ejercicio».
@@ -365,7 +366,7 @@ void main() {
         await bd.insertarEntrenamiento(idRutina, DateTime.now(), {
           idEjercicio: const [],
         }),
-        isFalse,
+        isNull,
       );
       expect(await bd.contarEntrenamientosRutina(idRutina), 0);
     });
@@ -689,6 +690,450 @@ void main() {
       expect(await bd.seriesConFecha(idRutina, idEjercicio), isEmpty);
       // El entrenamiento sigue existiendo; lo que desaparece son sus series.
       expect(await bd.contarEntrenamientosRutina(idRutina), 1);
+    });
+  });
+  // ── B7 y B8: descanso, sesión viva y récords ───────────────────────────────
+
+  group('descanso por ejercicio', () {
+    test('se fija por ejercicio y se vuelve al global con null', () async {
+      final idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarEjercicio(idRutina, 'Sentadilla');
+      final id = (await bd.ejerciciosDeRutina(idRutina)).single.id;
+
+      // Sin fijar nada, el ejercicio no manda: decide el ajuste global.
+      expect(
+        (await bd.ejerciciosDeRutina(idRutina)).single.ejercicio.descansoSeg,
+        isNull,
+      );
+
+      await bd.fijarDescansoEjercicio(id, 180);
+      expect(
+        (await bd.ejerciciosDeRutina(idRutina)).single.ejercicio.descansoSeg,
+        180,
+      );
+
+      await bd.fijarDescansoEjercicio(id, null);
+      expect(
+        (await bd.ejerciciosDeRutina(idRutina)).single.ejercicio.descansoSeg,
+        isNull,
+      );
+    });
+  });
+
+  group('sesión en curso', () {
+    late int idRutina;
+    late int idEjercicio;
+
+    setUp(() async {
+      idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarEjercicio(idRutina, 'Press banca');
+      idEjercicio = (await bd.ejerciciosDeRutina(idRutina)).single.id;
+    });
+
+    test('se guarda, se lee y se descarta', () async {
+      expect(await bd.sesionActiva(), isNull);
+
+      final inicio = DateTime(2026, 8, 1, 18, 30);
+      await bd.guardarSesionActiva(idRutina, inicio, '{"a":1}');
+
+      final borrador = (await bd.sesionActiva())!;
+      expect(borrador.idRutina, idRutina);
+      expect(borrador.inicio, inicio);
+      expect(borrador.estado, '{"a":1}');
+
+      await bd.descartarSesionActiva();
+      expect(await bd.sesionActiva(), isNull);
+    });
+
+    test('como mucho hay un borrador: el nuevo pisa al anterior', () async {
+      final otra = (await bd.insertarRutina('Pierna'))!;
+      await bd.guardarSesionActiva(idRutina, DateTime(2026, 8, 1), '{}');
+      await bd.guardarSesionActiva(otra, DateTime(2026, 8, 2), '{"b":2}');
+
+      final borrador = (await bd.sesionActiva())!;
+      expect(borrador.idRutina, otra);
+      expect(borrador.estado, '{"b":2}');
+    });
+
+    test('confirmar guarda la duración y borra el borrador a la vez', () async {
+      await bd.guardarSesionActiva(idRutina, DateTime(2026, 8, 1), '{}');
+
+      final id = await bd.insertarEntrenamiento(
+        idRutina,
+        DateTime(2026, 8, 1, 19),
+        {
+          idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
+        },
+        duracionSeg: 3600,
+        descartarBorrador: true,
+      );
+
+      expect(id, isNotNull);
+      expect((await bd.sesion(id!))!.entrenamiento.duracionSeg, 3600);
+      // Si esto quedara vivo, al reabrir la app aparecería un falso «tienes una
+      // sesión en curso» sobre un entrenamiento ya guardado.
+      expect(await bd.sesionActiva(), isNull);
+    });
+
+    test('editar una sesión no le cambia la duración', () async {
+      final id = (await bd.insertarEntrenamiento(
+        idRutina,
+        DateTime(2026, 8, 1),
+        {
+          idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
+        },
+        duracionSeg: 2400,
+      ))!;
+
+      await bd.actualizarEntrenamiento(id, DateTime(2026, 8, 1), {
+        idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 65)],
+      });
+
+      expect((await bd.sesion(id))!.entrenamiento.duracionSeg, 2400);
+    });
+
+    test('borrar la rutina se lleva su borrador', () async {
+      await bd.guardarSesionActiva(idRutina, DateTime(2026, 8, 1), '{}');
+      await bd.borrarRutina(idRutina);
+      expect(await bd.sesionActiva(), isNull);
+    });
+  });
+
+  group('récords de una sesión', () {
+    late int idRutina;
+    late int idEjercicio;
+
+    setUp(() async {
+      idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarEjercicio(idRutina, 'Press banca');
+      idEjercicio = (await bd.ejerciciosDeRutina(idRutina)).single.id;
+    });
+
+    test('la primera vez cuenta como récord, sin peso anterior', () async {
+      final id = (await bd.insertarEntrenamiento(
+        idRutina,
+        DateTime(2026, 3, 1),
+        {
+          idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
+        },
+      ))!;
+
+      final records = await bd.recordsDeSesion(id);
+      expect(records.single.nombre, 'Press banca');
+      expect(records.single.pesoMaximo, 60);
+      expect(records.single.pesoAnterior, isNull);
+      // Epley: 60 × (1 + 10/30) = 80.
+      expect(records.single.mejor1RM, closeTo(80, 0.001));
+    });
+
+    test('solo hay récord si se supera lo anterior', () async {
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
+      });
+      final igual = (await bd.insertarEntrenamiento(
+        idRutina,
+        DateTime(2026, 3, 8),
+        {
+          idEjercicio: const [ValoresSerie(repeticiones: 12, peso: 60)],
+        },
+      ))!;
+      // Más repeticiones pero el mismo peso: no es récord de peso máximo.
+      expect(await bd.recordsDeSesion(igual), isEmpty);
+
+      final mejor = (await bd.insertarEntrenamiento(
+        idRutina,
+        DateTime(2026, 3, 15),
+        {
+          idEjercicio: const [ValoresSerie(repeticiones: 8, peso: 65)],
+        },
+      ))!;
+      final records = await bd.recordsDeSesion(mejor);
+      expect(records.single.pesoMaximo, 65);
+      expect(records.single.pesoAnterior, 60);
+
+      // Y no depende de cuándo se pregunte: la sesión de en medio sigue sin
+      // ser récord ahora que existe una posterior mejor.
+      expect(await bd.recordsDeSesion(igual), isEmpty);
+    });
+
+    test('el calentamiento no bate récords', () async {
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
+      });
+      final id = (await bd.insertarEntrenamiento(
+        idRutina,
+        DateTime(2026, 3, 8),
+        {
+          idEjercicio: const [
+            ValoresSerie(repeticiones: 3, peso: 100, calentamiento: true),
+            ValoresSerie(repeticiones: 10, peso: 55),
+          ],
+        },
+      ))!;
+
+      expect(await bd.recordsDeSesion(id), isEmpty);
+    });
+  });
+
+  // ── B11: duplicar rutina ───────────────────────────────────────────────────
+
+  group('duplicar rutina', () {
+    test('copia ejercicios y orden, y no el histórico', () async {
+      final idRutina = (await bd.insertarRutina('Empuje'))!;
+      for (final nombre in ['Press banca', 'Aperturas', 'Fondos']) {
+        await bd.insertarEjercicio(idRutina, nombre);
+      }
+      final ejercicios = await bd.ejerciciosDeRutina(idRutina);
+      await bd.fijarDescansoEjercicio(ejercicios.first.id, 180);
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        ejercicios.first.id: const [ValoresSerie(repeticiones: 10, peso: 60)],
+      });
+
+      final copia = (await bd.duplicarRutina(idRutina))!;
+      expect((await bd.rutina(copia))!.nombre, 'Empuje (copia)');
+
+      final copiados = await bd.ejerciciosDeRutina(copia);
+      expect(copiados.map((e) => e.nombre), [
+        'Press banca',
+        'Aperturas',
+        'Fondos',
+      ]);
+      expect(copiados.map((e) => e.ejercicio.orden), [0, 1, 2]);
+      // El descanso propio viaja con el ejercicio; el histórico no.
+      expect(copiados.first.ejercicio.descansoSeg, 180);
+      expect(await bd.contarEntrenamientosRutina(copia), 0);
+      // Y la original se queda como estaba.
+      expect(await bd.contarEntrenamientosRutina(idRutina), 1);
+    });
+
+    test('no duplica si el nombre propuesto ya existe', () async {
+      final idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarRutina('Empuje B');
+
+      expect(
+        await bd.duplicarRutina(idRutina, nuevoNombre: 'Empuje B'),
+        isNull,
+      );
+      expect(await bd.todasLasRutinas(), hasLength(2));
+    });
+  });
+
+  // ── B12: favoritos, vistos y filtro por músculo ────────────────────────────
+
+  group('favoritos y vistos', () {
+    setUp(() => sembrarCatalogo(bd, datos: _catalogoFalso));
+
+    test('marcar y desmarcar un favorito', () async {
+      await bd.marcarFavorito('0001', true);
+      expect(await bd.idsFavoritos(), {'0001'});
+      expect((await bd.fichasFavoritas()).single.nombre, 'barbell bench press');
+
+      // Marcar dos veces no duplica ni falla.
+      await bd.marcarFavorito('0001', true);
+      expect(await bd.fichasFavoritas(), hasLength(1));
+
+      await bd.marcarFavorito('0001', false);
+      expect(await bd.fichasFavoritas(), isEmpty);
+    });
+
+    test('resembrar el catálogo no se lleva los favoritos', () async {
+      await bd.marcarFavorito('0002', true);
+      // Es lo que pasa cuando cambia el dataset: sin la clave foránea puesta,
+      // el borrado y la reinserción del catálogo no tocan los favoritos.
+      await sembrarCatalogo(bd, datos: _catalogoFalso, forzar: true);
+      expect(await bd.idsFavoritos(), {'0002'});
+    });
+
+    test('un favorito que ya no está en el catálogo no se pinta', () async {
+      await bd.marcarFavorito('9999', true);
+      expect(await bd.idsFavoritos(), {'9999'});
+      expect(await bd.fichasFavoritas(), isEmpty);
+    });
+
+    test('los vistos se quedan en los más recientes', () async {
+      await bd.registrarVisto('0001', conservar: 1);
+      await bd.registrarVisto('0002', conservar: 1);
+
+      final vistos = await bd.vistosRecientes();
+      expect(vistos.single.id, '0002');
+    });
+
+    test('volver a ver una ficha la sube, sin duplicarla', () async {
+      await bd.registrarVisto('0001');
+      await bd.registrarVisto('0002');
+      await bd.registrarVisto('0001');
+
+      final vistos = await bd.vistosRecientes();
+      expect(vistos.map((v) => v.id), ['0001', '0002']);
+    });
+
+    test('buscarCatalogo filtra por músculo objetivo', () async {
+      expect(
+        (await bd.buscarCatalogo(target: 'biceps')).single.nombre,
+        'dumbbell curl',
+      );
+      expect(await bd.buscarCatalogo(target: 'glutes'), isEmpty);
+      // Y se combina con el resto de filtros.
+      expect(
+        await bd.buscarCatalogo(target: 'biceps', equipment: 'barbell'),
+        isEmpty,
+      );
+    });
+
+    test('la paginación sigue funcionando con el filtro por músculo', () async {
+      // 45 fichas del mismo objetivo: más de una página de 40.
+      await sembrarCatalogo(
+        bd,
+        datos: [
+          for (final numero in [
+            for (var i = 0; i < 45; i++) i.toString().padLeft(4, '0'),
+          ])
+            EjercicioJson(
+              id: 'x$numero',
+              nombre: 'curl $numero',
+              bodyPart: 'upper arms',
+              equipment: 'dumbbell',
+              target: 'biceps',
+              muscleGroup: 'upper arms',
+              secondaryMuscles: const [],
+              pasos: const [],
+              image: '',
+              gif: '',
+            ),
+        ],
+        forzar: true,
+      );
+
+      final primera = await bd.buscarCatalogo(target: 'biceps');
+      expect(primera, hasLength(40));
+
+      final segunda = await bd.buscarCatalogo(
+        target: 'biceps',
+        desplazamiento: 40,
+      );
+      expect(segunda, hasLength(5));
+      // Sin solaparse con la primera tanda.
+      expect({
+        for (final f in [...primera, ...segunda]) f.id,
+      }, hasLength(45));
+    });
+
+    test('los objetivos vienen con su recuento y ordenados', () async {
+      expect(await bd.objetivosDisponibles(), [
+        ('biceps', 1),
+        ('pectorals', 1),
+      ]);
+    });
+
+    test('rutinasQueContienen dice dónde está ya un ejercicio', () async {
+      final empuje = (await bd.insertarRutina('Empuje'))!;
+      final full = (await bd.insertarRutina('Full body'))!;
+      await bd.insertarEjercicio(empuje, 'Press', idCatalogo: '0001');
+      await bd.insertarEjercicio(full, 'Press', idCatalogo: '0001');
+      await bd.insertarEjercicio(full, 'Curl', idCatalogo: '0002');
+
+      expect((await bd.rutinasQueContienen('0001')).map((r) => r.nombre), [
+        'Empuje',
+        'Full body',
+      ]);
+      expect((await bd.rutinasQueContienen('0002')).map((r) => r.nombre), [
+        'Full body',
+      ]);
+    });
+  });
+
+  // ── B13: medidas del cuerpo ────────────────────────────────────────────────
+
+  group('medidas', () {
+    test('un valor por día y tipo: el último manda', () async {
+      await bd.registrarMedida(DateTime(2026, 8, 1, 8), 'peso', 78.4);
+      await bd.registrarMedida(DateTime(2026, 8, 1, 21), 'peso', 78.9);
+
+      final serie = await bd.serieMedida('peso');
+      expect(serie, hasLength(1));
+      expect(serie.single.valor, 78.9);
+      // La hora se descarta: la fecha guardada es el día a medianoche.
+      expect(serie.single.fecha, DateTime(2026, 8, 1));
+    });
+
+    test('tipos distintos el mismo día conviven', () async {
+      await bd.registrarMedida(DateTime(2026, 8, 1), 'peso', 78.4);
+      await bd.registrarMedida(DateTime(2026, 8, 1), 'cintura', 82);
+
+      expect(await bd.serieMedida('peso'), hasLength(1));
+      expect(await bd.serieMedida('cintura'), hasLength(1));
+      expect(await bd.todasLasMedidas(), hasLength(2));
+    });
+
+    test('la serie sale en orden y la última es la más reciente', () async {
+      await bd.registrarMedida(DateTime(2026, 8, 3), 'peso', 78);
+      await bd.registrarMedida(DateTime(2026, 8, 1), 'peso', 79);
+      await bd.registrarMedida(DateTime(2026, 8, 2), 'peso', 78.5);
+
+      expect((await bd.serieMedida('peso')).map((m) => m.valor), [
+        79,
+        78.5,
+        78,
+      ]);
+      expect((await bd.ultimaMedida('peso'))!.valor, 78);
+      expect(await bd.ultimaMedida('brazo'), isNull);
+    });
+
+    test('el rango acota la serie', () async {
+      for (var dia = 1; dia <= 5; dia++) {
+        await bd.registrarMedida(
+          DateTime(2026, 8, dia),
+          'peso',
+          78 + dia.toDouble(),
+        );
+      }
+      final acotada = await bd.serieMedida(
+        'peso',
+        desde: DateTime(2026, 8, 2),
+        hasta: DateTime(2026, 8, 4),
+      );
+      expect(acotada.map((m) => m.fecha.day), [2, 3]);
+    });
+
+    test('borrar quita solo ese día y tipo', () async {
+      await bd.registrarMedida(DateTime(2026, 8, 1), 'peso', 78);
+      await bd.registrarMedida(DateTime(2026, 8, 1), 'cintura', 82);
+      await bd.registrarMedida(DateTime(2026, 8, 2), 'peso', 79);
+
+      await bd.borrarMedida(DateTime(2026, 8, 1, 15), 'peso');
+
+      expect((await bd.serieMedida('peso')).map((m) => m.fecha.day), [2]);
+      expect(await bd.serieMedida('cintura'), hasLength(1));
+    });
+  });
+
+  // ── B10: borrar todos los datos ────────────────────────────────────────────
+
+  group('borrar todos los datos', () {
+    test('se lleva lo del usuario y conserva el catálogo', () async {
+      await sembrarCatalogo(bd, datos: _catalogoFalso);
+      final idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarEjercicio(idRutina, 'Press', idCatalogo: '0001');
+      final idEjercicio = (await bd.ejerciciosDeRutina(idRutina)).single.id;
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 8, 1), {
+        idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
+      });
+      await bd.registrarMedida(DateTime(2026, 8, 1), 'peso', 78);
+      await bd.marcarFavorito('0001', true);
+      await bd.registrarVisto('0002');
+      await bd.guardarSesionActiva(idRutina, DateTime(2026, 8, 1), '{}');
+      await bd.fijarAjuste(Claves.unidad, 'lb');
+
+      await bd.borrarTodosLosDatos();
+
+      expect(await bd.todasLasRutinas(), isEmpty);
+      expect(await bd.todasLasMedidas(), isEmpty);
+      expect(await bd.idsFavoritos(), isEmpty);
+      expect(await bd.vistosRecientes(), isEmpty);
+      expect(await bd.sesionActiva(), isNull);
+      expect((await bd.ajustes()).unidad, Unidad.kg);
+      // El catálogo es regenerable pero no hay motivo para tirarlo.
+      expect(await bd.contarCatalogo(), 2);
     });
   });
 }

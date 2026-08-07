@@ -65,6 +65,64 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
     invalidarRutina(ref, idRutina);
   }
 
+  /// Menú de la rutina: renombrar y duplicar.
+  Future<void> _menu(BuildContext context, String nombre) async {
+    final accion = await showCupertinoModalPopup<String>(
+      context: context,
+      builder: (hoja) => CupertinoActionSheet(
+        title: Text(nombre),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(hoja, 'renombrar'),
+            child: const Text('Renombrar'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(hoja, 'duplicar'),
+            child: const Text('Duplicar rutina'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(hoja),
+          child: const Text('Cancelar'),
+        ),
+      ),
+    );
+    if (accion == null || !context.mounted) return;
+
+    if (accion == 'renombrar') {
+      await _renombrar(context, ref, nombre);
+    } else {
+      await _duplicar(context, nombre);
+    }
+  }
+
+  /// Copia la rutina con sus ejercicios, sin el histórico.
+  Future<void> _duplicar(BuildContext context, String nombre) async {
+    final propuesto = await ui.dialogoTexto(
+      context,
+      titulo: 'Duplicar rutina',
+      marcador: 'Nombre de la copia',
+      mensaje:
+          'Se copian los ejercicios y su orden. Las sesiones no: la rutina '
+          'nueva empieza sin histórico.',
+      valor: '$nombre (copia)',
+      etiquetaAceptar: 'Duplicar',
+    );
+    if (propuesto == null || !context.mounted) return;
+
+    final copia = await ref
+        .read(bdProvider)
+        .duplicarRutina(idRutina, nuevoNombre: propuesto);
+    if (!context.mounted) return;
+
+    if (copia == null) {
+      ui.aviso(context, 'Ya existe una rutina llamada «$propuesto»');
+      return;
+    }
+    invalidarRutinas(ref);
+    await abrirRutina(context, copia);
+  }
+
   Future<void> _borrarEjercicio(WidgetRef ref, int idEjercicio) async {
     await ref.read(bdProvider).borrarEjercicio(idRutina, idEjercicio);
     invalidarRutina(ref, idRutina);
@@ -198,8 +256,8 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
                       CupertinoButton(
                         padding: EdgeInsets.zero,
                         minimumSize: Size.zero,
-                        onPressed: () => _renombrar(context, ref, nombre),
-                        child: const Icon(CupertinoIcons.pencil, size: 20),
+                        onPressed: () => _menu(context, nombre),
+                        child: const Icon(CupertinoIcons.ellipsis, size: 20),
                       ),
                       const SizedBox(width: t.m),
                       CupertinoButton(
@@ -325,12 +383,32 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.all(t.l),
-                child: ui.BotonPrincipal(
-                  'Empezar entrenamiento',
-                  icono: CupertinoIcons.play_fill,
-                  onPressed: lista.isEmpty
-                      ? null
-                      : () => abrirEntrenar(context, idRutina),
+                child: Column(
+                  children: [
+                    ui.BotonPrincipal(
+                      'Empezar entrenamiento',
+                      icono: CupertinoIcons.play_fill,
+                      onPressed: lista.isEmpty
+                          ? null
+                          : () => abrirEntrenar(context, idRutina),
+                    ),
+                    // El formulario de siempre, para el día que uno se acuerda
+                    // de la app al día siguiente. Va debajo y sin relleno
+                    // porque es la salida secundaria, no la principal.
+                    CupertinoButton(
+                      onPressed: lista.isEmpty
+                          ? null
+                          : () => abrirRegistrarAnterior(context, idRutina),
+                      child: Text(
+                        'Registrar una sesión anterior',
+                        style: ui.estilo(
+                          context,
+                          size: t.subhead,
+                          color: context.acento,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

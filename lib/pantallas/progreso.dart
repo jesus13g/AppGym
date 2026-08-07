@@ -8,11 +8,13 @@ library;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../datos/bd.dart';
 import '../datos/formato.dart' as formato;
 import '../estado/providers.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
+import 'medidas.dart';
 import 'resultado_rutina.dart';
 
 class PantallaProgreso extends ConsumerStatefulWidget {
@@ -44,6 +46,8 @@ class _PantallaProgresoState extends ConsumerState<PantallaProgreso> {
                 groupValue: _pestana,
                 onValueChanged: (valor) =>
                     setState(() => _pestana = valor ?? 0),
+                // Tres opciones caben; con una cuarta el texto empezaría a
+                // apretarse en un móvil estrecho.
                 children: const {
                   0: Padding(
                     padding: EdgeInsets.symmetric(vertical: t.xs),
@@ -53,18 +57,24 @@ class _PantallaProgresoState extends ConsumerState<PantallaProgreso> {
                     padding: EdgeInsets.symmetric(vertical: t.xs),
                     child: Text('Calendario'),
                   ),
+                  2: Padding(
+                    padding: EdgeInsets.symmetric(vertical: t.xs),
+                    child: Text('Cuerpo'),
+                  ),
                 },
               ),
             ),
           ),
         ),
         SliverToBoxAdapter(
-          child: _pestana == 0
-              ? const _Resumen()
-              : _Calendario(
-                  mes: _mes,
-                  onMes: (nuevo) => setState(() => _mes = nuevo),
-                ),
+          child: switch (_pestana) {
+            0 => const _Resumen(),
+            1 => _Calendario(
+              mes: _mes,
+              onMes: (nuevo) => setState(() => _mes = nuevo),
+            ),
+            _ => const _Cuerpo(),
+          },
         ),
         const SliverToBoxAdapter(child: SizedBox(height: t.xxl)),
       ],
@@ -135,6 +145,85 @@ class _Resumen extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+}
+
+// ── Cuerpo ───────────────────────────────────────────────────────────────────
+
+/// Las medidas del cuerpo, con el peso corporal delante.
+///
+/// Si hace más de una semana que no se registra el peso, lo ofrece de un toque:
+/// una serie de peso corporal con huecos de un mes no dice gran cosa.
+class _Cuerpo extends ConsumerWidget {
+  const _Cuerpo();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
+    final ultimoPeso = ref.watch(ultimaMedidaProvider('peso')).value;
+    final dias = ultimoPeso == null
+        ? null
+        : DateTime.now().difference(ultimoPeso.fecha).inDays;
+
+    return Column(
+      children: [
+        if (dias == null || dias >= diasAvisoPeso)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: t.l, vertical: t.s),
+            child: ui.BotonPrincipal(
+              ultimoPeso == null
+                  ? 'Registrar tu peso'
+                  : 'Actualizar tu peso (${formato.hace(ultimoPeso.fecha).toLowerCase()})',
+              icono: CupertinoIcons.plus_circle,
+              onPressed: () => registrarMedida(context, ref, 'peso'),
+            ),
+          ),
+        ui.Grupo(
+          cabecera: 'Medidas',
+          pie:
+              'El peso corporal es el contexto de las cargas: subir en press '
+              'perdiendo peso no es lo mismo que subir ganándolo.',
+          filas: [
+            for (final (clave, nombre, _) in tiposMedida)
+              _FilaMedida(clave: clave, nombre: nombre, ajustes: ajustes),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _FilaMedida extends ConsumerWidget {
+  const _FilaMedida({
+    required this.clave,
+    required this.nombre,
+    required this.ajustes,
+  });
+
+  final String clave;
+  final String nombre;
+  final Ajustes ajustes;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ultima = ref.watch(ultimaMedidaProvider(clave)).value;
+
+    return CupertinoListTile(
+      backgroundColor: context.tarjeta,
+      title: Text(nombre, style: ui.estilo(context)),
+      subtitle: Text(
+        ultima == null ? 'Sin registros' : formato.hace(ultima.fecha),
+        style: ui.estilo(context, size: t.footnote, color: context.textoSec),
+      ),
+      additionalInfo: ultima == null
+          ? null
+          : Text(
+              valorMedida(ultima.valor, clave, ajustes),
+              style: ui.estilo(context, weight: t.semibold),
+            ),
+      trailing: const CupertinoListTileChevron(),
+      onTap: () => abrirMedidas(context, tipo: clave),
     );
   }
 }

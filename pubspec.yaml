@@ -44,6 +44,18 @@ dependencies:
   # Gráfico de evolución del peso
   fl_chart: ^1.2.0
 
+  # Copia de seguridad: exportar comparte el fichero (Drive, correo, Archivos) e
+  # importar lo elige del almacenamiento del móvil. Sin ellos la única salida
+  # sería escribir en el directorio de documentos y cantar la ruta, que en
+  # Android no hay quien alcance: una copia que el usuario no sabe dónde está no
+  # es una copia de seguridad.
+  #
+  # `share_plus` se queda en la 12 a propósito: la 13 exige win32 ^6 y
+  # `file_picker` pide win32 ^5, así que juntas no resuelven. Solo afecta al
+  # escritorio de Windows, que aquí no se compila.
+  file_picker: ^11.0.0
+  share_plus: ^12.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -65,3 +77,7 @@ flutter:
     # Catálogo de 1.324 ejercicios (datos MIT de hasaneyldrm/exercises-dataset).
     # Las imágenes y GIFs NO se empaquetan: son © Gym visual y se descargan.
     - assets/ejercicios.es.json
+
+    # Rutinas predefinidas. Referencian el catálogo por id; hay un test que
+    # comprueba que todos esos ids siguen existiendo.
+    - assets/plantillas.json

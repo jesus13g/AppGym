@@ -17,6 +17,7 @@ import '../estado/providers.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
+import 'anadir_a_rutina.dart';
 import 'ficha.dart';
 
 /// Resultados por tanda. Nunca se pintan los 1.324 de golpe.
@@ -66,6 +67,7 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
   String _texto = '';
   String? _zona;
   String? _equipo;
+  String? _objetivo;
   int _desplazamiento = 0;
   bool _hayMas = true;
   bool _cargando = false;
@@ -126,6 +128,7 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
           texto: _texto.isEmpty ? null : i18n.normalizar(_texto),
           bodyPart: _zona,
           equipment: _equipo,
+          target: _objetivo,
           limite: _pagina,
           desplazamiento: _desplazamiento,
         );
@@ -223,6 +226,35 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
     await _cargar(reiniciar: true);
   }
 
+  /// Filtro por músculo objetivo: la clasificación más fina del catálogo.
+  ///
+  /// Va con su recuento («Bíceps · 151») porque es lo que dice de antemano si
+  /// merece la pena entrar en el filtro.
+  Future<void> _elegirObjetivo() async {
+    final disponibles = await ref.read(objetivosProvider.future);
+    if (!mounted) return;
+
+    final elegido = await ui.elegirEnHoja<String?>(
+      context,
+      titulo: 'Músculo objetivo',
+      actual: _objetivo,
+      opciones: [
+        (null, 'Todos'),
+        for (final (valor, cuantos) in disponibles)
+          (valor, '${i18n.musculo(valor)} · $cuantos'),
+      ],
+    );
+    if (elegido == null || !mounted) return;
+
+    setState(() => _objetivo = elegido.$1);
+    await _cargar(reiniciar: true);
+  }
+
+  /// True cuando no hay ni búsqueda ni filtros: es el estado inicial, donde en
+  /// vez de los 1.324 de golpe se enseñan los favoritos y lo visto hace poco.
+  bool get _sinFiltros =>
+      _texto.isEmpty && _zona == null && _equipo == null && _objetivo == null;
+
   @override
   Widget build(BuildContext context) {
     final titulo = _esModal ? 'Añadir ejercicio' : 'Ejercicios';
@@ -273,12 +305,14 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
             _Filtros(
               zona: _zona,
               equipo: _equipo,
+              objetivo: _objetivo,
               contador: _contador,
               onZona: (valor) {
                 setState(() => _zona = valor);
                 _cargar(reiniciar: true);
               },
               onEquipo: _elegirEquipo,
+              onObjetivo: _elegirObjetivo,
             ),
             Expanded(child: _lista()),
           ],
@@ -307,65 +341,88 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
 
     // Una fila extra al final para ofrecer el ejercicio personalizado.
     final extra = _esModal && !_hayMas ? 1 : 0;
+    // En el estado inicial de la pestaña, encima de todo van los favoritos y lo
+    // visto hace poco. Antes esta pantalla arrancaba con el buscador y nada más.
+    final cabecera = !_esModal && _sinFiltros ? 1 : 0;
 
     return ListView.separated(
       controller: _scroll,
       padding: const EdgeInsets.only(bottom: t.xxl),
-      itemCount: _resultados.length + extra,
-      separatorBuilder: (context, indice) => Padding(
-        padding: const EdgeInsets.only(left: 76),
-        child: Container(height: 0.5, color: context.separador),
-      ),
-      itemBuilder: (context, indice) {
-        if (indice >= _resultados.length) return _filaPersonalizado();
-
-        final ficha = _resultados[indice];
-        final anadido = _yaEnRutina.contains(ficha.id);
-
-        return CupertinoListTile(
-          backgroundColor: context.tarjeta,
-          leading: ui.Miniatura(media.resolver(ficha.image)),
-          leadingSize: 48,
-          title: Text(ficha.nombre, style: ui.estilo(context)),
-          subtitle: Text(
-            formato.subtituloCatalogo(ficha),
-            style: ui.estilo(
-              context,
-              size: t.footnote,
-              color: context.textoSec,
+      itemCount: cabecera + _resultados.length + extra,
+      separatorBuilder: (context, indice) => indice < cabecera
+          ? const SizedBox.shrink()
+          : Padding(
+              padding: const EdgeInsets.only(left: 76),
+              child: Container(height: 0.5, color: context.separador),
             ),
-          ),
-          trailing: _esModal
-              ? Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // El icono ⓘ abre la ficha sin añadir nada.
-                    CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      minimumSize: Size.zero,
-                      onPressed: () => abrirFicha(context, ficha.id),
-                      child: Icon(
-                        CupertinoIcons.info_circle,
-                        size: 20,
-                        color: context.textoTer,
-                      ),
-                    ),
-                    const SizedBox(width: t.s),
-                    Icon(
-                      anadido
-                          ? CupertinoIcons.check_mark_circled_solid
-                          : CupertinoIcons.plus_circle,
-                      color: anadido ? context.exito : context.acento,
-                      size: 24,
-                    ),
-                  ],
-                )
-              : const CupertinoListTileChevron(),
-          onTap: _esModal
-              ? () => _anadir(ficha)
-              : () => abrirFicha(context, ficha.id),
-        );
+      itemBuilder: (context, posicion) {
+        if (posicion < cabecera) return const _Destacados();
+
+        final indice = posicion - cabecera;
+        if (indice >= _resultados.length) return _filaPersonalizado();
+        return _fila(_resultados[indice]);
       },
+    );
+  }
+
+  Widget _fila(FichaCatalogo ficha) {
+    final anadido = _yaEnRutina.contains(ficha.id);
+
+    return CupertinoListTile(
+      backgroundColor: context.tarjeta,
+      leading: ui.Miniatura(media.resolver(ficha.image)),
+      leadingSize: 48,
+      title: Text(ficha.nombre, style: ui.estilo(context)),
+      subtitle: Text(
+        formato.subtituloCatalogo(ficha),
+        style: ui.estilo(context, size: t.footnote, color: context.textoSec),
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: _esModal
+            ? [
+                // El icono ⓘ abre la ficha sin añadir nada.
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  onPressed: () => abrirFicha(context, ficha.id),
+                  child: Icon(
+                    CupertinoIcons.info_circle,
+                    size: 20,
+                    color: context.textoTer,
+                  ),
+                ),
+                const SizedBox(width: t.s),
+                Icon(
+                  anadido
+                      ? CupertinoIcons.check_mark_circled_solid
+                      : CupertinoIcons.plus_circle,
+                  color: anadido ? context.exito : context.acento,
+                  size: 24,
+                ),
+              ]
+            : [
+                // Fuera del modal, la fila lleva su estrella y su «+»: añadir a
+                // una rutina sin salir de la pestaña Ejercicios es justo lo que
+                // faltaba. El chevron sobra, la fila entera sigue abriendo la
+                // ficha.
+                BotonFavorito(idCatalogo: ficha.id, tamano: 20),
+                const SizedBox(width: t.s),
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  onPressed: () => anadirARutina(context, ref, ficha),
+                  child: Icon(
+                    CupertinoIcons.plus_circle,
+                    size: 22,
+                    color: context.acento,
+                  ),
+                ),
+              ],
+      ),
+      onTap: _esModal
+          ? () => _anadir(ficha)
+          : () => abrirFicha(context, ficha.id),
     );
   }
 
@@ -398,17 +455,99 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
   );
 }
 
+/// Favoritos y vistos recientemente, encima del catálogo.
+///
+/// Solo aparece sin búsqueda ni filtros: en cuanto se escribe algo, lo que
+/// interesa son los resultados. Cada sección se calla si está vacía, de modo
+/// que una instalación recién estrenada ve exactamente lo de antes.
+class _Destacados extends ConsumerWidget {
+  const _Destacados();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final favoritos = ref.watch(favoritosProvider).value ?? const [];
+    final vistos = ref.watch(vistosProvider).value ?? const [];
+    if (favoritos.isEmpty && vistos.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      children: [
+        if (favoritos.isNotEmpty)
+          _seccion(context, ref, 'Favoritos', favoritos),
+        if (vistos.isNotEmpty)
+          _seccion(context, ref, 'Vistos recientemente', vistos),
+        Padding(
+          padding: const EdgeInsets.only(
+            left: t.l,
+            right: t.l,
+            top: t.m,
+            bottom: t.xs,
+          ),
+          child: Text(
+            'TODOS LOS EJERCICIOS',
+            style: ui.estilo(
+              context,
+              size: t.footnote,
+              color: context.textoSec,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _seccion(
+    BuildContext context,
+    WidgetRef ref,
+    String cabecera,
+    List<FichaCatalogo> fichas,
+  ) => ui.Grupo(
+    cabecera: cabecera,
+    filas: [
+      for (final ficha in fichas)
+        CupertinoListTile(
+          backgroundColor: context.tarjeta,
+          leading: ui.Miniatura(media.resolver(ficha.image), tamano: 40),
+          leadingSize: 40,
+          title: Text(ficha.nombre, style: ui.estilo(context)),
+          subtitle: Text(
+            formato.subtituloCatalogo(ficha),
+            style: ui.estilo(
+              context,
+              size: t.footnote,
+              color: context.textoSec,
+            ),
+          ),
+          trailing: CupertinoButton(
+            padding: EdgeInsets.zero,
+            minimumSize: Size.zero,
+            onPressed: () => anadirARutina(context, ref, ficha),
+            child: Icon(
+              CupertinoIcons.plus_circle,
+              size: 22,
+              color: context.acento,
+            ),
+          ),
+          onTap: () => abrirFicha(context, ficha.id),
+        ),
+    ],
+  );
+}
+
 class _Filtros extends StatelessWidget {
   const _Filtros({
     required this.zona,
     required this.equipo,
+    required this.objetivo,
     required this.contador,
     required this.onZona,
     required this.onEquipo,
+    required this.onObjetivo,
   });
 
   final String? zona;
   final String? equipo;
+  final String? objetivo;
+  final VoidCallback onObjetivo;
   final String contador;
   final ValueChanged<String?> onZona;
   final VoidCallback onEquipo;
@@ -442,39 +581,55 @@ class _Filtros extends StatelessWidget {
         const SizedBox(height: t.s),
         Row(
           children: [
-            GestureDetector(
-              onTap: onEquipo,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    equipo == null ? 'Equipamiento' : i18n.equipamiento(equipo),
-                    style: ui.estilo(
-                      context,
-                      size: t.footnote,
-                      color: context.acento,
-                    ),
-                  ),
-                  const SizedBox(width: t.xs),
-                  Icon(
-                    CupertinoIcons.chevron_down,
-                    size: 12,
-                    color: context.acento,
-                  ),
-                ],
-              ),
+            _desplegable(
+              context,
+              equipo == null ? 'Equipamiento' : i18n.equipamiento(equipo),
+              onEquipo,
+            ),
+            const SizedBox(width: t.l),
+            _desplegable(
+              context,
+              objetivo == null ? 'Músculo' : i18n.musculo(objetivo),
+              onObjetivo,
             ),
             const Spacer(),
-            Text(
-              contador,
-              style: ui.estilo(
-                context,
-                size: t.footnote,
-                color: context.textoSec,
+            // El contador se encoge antes que los filtros: es informativo y
+            // «1.324+ ejercicios» junto a dos desplegables no cabe en un móvil.
+            Flexible(
+              child: Text(
+                contador,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+                style: ui.estilo(
+                  context,
+                  size: t.footnote,
+                  color: context.textoSec,
+                ),
               ),
             ),
           ],
         ),
+      ],
+    ),
+  );
+
+  /// Etiqueta con chevron que abre una hoja de opciones.
+  Widget _desplegable(
+    BuildContext context,
+    String etiqueta,
+    VoidCallback onTap,
+  ) => GestureDetector(
+    onTap: onTap,
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          etiqueta,
+          style: ui.estilo(context, size: t.footnote, color: context.acento),
+        ),
+        const SizedBox(width: t.xs),
+        Icon(CupertinoIcons.chevron_down, size: 12, color: context.acento),
       ],
     ),
   );

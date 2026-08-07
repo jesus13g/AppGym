@@ -12,7 +12,7 @@ flutter pub get
 dart run build_runner build     # genera bd.g.dart; obligatorio tras clonar
 flutter run                     # app en un dispositivo o emulador
 flutter analyze                 # objetivo permanente: 0 issues
-flutter test                    # 66 tests: datos, pantallas y migraciones
+flutter test                    # 176 tests: datos, pantallas, migraciones, copia y ajustes
 dart format lib test
 flutter build apk --release     # APK local (necesita SDK de Android y Java 17)
 ```
@@ -47,27 +47,31 @@ el estado. Interfaz **solo Cupertino**: no se importa `material.dart` en ningún
 
 ```
 lib/
-├── main.dart          CupertinoApp, localización en español
-├── datos/             bd.dart · esquemas · respaldo · consultas · i18n · semilla · media · formato
-├── estado/            providers.dart
+├── main.dart          CupertinoApp, tema (claro/oscuro/sistema), localización
+├── datos/             bd · esquemas · ajustes · copia · respaldo · borrador · plantillas
+│                      consultas · i18n · semilla · media · reloj · formato
+├── estado/            providers.dart · descanso.dart
 ├── tema/              tokens.dart · ui.dart
-└── pantallas/         raiz (las tres pestañas) + doce pantallas
-assets/                ejercicios.es.json, el catálogo
+└── pantallas/         raiz (las tres pestañas) + dieciséis más
+assets/                ejercicios.es.json (el catálogo) · plantillas.json
 drift_schemas/         un JSON por versión del esquema, para los tests de migración
-test/                  datos · pantallas · migraciones · esquemas/ (generado)
+test/                  datos · pantallas · migraciones · copia · ajustes · plantillas
+                       esquemas/ (generado)
 docs/                  especificaciones.md, el trabajo previsto
 ```
 
 `catalogo.dart` sirve dos destinos con la misma pantalla: la pestaña Ejercicios y el modal de
-añadir a una rutina (`abrirAnadirEjercicio`). Por eso hay doce ficheros de pantalla y trece
-destinos navegables.
+añadir a una rutina (`abrirAnadirEjercicio`). `entrenar.dart` hace lo propio con su `Modo`: la
+sesión viva y el formulario de siempre.
 
-**`docs/especificaciones.md`** recoge lo que está previsto construir. Su **bloque A (limitaciones
-del modelo de datos) ya está implementado**: series independientes por ejercicio, editar y borrar
-entrenamientos, elegir la fecha, ordenar los ejercicios, notas y RPE, y varias rutinas el mismo día.
-Queda pendiente el resto: temporizador de descanso, sesión viva, la pantalla de ajustes completa,
-copia de seguridad, métricas de 1RM y el mapa muscular. Antes de proponer una funcionalidad nueva,
-mira si ya está ahí especificada — incluye el esquema de datos final y el orden de las migraciones.
+**`docs/especificaciones.md`** recoge lo que está previsto construir. Sus **bloques A
+(limitaciones del modelo de datos) y B (uso diario) ya están implementados**: series
+independientes, editar y borrar entrenamientos, elegir la fecha, orden, notas y RPE, varias
+rutinas el mismo día, temporizador de descanso, sesión viva, la pantalla de Ajustes completa,
+copia de seguridad, plantillas, favoritos y medidas del cuerpo. Queda **C** (1RM, racha y días
+pulsables) y **D** (mapa muscular). Antes de proponer una funcionalidad nueva, mira si ya está
+ahí especificada — incluye el esquema de datos final, el orden de las migraciones y las
+desviaciones de lo que se implementó.
 
 ### Navegación: pestañas con pila propia
 
@@ -115,7 +119,7 @@ resueltos.**
 `PRAGMA foreign_keys = ON` se activa en `beforeOpen`. Sin él SQLite ignora los `ON DELETE CASCADE` y
 borrar una rutina dejaría sus series huérfanas.
 
-**Migraciones:** `schemaVersion` va por 4. Todo cambio de esquema exige subirlo y añadir el paso en
+**Migraciones:** `schemaVersion` va por 6. Todo cambio de esquema exige subirlo y añadir el paso en
 `MigrationStrategy`, o las bases de datos existentes se romperán. El flujo completo, tras tocar una
 tabla:
 
@@ -141,7 +145,21 @@ transforma datos. La copia se hace con la base todavía cerrada, desde el callba
 `drift_flutter`, porque con la conexión abierta el WAL dejaría el duplicado a medias.
 
 Las preferencias viven en la tabla `ajustes`, de clave/valor, para que entren en la misma copia de
-seguridad que el resto de los datos.
+seguridad que el resto de los datos. Quien las interpreta es `datos/ajustes.dart`: ahí están las
+claves, los valores por defecto y la conversión de unidades. `bd.ajustes()` solo trae las filas.
+
+**El peso se guarda siempre en kilogramos.** Las libras son solo presentación: todo peso pasa por
+`formato.peso(kilos, ajustes)` antes de pintarse, y el selector del registro convierte de vuelta
+con `ajustes.aKilos`. En cuanto una pantalla escriba `'$valor kg'` a mano, cambiar de unidad dejará
+de funcionar justo ahí.
+
+**Nada que cronometre debe llamar a `DateTime.now()`.** El descanso y el cronómetro de la sesión
+viva usan `datos/reloj.dart`, que es la costura que los tests adelantan: `tester.pump` mueve los
+`Timer`, no el calendario.
+
+**Dos tablas van sin clave foránea a propósito**, `favoritos` y `vistos`: `sembrarCatalogo` borra y
+reinserta el catálogo entero cuando cambia el dataset, y con la clave puesta esa operación fallaría
+en cuanto hubiera un favorito guardado. Hay un test que lo fija.
 
 ### Catálogo de ejercicios
 
@@ -192,8 +210,8 @@ literales salvo en `coloresRutina`, que identifica rutinas y debe ser estable en
 
 En `ui.dart` solo está lo que Flutter no trae. El inventario completo es `estilo`, `TituloGrande`,
 `Grupo`, `Pildora`, `PuntoColor`, `Miniatura`, `BotonPrincipal`, `SelectorEnLinea`, `EstadoVacio`,
-`Cargando`, `BarraProgreso`, `DeslizarParaBorrar`, `barra`, `selectorFecha`, `dialogoTexto`,
-`dialogoConfirmar` y `aviso`. Para lo demás usa el widget del framework: `CupertinoListSection.insetGrouped` (envuelto en
+`Cargando`, `BarraProgreso`, `BarraDescanso`, `CheckSerie`, `DeslizarParaBorrar`, `barra`,
+`selectorFecha`, `elegirEnHoja`, `dialogoTexto`, `dialogoConfirmar` y `aviso`. Para lo demás usa el widget del framework: `CupertinoListSection.insetGrouped` (envuelto en
 `ui.Grupo`), `CupertinoListTile`, `CupertinoSearchTextField`, `CupertinoSlidingSegmentedControl`.
 
 **No importes `material.dart`.** Si necesitas algo que solo existe en Material (`BarraProgreso` nació
@@ -201,13 +219,22 @@ así, sustituyendo a `LinearProgressIndicator`; `ReorderableListView` se sustitu
 `SliverReorderableList` de `widgets.dart`), compónlo en `ui.dart`.
 
 **Cuidado con el ancho de un móvil.** Los tests de widget que montan la pantalla de registro y el
-detalle de rutina fijan la ventana a 375 px con `_comoUnMovil`, y ahí han saltado ya dos
-desbordamientos reales que a 800 px no se veían. Al pintar una fila con varios controles, hazla
-flexible.
+detalle de rutina fijan la ventana a 375 px con `_comoUnMovil`, y ahí han saltado ya tres
+desbordamientos reales que a 800 px no se veían —el último, la barra del descanso—. Al pintar una
+fila con varios controles, hazla flexible.
+
+**En la sesión viva no se puede usar `pumpAndSettle`.** El cronómetro y el descanso son
+`Timer.periodic` que repintan para siempre, así que «esperar a que no queden fotogramas» no
+termina nunca: los tests de ese grupo van con `_asentar`, a base de fotogramas sueltos.
 
 ### Empaquetado
 
-`pubspec.yaml` es la única fuente de dependencias. El permiso de **INTERNET va en
+`pubspec.yaml` es la única fuente de dependencias; hoy son ocho. Las dos últimas, `share_plus` y
+`file_picker`, son de la copia de seguridad: sin ellas la única salida sería escribir en el
+directorio de documentos y cantar la ruta, que en Android no hay quien alcance. `share_plus` se
+queda en la 12 porque la 13 exige `win32 ^6` y `file_picker` pide `win32 ^5`.
+
+El permiso de **INTERNET va en
 `android/app/src/main/AndroidManifest.xml`**: Flutter solo lo declara en los manifiestos de debug y
 profile, así que sin esa línea el APK de release no puede descargar la media.
 

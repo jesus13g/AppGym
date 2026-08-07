@@ -26,6 +26,8 @@ import 'esquemas/schema.dart';
 import 'esquemas/schema_v1.dart' as v1;
 import 'esquemas/schema_v2.dart' as v2;
 import 'esquemas/schema_v3.dart' as v3;
+import 'esquemas/schema_v4.dart' as v4;
+import 'esquemas/schema_v5.dart' as v5;
 
 /// Segundos desde época, que es como drift guarda las fechas aquí.
 int _epoca(DateTime fecha) => fecha.millisecondsSinceEpoch ~/ 1000;
@@ -187,6 +189,91 @@ void main() {
     final ajustes = await bd.ajustes();
     expect(ajustes.esfuerzoActivo, isFalse);
     expect(ajustes.escala, EscalaEsfuerzo.rpe);
+
+    await bd.close();
+  });
+
+  test('v4 → última: llegan el descanso, la duración y el borrador', () async {
+    final esquema = await verificador.schemaAt(4);
+
+    final vieja = v4.DatabaseAtV4(esquema.newConnection());
+    await vieja.customStatement(
+      "INSERT INTO rutinas (id, nombre, color) VALUES (1, 'Empuje', '#0A84FF')",
+    );
+    await vieja.customStatement(
+      'INSERT INTO ejercicios (id, id_rutina, nombre, orden) '
+      "VALUES (1, 1, 'Press banca', 0)",
+    );
+    await vieja.customStatement(
+      'INSERT INTO entrenamientos (id, id_rutina, fecha, nota) '
+      "VALUES (1, 1, ${_epoca(DateTime(2026, 3, 1))}, 'Buen día')",
+    );
+    await vieja.customStatement(
+      'INSERT INTO serie (id_entrenamiento, id_ejercicio, n_serie, '
+      'repeticiones, peso, calentamiento, rpe) VALUES (1, 1, 1, 10, 60.0, 0, 8)',
+    );
+    await vieja.customStatement(
+      "INSERT INTO ajustes (clave, valor) VALUES ('esfuerzo_activo', '1')",
+    );
+    await vieja.close();
+
+    final bd = AppBD(esquema.newConnection());
+    await verificador.migrateAndValidate(bd, bd.schemaVersion);
+
+    // Lo de antes sigue igual, notas y RPE incluidos.
+    final sesion = (await bd.sesion(1))!;
+    expect(sesion.nota, 'Buen día');
+    expect(sesion.ejercicios.single.series.single.rpe, 8);
+    expect((await bd.ajustes()).esfuerzoActivo, isTrue);
+
+    // Y lo nuevo está, vacío: nadie cronometró aquellas sesiones ni fijó un
+    // descanso propio, y decirlo con un nulo es más honesto que con un cero.
+    expect(sesion.entrenamiento.duracionSeg, isNull);
+    expect(
+      (await bd.ejerciciosDeRutina(1)).single.ejercicio.descansoSeg,
+      isNull,
+    );
+    expect(await bd.sesionActiva(), isNull);
+    await bd.guardarSesionActiva(1, DateTime(2026, 8, 1), '{}');
+    expect(await bd.sesionActiva(), isNotNull);
+
+    await bd.close();
+  });
+
+  test('v5 → última: llegan favoritos, vistos y medidas', () async {
+    final esquema = await verificador.schemaAt(5);
+
+    final vieja = v5.DatabaseAtV5(esquema.newConnection());
+    await vieja.customStatement(
+      "INSERT INTO rutinas (id, nombre, color) VALUES (1, 'Pierna', '#30D158')",
+    );
+    await vieja.customStatement(
+      'INSERT INTO ejercicios (id, id_rutina, nombre, orden, descanso_seg) '
+      "VALUES (1, 1, 'Sentadilla', 0, 180)",
+    );
+    await vieja.customStatement(
+      'INSERT INTO catalogo_ejercicios (id, nombre, body_part, equipment, '
+      'target, muscle_group, secondary_muscles, instrucciones, image, gif, '
+      "busqueda) VALUES ('0043', 'barbell full squat', 'upper legs', "
+      "'barbell', 'glutes', 'upper legs', '[]', '[]', '', '', 'squat')",
+    );
+    await vieja.close();
+
+    final bd = AppBD(esquema.newConnection());
+    await verificador.migrateAndValidate(bd, bd.schemaVersion);
+
+    expect((await bd.ejerciciosDeRutina(1)).single.ejercicio.descansoSeg, 180);
+
+    // Las tablas nuevas están y funcionan, incluido el índice sobre `target`
+    // que la validación del esquema ya habrá comprobado.
+    await bd.marcarFavorito('0043', true);
+    await bd.registrarVisto('0043');
+    await bd.registrarMedida(DateTime(2026, 8, 1), 'peso', 78.4);
+
+    expect((await bd.fichasFavoritas()).single.id, '0043');
+    expect((await bd.vistosRecientes()).single.id, '0043');
+    expect((await bd.ultimaMedida('peso'))!.valor, 78.4);
+    expect((await bd.buscarCatalogo(target: 'glutes')), hasLength(1));
 
     await bd.close();
   });

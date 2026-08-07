@@ -1,0 +1,48 @@
+[
+  {
+    "nombre": "Full body",
+    "descripcion": "Tres sesiones a la semana, todo el cuerpo en cada una. Lo más eficiente si entrenas tres días o menos.",
+    "rutinas": [
+      { "nombre": "Full body A", "ejercicios": ["0043", "0025", "0027", "0405", "0031"] },
+      { "nombre": "Full body B", "ejercicios": ["0032", "0289", "0198", "0334", "0201"] },
+      { "nombre": "Full body C", "ejercicios": ["0054", "0662", "0652", "0313", "0274"] }
+    ]
+  },
+  {
+    "nombre": "Torso / Pierna",
+    "descripcion": "Dos sesiones que se alternan: arriba un día, abajo el siguiente. El punto medio entre full body y PPL.",
+    "rutinas": [
+      { "nombre": "Torso", "ejercicios": ["0025", "0027", "0405", "0198", "0031", "0201"] },
+      { "nombre": "Pierna", "ejercicios": ["0043", "0085", "0599", "0585", "0417", "0274"] }
+    ]
+  },
+  {
+    "nombre": "Push / Pull / Legs",
+    "descripcion": "Tres sesiones: empuje, tirón y pierna. El reparto clásico para cuatro o más días de gimnasio.",
+    "rutinas": [
+      { "nombre": "Empuje", "ejercicios": ["0025", "0405", "0289", "0334", "0201", "0308"] },
+      { "nombre": "Tirón", "ejercicios": ["0652", "0027", "0198", "0861", "0031", "0313"] },
+      { "nombre": "Pierna", "ejercicios": ["0043", "0085", "0599", "0585", "0417", "0003"] }
+    ]
+  },
+  {
+    "nombre": "Solo peso corporal",
+    "descripcion": "Sin material: sirve en casa, de viaje o el día que el gimnasio está lleno.",
+    "rutinas": [
+      {
+        "nombre": "Peso corporal",
+        "ejercicios": ["0662", "1326", "0499", "0251", "0129", "0735", "0464", "1160"]
+      }
+    ]
+  },
+  {
+    "nombre": "Principiante (máquinas)",
+    "descripcion": "Todo guiado en máquina: el recorrido está fijado, así que se aprende a apretar antes que a estabilizar.",
+    "rutinas": [
+      {
+        "nombre": "Máquinas",
+        "ejercicios": ["0576", "1350", "0673", "0584", "0585", "0599", "2289", "0019"]
+      }
+    ]
+  }
+]
