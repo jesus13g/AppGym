@@ -1527,4 +1527,124 @@ void main() {
       expect(find.text('1RM estimado'), findsNothing);
     });
   });
+
+  // ── C17: resumen semanal y racha ───────────────────────────────────────────
+
+  group('resumen de la semana', () {
+    /// Miércoles 11 de marzo de 2026; su semana va del lunes 9 al domingo 15.
+    ///
+    /// La fecha se fija para que la racha y el «esta semana» no dependan de
+    /// cuándo se ejecute la suite, que es justo el fallo que tendría un test
+    /// escrito contra `DateTime.now()`.
+    final hoy = DateTime(2026, 3, 11, 19);
+
+    late int idRutina;
+    late int idEjercicio;
+
+    setUp(() async {
+      reloj.fijarReloj(() => hoy);
+      addTearDown(() => reloj.fijarReloj(null));
+
+      idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarEjercicio(idRutina, 'Press banca');
+      idEjercicio = (await bd.ejerciciosDeRutina(idRutina)).single.id;
+    });
+
+    Future<void> entrenar(DateTime fecha, {double peso = 60}) =>
+        bd.insertarEntrenamiento(idRutina, fecha, {
+          idEjercicio: [ValoresSerie(repeticiones: 10, peso: peso)],
+        });
+
+    Future<void> abrir(WidgetTester tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, const PantallaProgreso()));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('cuenta las sesiones de la semana contra el objetivo', (
+      tester,
+    ) async {
+      await entrenar(DateTime(2026, 3, 9));
+      await entrenar(DateTime(2026, 3, 11));
+      // La del domingo anterior es de la semana pasada y no cuenta aquí.
+      await entrenar(DateTime(2026, 3, 8));
+
+      await abrir(tester);
+
+      expect(find.text('Esta semana'.toUpperCase()), findsOneWidget);
+      expect(find.text('2 de 3'), findsOneWidget);
+    });
+
+    testWidgets('la comparativa se omite sin datos de la semana anterior', (
+      tester,
+    ) async {
+      await entrenar(DateTime(2026, 3, 9));
+
+      await abrir(tester);
+
+      expect(find.text('1 de 3'), findsOneWidget);
+      expect(find.textContaining('de volumen'), findsNothing);
+    });
+
+    testWidgets('con semana previa enseña la variación con signo', (
+      tester,
+    ) async {
+      // La semana pasada: una sesión de 600 kg. Esta: dos de 600 y 720.
+      await entrenar(DateTime(2026, 3, 4));
+      await entrenar(DateTime(2026, 3, 9));
+      await entrenar(DateTime(2026, 3, 10), peso: 72);
+
+      await abrir(tester);
+
+      expect(find.text('+1 sesión'), findsOneWidget);
+      // (1320 − 600) / 600 = +120 %.
+      expect(find.text('+120 % de volumen'), findsOneWidget);
+    });
+
+    testWidgets('la racha cuenta semanas cerradas, no la que está en curso', (
+      tester,
+    ) async {
+      // Objetivo 2, cumplido las dos semanas anteriores. La actual va por una,
+      // y aun así la racha sigue viva porque la semana no ha terminado.
+      await bd.fijarAjuste(Claves.sesionesPorSemana, '2');
+      for (final dia in [23, 25]) {
+        await entrenar(DateTime(2026, 2, dia));
+      }
+      for (final dia in [2, 4]) {
+        await entrenar(DateTime(2026, 3, dia));
+      }
+      await entrenar(DateTime(2026, 3, 9));
+
+      await abrir(tester);
+
+      expect(find.text('1 de 2'), findsOneWidget);
+      expect(
+        find.textContaining('2 semanas seguidas', findRichText: true),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('avisa cuando hace más de una semana del último entreno', (
+      tester,
+    ) async {
+      await entrenar(DateTime(2026, 3, 1));
+
+      await abrir(tester);
+
+      expect(find.text('0 de 3'), findsOneWidget);
+      expect(
+        find.text('Hace 10 días de tu último entrenamiento'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('sin ninguna sesión no hay tarjeta, sino el estado vacío', (
+      tester,
+    ) async {
+      await abrir(tester);
+
+      expect(find.text('Todavía no hay datos'), findsOneWidget);
+      expect(find.text('Esta semana'.toUpperCase()), findsNothing);
+    });
+  });
 }

@@ -506,6 +506,56 @@ void main() {
       expect(series.first.calentamiento, isTrue);
     });
 
+    test('sesionesConVolumen suma sin contar el calentamiento', () async {
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [
+          ValoresSerie(repeticiones: 20, peso: 100, calentamiento: true),
+          ValoresSerie(repeticiones: 10, peso: 60),
+        ],
+      });
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 8), {
+        idEjercicio: const [ValoresSerie(repeticiones: 8, peso: 65)],
+      });
+
+      final sesiones = await bd.sesionesConVolumen();
+      // De la más reciente a la más antigua, que es lo que espera el resumen
+      // semanal para dar con la última sesión sin ordenar nada.
+      expect(sesiones.first.fecha, DateTime(2026, 3, 8));
+      expect(sesiones.first.volumen, 520);
+      expect(sesiones.last.volumen, 600);
+    });
+
+    test('sesionesConVolumen respeta el «desde»', () async {
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 1, 5), {
+        idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
+      });
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 8), {
+        idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
+      });
+
+      final recientes = await bd.sesionesConVolumen(
+        desde: DateTime(2026, 3, 1),
+      );
+      expect(recientes, hasLength(1));
+      expect(await bd.sesionesConVolumen(), hasLength(2));
+    });
+
+    test('una sesión sin series aparece con volumen cero', () async {
+      // No deberían existir, pero si una se cuela no puede desaparecer del
+      // resumen ni reventar la suma.
+      await bd
+          .into(bd.entrenamientos)
+          .insert(
+            EntrenamientosCompanion.insert(
+              idRutina: idRutina,
+              fecha: DateTime(2026, 3, 1),
+            ),
+          );
+
+      final sesiones = await bd.sesionesConVolumen();
+      expect(sesiones.single.volumen, 0);
+    });
+
     test('resumenRutinas agrega conteo y última fecha de una vez', () async {
       final otra = (await bd.insertarRutina('Pierna'))!;
       await bd.insertarEjercicio(otra, 'Sentadilla');

@@ -10,6 +10,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
 import '../datos/formato.dart' as formato;
+import '../datos/metricas.dart' as metricas;
+import '../datos/reloj.dart' as reloj;
 import '../estado/providers.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
@@ -117,34 +119,311 @@ class _Resumen extends ConsumerWidget {
           );
         }
 
-        return ui.Grupo(
-          cabecera: 'Rutinas entrenadas',
-          pie:
-              'Entra en una rutina para ver la evolución del peso en cada '
-              'ejercicio.',
-          filas: [
-            for (final r in conDatos)
-              CupertinoListTile(
-                backgroundColor: context.tarjeta,
-                leading: ui.PuntoColor(
-                  colorDesdeHex(r.color, context.acento),
-                  tamano: 12,
+        return Column(
+          children: [
+            const _Semana(),
+            ui.Grupo(
+              cabecera: 'Rutinas entrenadas',
+              pie:
+                  'Entra en una rutina para ver la evolución del peso en cada '
+                  'ejercicio.',
+              filas: [
+                for (final r in conDatos)
+                  CupertinoListTile(
+                    backgroundColor: context.tarjeta,
+                    leading: ui.PuntoColor(
+                      colorDesdeHex(r.color, context.acento),
+                      tamano: 12,
+                    ),
+                    title: Text(r.nombre, style: ui.estilo(context)),
+                    subtitle: Text(
+                      formato.hace(r.ultimaFecha),
+                      style: ui.estilo(
+                        context,
+                        size: t.footnote,
+                        color: context.textoSec,
+                      ),
+                    ),
+                    trailing: const CupertinoListTileChevron(),
+                    onTap: () => abrirResultadoRutina(context, r.id),
+                  ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+// ── C17: la semana y la racha ────────────────────────────────────────────────
+
+/// Cuántos días sin entrenar hacen falta para decirlo.
+const _diasAviso = 7;
+
+/// La tarjeta que responde a «¿voy bien esta semana?».
+///
+/// Sesiones frente al objetivo de Ajustes, volumen, comparativa con la semana
+/// anterior, racha y los últimos siete días. Todo sale de **una** consulta
+/// (`sesionesRecientesProvider`) más los colores de las rutinas, que ya están
+/// cargados para la leyenda del calendario.
+///
+/// No aparece si no hay ninguna sesión registrada: ahí manda el `EstadoVacio`
+/// de la pestaña, que ya explica por dónde empezar.
+class _Semana extends ConsumerWidget {
+  const _Semana();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sesiones = ref.watch(sesionesRecientesProvider).value ?? const [];
+    if (sesiones.isEmpty) return const SizedBox.shrink();
+
+    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
+    final colores = ref.watch(coloresRutinasProvider).value ?? const {};
+    final objetivo = ajustes.sesionesPorSemana;
+
+    // El «hoy» sale del reloj de la app y no de `DateTime.now()`, que es lo que
+    // permite a los tests fijar la semana en vez de depender de cuándo corran.
+    final hoy = reloj.ahora();
+    final lunes = metricas.lunesDe(hoy);
+    final estaSemana = metricas.resumenSemana(sesiones, lunes);
+    final anterior = metricas.resumenSemana(
+      sesiones,
+      lunes.subtract(const Duration(days: 7)),
+    );
+    final racha = metricas.rachaSemanas(sesiones, objetivo, hoy: hoy);
+
+    // La lista viene de la más reciente a la más antigua, así que la primera es
+    // la última sesión.
+    final ultima = sesiones.first.fecha;
+    final diasSinEntrenar = DateTime(
+      hoy.year,
+      hoy.month,
+      hoy.day,
+    ).difference(DateTime(ultima.year, ultima.month, ultima.day)).inDays;
+
+    return ui.Grupo(
+      cabecera: 'Esta semana',
+      filas: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: t.m, vertical: t.m),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${estaSemana.sesiones} de $objetivo',
+                      style: ui.estilo(context, size: t.title2, weight: t.bold),
+                    ),
+                  ),
+                  Flexible(
+                    child: Text(
+                      formato.peso(estaSemana.volumen, ajustes),
+                      textAlign: TextAlign.right,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: ui.estilo(
+                        context,
+                        size: t.subhead,
+                        color: context.textoSec,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: t.s),
+              ui.BarraProgreso(
+                objetivo == 0 ? 0 : estaSemana.sesiones / objetivo,
+              ),
+              if (!anterior.vacia) ...[
+                const SizedBox(height: t.m),
+                _Comparativa(estaSemana: estaSemana, anterior: anterior),
+              ],
+              if (racha > 0) ...[
+                const SizedBox(height: t.m),
+                Row(
+                  children: [
+                    Icon(
+                      CupertinoIcons.flame_fill,
+                      size: 16,
+                      color: context.acento,
+                    ),
+                    const SizedBox(width: t.xs),
+                    Flexible(
+                      child: Text(
+                        '${formato.plural(racha, 'semana', 'semanas')} '
+                        'seguidas cumpliendo el objetivo',
+                        style: ui.estilo(context, size: t.footnote),
+                      ),
+                    ),
+                  ],
                 ),
-                title: Text(r.nombre, style: ui.estilo(context)),
-                subtitle: Text(
-                  formato.hace(r.ultimaFecha),
+              ],
+              if (diasSinEntrenar > _diasAviso) ...[
+                const SizedBox(height: t.m),
+                Text(
+                  'Hace ${formato.plural(diasSinEntrenar, 'día', 'días')} de '
+                  'tu último entrenamiento',
                   style: ui.estilo(
                     context,
                     size: t.footnote,
                     color: context.textoSec,
                   ),
                 ),
-                trailing: const CupertinoListTileChevron(),
-                onTap: () => abrirResultadoRutina(context, r.id),
-              ),
-          ],
-        );
+              ],
+            ],
+          ),
+        ),
+        _UltimosDias(sesiones: sesiones, colores: colores, hoy: hoy),
+      ],
+    );
+  }
+}
+
+/// La variación frente a la semana anterior, con signo y color.
+///
+/// Sin datos de la semana previa no se pinta —de eso se encarga quien la
+/// monta—: un `+0 %` contra la nada no dice nada.
+class _Comparativa extends StatelessWidget {
+  const _Comparativa({required this.estaSemana, required this.anterior});
+
+  final metricas.ResumenSemana estaSemana;
+  final metricas.ResumenSemana anterior;
+
+  @override
+  Widget build(BuildContext context) {
+    final sesiones = estaSemana.sesiones - anterior.sesiones;
+    final volumen = metricas.variacion(estaSemana.volumen, anterior.volumen);
+
+    String conSigno(num valor) => valor > 0 ? '+$valor' : '$valor';
+
+    return Row(
+      children: [
+        Expanded(
+          child: _Variacion(
+            texto:
+                '${conSigno(sesiones)} '
+                '${sesiones.abs() == 1 ? 'sesión' : 'sesiones'}',
+            signo: sesiones,
+          ),
+        ),
+        if (volumen != null)
+          Expanded(
+            child: _Variacion(
+              texto: '${conSigno((volumen * 100).round())} % de volumen',
+              signo: volumen,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _Variacion extends StatelessWidget {
+  const _Variacion({required this.texto, required this.signo});
+
+  final String texto;
+
+  /// Positivo, negativo o cero; solo se mira el signo.
+  final num signo;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    texto,
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    style: ui.estilo(
+      context,
+      size: t.footnote,
+      color: switch (signo) {
+        > 0 => context.exito,
+        < 0 => context.destructivo,
+        _ => context.textoSec,
       },
+    ),
+  );
+}
+
+/// Siete puntos, uno por día de la semana en curso, con el color de la rutina.
+///
+/// De lunes a domingo, coherente con `formato.diasSemana` y con la semana que
+/// mide la racha.
+class _UltimosDias extends StatelessWidget {
+  const _UltimosDias({
+    required this.sesiones,
+    required this.colores,
+    required this.hoy,
+  });
+
+  final List<SesionConVolumen> sesiones;
+  final Map<int, (String, String)> colores;
+  final DateTime hoy;
+
+  @override
+  Widget build(BuildContext context) {
+    final lunes = metricas.lunesDe(hoy);
+    final dia = DateTime(hoy.year, hoy.month, hoy.day);
+
+    /// La rutina entrenada ese día, si hubo alguna.
+    int? rutinaDe(DateTime cuando) {
+      for (final s in sesiones) {
+        if (s.fecha.year == cuando.year &&
+            s.fecha.month == cuando.month &&
+            s.fecha.day == cuando.day) {
+          return s.idRutina;
+        }
+      }
+      return null;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(
+        left: t.m,
+        right: t.m,
+        top: t.s,
+        bottom: t.m,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          for (final (indice, etiqueta) in formato.diasSemana.indexed)
+            Builder(
+              builder: (_) {
+                final cuando = lunes.add(Duration(days: indice));
+                final idRutina = rutinaDe(cuando);
+                // Los días que aún no han llegado se apagan: no son días sin
+                // entrenar, son días que no han pasado.
+                final futuro = cuando.isAfter(dia);
+
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      etiqueta,
+                      style: ui.estilo(
+                        context,
+                        size: t.caption,
+                        color: futuro ? context.textoTer : context.textoSec,
+                      ),
+                    ),
+                    const SizedBox(height: t.xs),
+                    ui.PuntoColor(
+                      idRutina == null
+                          ? (futuro ? context.relleno : context.separador)
+                          : colorDesdeHex(
+                              colores[idRutina]?.$2,
+                              context.acento,
+                            ),
+                      tamano: 10,
+                    ),
+                  ],
+                );
+              },
+            ),
+        ],
+      ),
     );
   }
 }
