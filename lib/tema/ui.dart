@@ -458,12 +458,26 @@ class BarraDescanso extends StatelessWidget {
                     color: excedido ? context.textoSec : context.texto,
                   ),
                 ),
-                const Spacer(),
-                _boton(context, '−15 s', onMenos),
-                const SizedBox(width: t.s),
-                _boton(context, '+15 s', onMas),
-                const SizedBox(width: t.s),
-                _boton(context, 'Saltar', onSaltar, destacado: true),
+                const SizedBox(width: t.m),
+                // El reloj manda y los botones se encogen: tres botones y un
+                // número a 28 px no caben a lo ancho de un móvil, y aquí lo que
+                // no puede perderse de vista es el tiempo.
+                Expanded(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _boton(context, '−15 s', onMenos),
+                        const SizedBox(width: t.s),
+                        _boton(context, '+15 s', onMas),
+                        const SizedBox(width: t.s),
+                        _boton(context, 'Saltar', onSaltar, destacado: true),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ],

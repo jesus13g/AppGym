@@ -16,6 +16,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../datos/reloj.dart';
 import 'providers.dart';
 
 /// Cada cuánto se repinta. El valor mostrado no depende de esto —sale de la
@@ -89,11 +90,11 @@ class DescansoNotifier extends Notifier<Descanso?> {
   void arrancar(int segundos) {
     if (segundos <= 0) return;
     _avisado = false;
-    final ahora = DateTime.now();
+    final instante = ahora();
     state = Descanso(
-      fin: ahora.add(Duration(seconds: segundos)),
+      fin: instante.add(Duration(seconds: segundos)),
       totalSeg: segundos,
-      ahora: ahora,
+      ahora: instante,
     );
     pararReloj();
     _reloj = Timer.periodic(_tic, (_) => _latir());
@@ -107,14 +108,14 @@ class DescansoNotifier extends Notifier<Descanso?> {
     final actual = state;
     if (actual == null) return;
 
-    final ahora = DateTime.now();
+    final instante = ahora();
     var fin = actual.fin.add(delta);
     // Restar por debajo del momento actual no debe dejar el descanso «en el
     // pasado»: se queda a cero, que es lo que el usuario quiere decir.
-    if (fin.isBefore(ahora)) fin = ahora;
+    if (fin.isBefore(instante)) fin = instante;
 
     final total = (actual.totalSeg + delta.inSeconds).clamp(1, 3600);
-    state = Descanso(fin: fin, totalSeg: total, ahora: ahora);
+    state = Descanso(fin: fin, totalSeg: total, ahora: instante);
     if (!actual.excedido) _avisado = false;
   }
 
@@ -147,14 +148,18 @@ class DescansoNotifier extends Notifier<Descanso?> {
       return;
     }
 
-    final ahora = DateTime.now();
-    state = Descanso(fin: actual.fin, totalSeg: actual.totalSeg, ahora: ahora);
+    final instante = ahora();
+    state = Descanso(
+      fin: actual.fin,
+      totalSeg: actual.totalSeg,
+      ahora: instante,
+    );
 
-    if (!_avisado && !ahora.isBefore(actual.fin)) {
+    if (!_avisado && !instante.isBefore(actual.fin)) {
       _avisado = true;
       avisar();
     }
-    if (ahora.difference(actual.fin) > _maxExceso) pararReloj();
+    if (instante.difference(actual.fin) > _maxExceso) pararReloj();
   }
 
   /// Pitido y vibración al llegar a cero.

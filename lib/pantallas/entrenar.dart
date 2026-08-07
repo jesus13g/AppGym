@@ -24,6 +24,7 @@ import '../datos/ajustes.dart' show descansos;
 import '../datos/bd.dart';
 import '../datos/borrador.dart';
 import '../datos/formato.dart' as formato;
+import '../datos/reloj.dart' as reloj;
 import '../estado/descanso.dart';
 import '../estado/providers.dart';
 import '../tema/tokens.dart';
@@ -119,7 +120,7 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
   final _nota = TextEditingController();
 
   /// Cuándo empezó la sesión viva. En formulario no se usa.
-  late DateTime _inicio = DateTime.now();
+  late DateTime _inicio = reloj.ahora();
 
   /// Repinta la cabecera del cronómetro una vez por segundo.
   Timer? _cronometro;
@@ -354,7 +355,7 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
     } else {
       idGuardado = await bd.insertarEntrenamiento(
         widget.idRutina,
-        _vivo ? DateTime.now() : _fecha,
+        _vivo ? reloj.ahora() : _fecha,
         series,
         nota: _nota.text,
         duracionSeg: _vivo ? _transcurrido.inSeconds : null,
@@ -383,7 +384,7 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
     if (_vivo) await abrirResumenSesion(context, idGuardado);
   }
 
-  Duration get _transcurrido => DateTime.now().difference(_inicio);
+  Duration get _transcurrido => reloj.ahora().difference(_inicio);
 
   /// Cierra la sesión viva ofreciendo conservarla o tirarla.
   Future<void> _salirDeVivo() async {

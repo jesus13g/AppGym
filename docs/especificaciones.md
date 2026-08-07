@@ -1,9 +1,14 @@
 # AppGym — Especificaciones de nuevas funcionalidades
 
 > Documento de especificación funcional y técnica para la siguiente iteración de AppGym.
-> Escrito sobre el código actual: **Flutter 3.44.8 / Dart 3.12.2**, `drift` sobre SQLite,
-> `Riverpod` para el estado, interfaz **solo Cupertino**, catálogo de 1.324 ejercicios,
-> nueve pantallas y 27 tests. Ver `CLAUDE.md` para la arquitectura vigente.
+> Escrito sobre el código de entonces: **Flutter 3.44.8 / Dart 3.12.2**, `drift` sobre
+> SQLite, `Riverpod` para el estado, interfaz **solo Cupertino** y catálogo de 1.324
+> ejercicios. Ver `CLAUDE.md` para la arquitectura vigente.
+>
+> **Estado: los bloques A y B están implementados.** Queda C (progreso y análisis) y D
+> (mapa muscular). Cada bloque conserva su especificación como el porqué de las
+> decisiones; donde la implementación se desvió, se dice en la sección
+> [E](#e-modelo-de-datos-consolidado).
 
 ## Índice
 
@@ -507,6 +512,11 @@ igual que ya hace `seriesConFechaProvider` con su `ClaveSeries` (`providers.dart
 ---
 
 ## B. Funcionalidades nuevas de uso diario
+
+> **Bloque implementado.** B7–B13 están en el código desde la iteración de agosto de
+> 2026, con el esquema v5 y v6, sus migraciones y sus tests. Lo que sigue se conserva
+> como el porqué de cada decisión; las desviaciones están recogidas en la sección
+> [E](#e-modelo-de-datos-consolidado).
 
 ### B7. Temporizador de descanso
 
@@ -1484,16 +1494,29 @@ SeriesTabla          id, idEntrenamiento, idEjercicio,
 | 2 | **A1** — expansión de series agregadas a filas por serie + `calentamiento` | **Sí** | **Hecha** |
 | 3 | A4 (`orden`) | No | **Hecha** |
 | 4 | A5 (`nota` de sesión y de serie, `rpe`) y la tabla `Ajustes` | No | **Hecha** |
-| 5 | B7 (`descansoSeg`), B8 (`duracionSeg`, `SesionesActivas`) | No | Pendiente |
-| 6 | B12 (`Favoritos`, `Vistos`, índice de `target`), B13 (`Medidas`) | No | Pendiente |
+| 5 | B7 (`descansoSeg`), B8 (`duracionSeg`, `SesionesActivas`) | No | **Hecha** |
+| 6 | B12 (`Favoritos`, `Vistos`, índice de `target`), B13 (`Medidas`) | No | **Hecha** |
 
 Solo la versión 2 transforma datos existentes. Todas las demás añaden columnas, tablas o índices y
 son seguras. Antes de la 2 se copia el fichero de base de datos.
 
-> **Desviación al implementar.** La tabla `Ajustes` se adelantó a la v4, junto con A5: el
+> **Desviación al implementar (A5).** La tabla `Ajustes` se adelantó a la v4, junto con A5: el
 > interruptor del RPE tenía que poder tocarse desde algún sitio y no había ninguno. Eso corrió una
-> versión el resto de la secuencia. La pantalla de Ajustes que existe hoy tiene **solo** esa
-> opción y la escala RPE/RIR; B9 sigue pendiente entera.
+> versión el resto de la secuencia.
+
+**Desviaciones al implementar el bloque B.** Todas conscientes, y todas por el mismo
+motivo: la especificación se escribió antes de tener el código delante.
+
+| Punto | Lo que decía | Lo que hay | Por qué |
+|---|---|---|---|
+| B10 | El módulo se llama `lib/datos/respaldo.dart` | `lib/datos/copia.dart` | Ese nombre ya lo ocupa el duplicado del fichero antes de una migración (A1). Aquello protege de una migración; esto, de perder el móvil |
+| B12 | `Favoritos` y `Vistos` con clave foránea a `CatalogoEjercicios` | Sin clave foránea | `sembrarCatalogo` borra y reinserta el catálogo entero cuando cambia el dataset, y con la clave puesta esa operación fallaría en cuanto hubiera un favorito. Un favorito huérfano se cae solo del `join`; hay un test que lo fija |
+| B12 | `rutinasQueContienen` devuelve `List<ResumenRutina>` | `List<Rutina>` | La ficha solo enseña los nombres; el resumen agregado sería una consulta más para nada |
+| B9 | La versión en «Acerca de» | Llega por `--dart-define=VERSION` desde CI | La alternativa era `package_info_plus`, una dependencia entera para una cadena de texto |
+| B10 | `share_plus` y `file_picker` sin fijar | `share_plus` en la 12 | La 13 exige `win32 ^6` y `file_picker` pide `win32 ^5`, así que juntas no resuelven. Solo afecta al escritorio de Windows, que aquí no se compila |
+| B7, B8 | — | `lib/datos/reloj.dart` | El descanso y el cronómetro se calculan contra la hora real —para que suspender la app no los desfase—, y eso es justo lo que impedía probarlos: `tester.pump` adelanta los `Timer`, no el calendario. Es la misma costura que `media.fijarDirectorioMedia` |
+| B8 | Solo se describía el borrador | Al terminar se guardan **solo las series marcadas** | Las que quedaron sin marcar eran el plan, no el entrenamiento: contarlas inflaría el volumen de un día que se cortó a la mitad |
+| B13 | La unidad afecta a todas las medidas | Solo al peso corporal | Los perímetros son centímetros y la grasa, por ciento: no dependen de la unidad de las cargas |
 
 El flujo de esquemas versionados de drift (`drift_dev schema dump`, `schema steps` y
 `schema generate`) se montó al abordar la v2 y ya sirve para las que quedan:
@@ -1525,20 +1548,20 @@ Hecha. **A1** (series independientes, con la migración destructiva y el respald
 (editar/borrar, con historial y detalle de sesión) → **A3** (fecha) → **A6** (varias sesiones por
 día).
 
-### Fase 2 — Uso diario
+### Fase 2 — Uso diario ✅
 
-**A4** (orden) y **A5** (notas y RPE) ✅ ya están; A5 se adelantó a B9 llevándose consigo la tabla
-de ajustes y una pantalla mínima con su interruptor. Queda **B9** (la pantalla de Ajustes completa)
-→ **B7** (descanso) → **B8** (sesión viva).
+Hecha. **A4** (orden) y **A5** (notas y RPE) ya estaban; A5 se adelantó a B9 llevándose consigo
+la tabla de ajustes y una pantalla mínima con su interruptor. Después **B9** (la pantalla de
+Ajustes completa, con las unidades y el tema) → **B7** (descanso) → **B8** (sesión viva).
 
-### Fase 3 — Protección de datos y comodidad
+### Fase 3 — Protección de datos y comodidad ✅
 
-**B10** (copia de seguridad) → **B11** (duplicar y plantillas) → **B12** (catálogo) →
-**B13** (peso corporal).
+Hecha. **B10** (copia de seguridad, con las dos dependencias nuevas) → **B11** (duplicar y
+plantillas) → **B12** (catálogo) → **B13** (peso corporal).
 
-> B10 podría adelantarse a la fase 1 si se prefiere tener la copia de seguridad **antes** de la
-> primera migración destructiva. Es una alternativa defendible y probablemente la más prudente,
-> sobre todo si ya hay histórico instalado en un móvil.
+> Se llegó tarde para adelantar B10 antes de la migración destructiva de A1, que es lo que
+> recomendaba la nota original. Lo cubre el respaldo del fichero (`datos/respaldo.dart`), que
+> justamente se montó para eso.
 
 ### Fase 4 — Análisis
 
@@ -1577,18 +1600,19 @@ Se deja fuera de esta iteración, de forma consciente:
 
 Cuestiones que conviene cerrar antes o durante la implementación:
 
-1. **¿Cuatro pestañas o tres?** El mapa muscular (D) y las medidas (B13) compiten por sitio dentro
-   de Progreso. Opciones: un tercer elemento «Cuerpo» en el `CupertinoSlidingSegmentedControl`
-   (recomendado, no toca el `CupertinoTabScaffold`) o una cuarta pestaña. Afecta a D.2 y B13.
-2. **¿Adelantar B10 (copia de seguridad) a la fase 1?** Ver la nota de la fase 3. Recomendado si ya
-   hay histórico instalado que importe.
+1. ~~**¿Cuatro pestañas o tres?**~~ **Cerrada:** tres. B13 entró como un tercer elemento
+   «Cuerpo» del `CupertinoSlidingSegmentedControl` de Progreso, sin tocar el
+   `CupertinoTabScaffold`. Con cuatro el texto empezaría a apretarse en un móvil estrecho, así
+   que **D tendrá que compartir sitio ahí dentro o buscarse otro**.
+2. ~~**¿Adelantar B10 (copia de seguridad) a la fase 1?**~~ **Cerrada:** no se adelantó; la
+   migración destructiva la cubrió el respaldo del fichero.
 3. **Origen del dibujo anatómico** (D.7). Es un bloqueo real de la fase 5 y no se resuelve
    programando. Decidir entre dibujo original o fuente en dominio público.
 4. **¿Parser de SVG o JSON de puntos?** (D.7). Se recomienda el JSON de puntos, para no mantener un
    parser de un formato ajeno.
 5. **Fórmula de 1RM por defecto** (C16): Epley es la propuesta; Brzycki es algo más conservadora en
    repeticiones altas. Puede dejarse elegible en Ajustes a coste casi nulo.
-6. **Escala de esfuerzo por defecto** (A5): RPE o RIR. Se propone dejarlo **desactivado** de inicio
-   para no complicar el registro a quien no lo use.
-7. **Dependencias nuevas de B10** (`share_plus`, `file_picker`). Son dos, y la alternativa sin
-   dependencias empeora bastante la experiencia en Android. Recomendado aceptarlas.
+6. ~~**Escala de esfuerzo por defecto** (A5)~~ **Cerrada:** desactivado de inicio, y en Ajustes
+   se elige entre «No», «RPE» y «RIR» en una sola fila.
+7. ~~**Dependencias nuevas de B10**~~ **Cerrada:** se aceptaron las dos. Con ellas la app va por
+   ocho dependencias.

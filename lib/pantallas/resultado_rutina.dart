@@ -106,6 +106,7 @@ class _Fila extends ConsumerWidget {
           )),
         )
         .value;
+    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
 
     final String subtitulo;
     final VoidCallback? alTocar;
@@ -123,8 +124,8 @@ class _Fila extends ConsumerWidget {
           .reduce((a, b) => a > b ? a : b);
       subtitulo =
           '${formato.plural(registros.length, 'sesión', 'sesiones')} · '
-          'último ${formato.numero(ultimo.pesoMaximo)} kg · '
-          'máx ${formato.numero(maximo)} kg';
+          'último ${formato.peso(ultimo.pesoMaximo, ajustes)} · '
+          'máx ${formato.peso(maximo, ajustes)}';
       alTocar = () => abrirResultadoEjercicio(context, idRutina, ejercicio.id);
     }
 

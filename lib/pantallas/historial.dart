@@ -37,6 +37,7 @@ class PantallaHistorial extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final rutina = ref.watch(rutinaProvider(idRutina));
     final historial = ref.watch(historialRutinaProvider(idRutina));
+    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
 
     return CupertinoPageScaffold(
       backgroundColor: context.fondo,
@@ -87,7 +88,7 @@ class PantallaHistorial extends ConsumerWidget {
                                 style: ui.estilo(context),
                               ),
                               subtitle: Text(
-                                _resumen(sesion),
+                                _resumen(sesion, ajustes),
                                 style: ui.estilo(
                                   context,
                                   size: t.footnote,
@@ -124,8 +125,8 @@ class PantallaHistorial extends ConsumerWidget {
     );
   }
 
-  String _resumen(ResumenSesion sesion) =>
+  String _resumen(ResumenSesion sesion, Ajustes ajustes) =>
       '${formato.plural(sesion.nEjercicios, 'ejercicio', 'ejercicios')} · '
       '${formato.plural(sesion.nSeries, 'serie', 'series')} · '
-      '${formato.numero(sesion.volumen)} kg';
+      '${formato.peso(sesion.volumen, ajustes)}';
 }

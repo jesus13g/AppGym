@@ -83,7 +83,7 @@ class PantallaSesion extends ConsumerWidget {
                 )
               : _Contenido(
                   sesion: datos,
-                  escala: ajustes.escala,
+                  ajustes: ajustes,
                   onEliminar: () => _eliminar(context, ref, datos),
                 ),
         ),
@@ -95,14 +95,14 @@ class PantallaSesion extends ConsumerWidget {
 class _Contenido extends StatelessWidget {
   const _Contenido({
     required this.sesion,
-    required this.escala,
+    required this.ajustes,
     required this.onEliminar,
   });
 
   final SesionCompleta sesion;
 
-  /// Escala con la que se escribe el esfuerzo guardado.
-  final EscalaEsfuerzo escala;
+  /// De aquí salen la unidad del peso y la escala del esfuerzo.
+  final Ajustes ajustes;
 
   final VoidCallback onEliminar;
 
@@ -141,7 +141,7 @@ class _Contenido extends StatelessWidget {
               ),
               Expanded(child: _Dato('$nSeries', 'Series')),
               Expanded(
-                child: _Dato('${formato.numero(sesion.volumen)} kg', 'Volumen'),
+                child: _Dato(formato.peso(sesion.volumen, ajustes), 'Volumen'),
               ),
             ],
           ),
@@ -190,7 +190,7 @@ class _Contenido extends StatelessWidget {
                     final valores => Text(
                       [
                         if (valores.$1 case final rpe?)
-                          formato.esfuerzo(rpe, escala),
+                          formato.esfuerzo(rpe, ajustes.escala),
                         ?valores.$2,
                       ].join(' · '),
                       style: ui.estilo(
@@ -201,7 +201,7 @@ class _Contenido extends StatelessWidget {
                     ),
                   },
                   additionalInfo: Text(
-                    '${formato.numero(serie.peso)} kg',
+                    formato.peso(serie.peso, ajustes),
                     style: ui.estilo(context, color: context.textoSec),
                   ),
                 ),

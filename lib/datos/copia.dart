@@ -242,9 +242,18 @@ List<String> validar(Map<String, dynamic> datos) {
 }
 
 /// Lee un JSON de copia. Devuelve `null` si ni siquiera es un objeto JSON.
+///
+/// Se descarta un BOM inicial si lo hay: `jsonDecode` no lo admite, y un
+/// fichero que haya pasado por una hoja de cálculo o por un editor de Windows
+/// puede traerlo.
 Map<String, dynamic>? leer(String contenido) {
+  // Comparar el carácter y no un `RegExp`: `\u{...}` en un patrón necesita la
+  // bandera de Unicode, y así no hay lugar a dudas.
+  final limpio = contenido.startsWith('\u{FEFF}')
+      ? contenido.substring(1)
+      : contenido;
   try {
-    final cargado = jsonDecode(contenido);
+    final cargado = jsonDecode(limpio);
     return cargado is Map<String, dynamic> ? cargado : null;
   } on FormatException {
     return null;

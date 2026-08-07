@@ -49,6 +49,7 @@ class PantallaResultadoEjercicio extends ConsumerWidget {
         idEjercicio: idEjercicio,
       )),
     );
+    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
     final nombre = ejercicio.value?.nombre ?? 'Ejercicio';
 
     return CupertinoPageScaffold(
@@ -72,17 +73,24 @@ class PantallaResultadoEjercicio extends ConsumerWidget {
                     'Registra un entrenamiento con este ejercicio para '
                     'ver aquí su evolución.',
               )
-            : _Contenido(nombre: nombre, registros: lista),
+            : _Contenido(nombre: nombre, registros: lista, ajustes: ajustes),
       ),
     );
   }
 }
 
 class _Contenido extends StatelessWidget {
-  const _Contenido({required this.nombre, required this.registros});
+  const _Contenido({
+    required this.nombre,
+    required this.registros,
+    required this.ajustes,
+  });
 
   final String nombre;
   final List<ResumenSesionEjercicio> registros;
+
+  /// De aquí sale la unidad en la que se escriben los pesos.
+  final Ajustes ajustes;
 
   @override
   Widget build(BuildContext context) {
@@ -108,13 +116,11 @@ class _Contenido extends StatelessWidget {
               children: [
                 Expanded(
                   child: _Dato(
-                    '${formato.numero(ultimo.pesoMaximo)} kg',
+                    formato.peso(ultimo.pesoMaximo, ajustes),
                     'Último',
                   ),
                 ),
-                Expanded(
-                  child: _Dato('${formato.numero(maximo)} kg', 'Máximo'),
-                ),
+                Expanded(child: _Dato(formato.peso(maximo, ajustes), 'Máximo')),
                 Expanded(child: _Dato('${registros.length}', 'Sesiones')),
               ],
             ),
@@ -133,7 +139,11 @@ class _Contenido extends StatelessWidget {
               color: context.tarjeta,
               borderRadius: BorderRadius.circular(t.radioL),
             ),
-            child: _Grafico(registros: recientes, maximo: maximo),
+            child: _Grafico(
+              registros: recientes,
+              maximo: maximo,
+              ajustes: ajustes,
+            ),
           ),
           const SizedBox(height: t.l),
           ui.Grupo(
@@ -148,7 +158,7 @@ class _Contenido extends StatelessWidget {
                   ),
                   subtitle: Text(
                     '${formato.plural(r.nSeries, 'serie', 'series')} · '
-                    '${formato.numero(r.volumen)} kg de volumen',
+                    '${formato.peso(r.volumen, ajustes)} de volumen',
                     style: ui.estilo(
                       context,
                       size: t.footnote,
@@ -156,7 +166,7 @@ class _Contenido extends StatelessWidget {
                     ),
                   ),
                   additionalInfo: Text(
-                    '${formato.numero(r.pesoMaximo)} kg',
+                    formato.peso(r.pesoMaximo, ajustes),
                     style: ui.estilo(context, color: context.textoSec),
                   ),
                 ),
@@ -170,16 +180,24 @@ class _Contenido extends StatelessWidget {
 }
 
 class _Grafico extends StatelessWidget {
-  const _Grafico({required this.registros, required this.maximo});
+  const _Grafico({
+    required this.registros,
+    required this.maximo,
+    required this.ajustes,
+  });
 
   final List<ResumenSesionEjercicio> registros;
+
+  /// El máximo en kilos; el eje se dibuja en la unidad activa.
   final double maximo;
+
+  final Ajustes ajustes;
 
   @override
   Widget build(BuildContext context) => BarChart(
     BarChartData(
       // El +15% evita que la barra más alta quede pegada al borde.
-      maxY: maximo * 1.15 + 1,
+      maxY: ajustes.desdeKilos(maximo) * 1.15 + 1,
       borderData: FlBorderData(show: false),
       gridData: FlGridData(
         drawVerticalLine: false,
@@ -236,7 +254,7 @@ class _Grafico extends StatelessWidget {
             x: indice,
             barRods: [
               BarChartRodData(
-                toY: r.pesoMaximo,
+                toY: ajustes.desdeKilos(r.pesoMaximo),
                 width: 16,
                 color: context.acento,
                 borderRadius: const BorderRadius.vertical(

@@ -1069,15 +1069,23 @@ class AppBD extends _$AppBD {
   ///
   /// La poda va aquí y no en la lectura para que la tabla no crezca sin límite
   /// con cada ficha que se abre.
+  ///
+  /// Se borra y se reinserta en vez de hacer *upsert*: drift guarda las fechas
+  /// con precisión de **segundo**, así que dos fichas abiertas seguidas empatan
+  /// y el orden quedaría al azar. Reinsertando, la recién vista es siempre la
+  /// del `rowid` más alto, y ese es el desempate.
   Future<void> registrarVisto(String idCatalogo, {int conservar = 10}) =>
       transaction(() async {
-        await into(vistos).insertOnConflictUpdate(
+        await (delete(
+          vistos,
+        )..where((v) => v.idCatalogo.equals(idCatalogo))).go();
+        await into(vistos).insert(
           VistosCompanion.insert(idCatalogo: idCatalogo, fecha: DateTime.now()),
         );
         await customStatement(
           '''
-          DELETE FROM vistos WHERE id_catalogo NOT IN (
-            SELECT id_catalogo FROM vistos ORDER BY fecha DESC LIMIT ?
+          DELETE FROM vistos WHERE rowid NOT IN (
+            SELECT rowid FROM vistos ORDER BY fecha DESC, rowid DESC LIMIT ?
           )
           ''',
           [conservar],
@@ -1086,21 +1094,19 @@ class AppBD extends _$AppBD {
 
   /// Las últimas fichas abiertas, de la más reciente a la más antigua.
   Future<List<FichaCatalogo>> vistosRecientes({int limite = 10}) async {
-    final filas =
-        await (select(vistos)
-              ..orderBy([
-                (v) =>
-                    OrderingTerm(expression: v.fecha, mode: OrderingMode.desc),
-              ])
-              ..limit(limite))
-            .join([
-              innerJoin(
-                catalogoEjercicios,
-                catalogoEjercicios.id.equalsExp(vistos.idCatalogo),
-              ),
-            ])
-            .get();
-    return [for (final f in filas) f.readTable(catalogoEjercicios)];
+    // Con `customSelect` porque el desempate es por `rowid`, que no es una
+    // columna del modelo pero sí la que ordena bien dentro del mismo segundo.
+    final filas = await customSelect(
+      '''
+      SELECT c.* FROM vistos v
+      JOIN catalogo_ejercicios c ON c.id = v.id_catalogo
+      ORDER BY v.fecha DESC, v.rowid DESC
+      LIMIT ?
+      ''',
+      variables: [Variable.withInt(limite)],
+      readsFrom: {vistos, catalogoEjercicios},
+    ).get();
+    return [for (final f in filas) catalogoEjercicios.map(f.data)];
   }
 
   /// Rutinas en las que ya está ese ejercicio del catálogo.
@@ -1126,14 +1132,20 @@ class AppBD extends _$AppBD {
   ///
   /// La fecha se lleva a medianoche antes de guardar: es lo que hace que la
   /// clave única `(fecha, tipo)` signifique de verdad «una por día».
-  Future<void> registrarMedida(DateTime fecha, String tipo, double valor) =>
-      into(medidas).insertOnConflictUpdate(
-        MedidasCompanion.insert(
-          fecha: DateTime(fecha.year, fecha.month, fecha.day),
-          tipo: tipo,
-          valor: valor,
-        ),
-      );
+  /// El `onConflict` apunta a la clave única `(fecha, tipo)` y no a la
+  /// primaria: la primaria es el `id` autoincremental, que nunca choca, de modo
+  /// que un `insertOnConflictUpdate` normal reventaría contra el índice único
+  /// en vez de sustituir el valor del día.
+  Future<void> registrarMedida(DateTime fecha, String tipo, double valor) {
+    final dia = DateTime(fecha.year, fecha.month, fecha.day);
+    return into(medidas).insert(
+      MedidasCompanion.insert(fecha: dia, tipo: tipo, valor: valor),
+      onConflict: DoUpdate(
+        (_) => MedidasCompanion(valor: Value(valor)),
+        target: [medidas.fecha, medidas.tipo],
+      ),
+    );
+  }
 
   /// Una medida a lo largo del tiempo, de la más antigua a la más reciente.
   Future<List<Medida>> serieMedida(

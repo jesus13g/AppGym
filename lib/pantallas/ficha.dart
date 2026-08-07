@@ -12,6 +12,7 @@ import '../estado/providers.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
+import 'anadir_a_rutina.dart';
 
 Future<void> abrirFicha(BuildContext context, String idCatalogo) =>
     Navigator.of(context).push(
@@ -20,20 +21,39 @@ Future<void> abrirFicha(BuildContext context, String idCatalogo) =>
       ),
     );
 
-class PantallaFicha extends ConsumerWidget {
+class PantallaFicha extends ConsumerStatefulWidget {
   const PantallaFicha({super.key, required this.idCatalogo});
 
   final String idCatalogo;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final ficha = ref.watch(fichaProvider(idCatalogo));
+  ConsumerState<PantallaFicha> createState() => _PantallaFichaState();
+}
+
+class _PantallaFichaState extends ConsumerState<PantallaFicha> {
+  @override
+  void initState() {
+    super.initState();
+    // Abrir la ficha es lo que cuenta como «visto»: es el gesto de interesarse
+    // por un ejercicio, y lo que alimenta la lista del estado inicial.
+    _anotarVisto();
+  }
+
+  Future<void> _anotarVisto() async {
+    await ref.read(bdProvider).registrarVisto(widget.idCatalogo);
+    if (mounted) ref.invalidate(vistosProvider);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ficha = ref.watch(fichaProvider(widget.idCatalogo));
 
     return CupertinoPageScaffold(
       backgroundColor: context.fondo,
       navigationBar: ui.barra(
         context,
         titulo: ficha.value?.nombre ?? 'Ejercicio',
+        derecha: BotonFavorito(idCatalogo: widget.idCatalogo),
       ),
       child: ficha.when(
         loading: () => const ui.Cargando(),
@@ -53,13 +73,13 @@ class PantallaFicha extends ConsumerWidget {
   }
 }
 
-class _Contenido extends StatelessWidget {
+class _Contenido extends ConsumerWidget {
   const _Contenido({required this.ficha});
 
   final FichaCatalogo ficha;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final secundarios = i18n.musculos(
       formato.listaJson(ficha.secondaryMuscles),
     );
@@ -115,6 +135,16 @@ class _Contenido extends StatelessWidget {
               ],
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: t.l),
+            child: ui.BotonPrincipal(
+              'Añadir a una rutina',
+              icono: CupertinoIcons.add,
+              onPressed: () => anadirARutina(context, ref, ficha),
+            ),
+          ),
+          _EnRutinas(idCatalogo: ficha.id),
+          const SizedBox(height: t.s),
           ui.Grupo(
             cabecera: 'Detalles',
             filas: [
@@ -199,6 +229,32 @@ class _Contenido extends StatelessWidget {
           style: ui.estilo(context, color: context.textoSec),
         ),
       );
+}
+
+/// «Ya está en: Empuje · Tirón», debajo del botón de añadir.
+///
+/// Responde antes de pulsar la pregunta que llevaba a pulsar: si ya lo tienes
+/// puesto en algún sitio y dónde.
+class _EnRutinas extends ConsumerWidget {
+  const _EnRutinas({required this.idCatalogo});
+
+  final String idCatalogo;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final rutinas =
+        ref.watch(rutinasQueContienenProvider(idCatalogo)).value ?? const [];
+    if (rutinas.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(left: t.l, right: t.l, top: t.s),
+      child: Text(
+        'Ya está en: ${rutinas.map((r) => r.nombre).join(' · ')}',
+        textAlign: TextAlign.center,
+        style: ui.estilo(context, size: t.footnote, color: context.textoSec),
+      ),
+    );
+  }
 }
 
 class _Paso extends StatelessWidget {

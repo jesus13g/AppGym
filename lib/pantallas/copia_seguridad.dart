@@ -64,11 +64,17 @@ class _GrupoDatosState extends ConsumerState<GrupoDatos> {
   /// guarde en Drive o se mande por correo, no una copia escondida dentro de la
   /// app —que se iría con la app al desinstalarla, que es justo de lo que esto
   /// protege—.
-  Future<void> _compartir(String contenido, String nombre) async {
+  Future<void> _compartir(
+    String contenido,
+    String nombre, {
+    bool conBom = false,
+  }) async {
     final directorio = await getTemporaryDirectory();
     final fichero = File('${directorio.path}/$nombre');
-    // UTF-8 con BOM: sin él, Excel abre los acentos del CSV como basura.
-    await fichero.writeAsString('\u{FEFF}$contenido');
+    // El BOM es **solo** para el CSV: sin él, Excel abre los acentos como
+    // basura. En el JSON estorbaría, porque `jsonDecode` no lo admite y la
+    // copia dejaría de poder reimportarse.
+    await fichero.writeAsString(conBom ? '\u{FEFF}$contenido' : contenido);
 
     await SharePlus.instance.share(
       ShareParams(
@@ -89,7 +95,7 @@ class _GrupoDatosState extends ConsumerState<GrupoDatos> {
   Future<void> _exportarCsv() => _hacer('csv', () async {
     final texto = await copia.exportarCsv(ref.read(bdProvider));
     final nombre = copia.nombreFichero(DateTime.now(), extension: 'csv');
-    await _compartir(texto, nombre);
+    await _compartir(texto, nombre, conBom: true);
     _informar('CSV generado: $nombre');
   });
 
