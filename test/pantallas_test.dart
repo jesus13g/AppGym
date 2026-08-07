@@ -1647,4 +1647,154 @@ void main() {
       expect(find.text('Esta semana'.toUpperCase()), findsNothing);
     });
   });
+
+  // ── C19: días del calendario pulsables ─────────────────────────────────────
+
+  group('días del calendario', () {
+    late int idRutina;
+    late int idEjercicio;
+
+    setUp(() async {
+      idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarEjercicio(idRutina, 'Press banca');
+      idEjercicio = (await bd.ejerciciosDeRutina(idRutina)).single.id;
+    });
+
+    /// Abre el calendario del mes en curso, que es el que monta la pantalla.
+    Future<void> abrirCalendario(WidgetTester tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, const PantallaProgreso()));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Calendario'));
+      await tester.pumpAndSettle();
+    }
+
+    /// Pulsa la celda de un día del mes visible.
+    ///
+    /// El número del día aparece también en otros sitios de la pantalla, así
+    /// que se busca dentro del `GridView` del calendario.
+    Future<void> pulsarDia(WidgetTester tester, int dia) async {
+      await tester.tap(
+        find.descendant(of: find.byType(GridView), matching: find.text('$dia')),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('pulsar un día entrenado enseña sus sesiones', (tester) async {
+      // Se entrena **hoy**, y no un día fijo del mes: un 4 clavado convertiría
+      // el test en futuro —y por tanto no pulsable— los tres primeros días de
+      // cada mes.
+      final ahora = DateTime.now();
+      // Dos sesiones el mismo día: la hoja debe traerlas las dos.
+      await bd.insertarEntrenamiento(
+        idRutina,
+        DateTime(ahora.year, ahora.month, ahora.day, 9),
+        {
+          idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
+        },
+      );
+      await bd.insertarEntrenamiento(
+        idRutina,
+        DateTime(ahora.year, ahora.month, ahora.day, 19),
+        {
+          idEjercicio: const [ValoresSerie(repeticiones: 8, peso: 65)],
+        },
+      );
+
+      await abrirCalendario(tester);
+      await pulsarDia(tester, ahora.day);
+
+      expect(find.text('2 sesiones'), findsOneWidget);
+      // El nombre de la rutina sale también en la leyenda del mes, así que se
+      // cuenta solo dentro de la hoja.
+      expect(
+        find.descendant(
+          of: find.byType(CupertinoActionSheet),
+          matching: find.text('Empuje'),
+        ),
+        findsNWidgets(2),
+      );
+      expect(
+        find.textContaining('9:00 · 1 ejercicio · 600 kg'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('19:00 · 1 ejercicio · 520 kg'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('desde la hoja se llega al detalle de la sesión', (
+      tester,
+    ) async {
+      final ahora = DateTime.now();
+      await bd.insertarEntrenamiento(
+        idRutina,
+        DateTime(ahora.year, ahora.month, ahora.day, 9),
+        {
+          idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
+        },
+      );
+
+      await abrirCalendario(tester);
+      await pulsarDia(tester, ahora.day);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(CupertinoActionSheet),
+          matching: find.text('Empuje'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // La pantalla de sesión de A2, con su botón de eliminar.
+      expect(find.text('Sesión'), findsWidgets);
+      expect(find.text('Eliminar sesión'), findsOneWidget);
+    });
+
+    testWidgets('un día pasado y vacío ofrece registrar en él', (tester) async {
+      await abrirCalendario(tester);
+      await pulsarDia(tester, 1);
+
+      expect(
+        find.text('Registrar un entrenamiento en este día'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Empuje'));
+      await tester.pumpAndSettle();
+
+      // Se abre el formulario de siempre, con el día elegido puesto.
+      expect(find.text('Registrar sesión'), findsOneWidget);
+      final ahora = DateTime.now();
+      expect(
+        find.text(formato.fechaLarga(DateTime(ahora.year, ahora.month, 1))),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('sin ninguna rutina avisa en vez de abrir una hoja vacía', (
+      tester,
+    ) async {
+      await bd.borrarRutina(idRutina);
+
+      await abrirCalendario(tester);
+      await pulsarDia(tester, 1);
+
+      expect(find.text('Crea antes una rutina'), findsOneWidget);
+      await _cerrarAviso(tester);
+    });
+
+    testWidgets('los días futuros no responden al toque', (tester) async {
+      final ahora = DateTime.now();
+      // El último día del mes; si hoy es ese mismo día no hay futuro que
+      // probar dentro del mes visible y el caso no aplica.
+      final ultimo = DateTime(ahora.year, ahora.month + 1, 0).day;
+      if (ahora.day >= ultimo) return;
+
+      await abrirCalendario(tester);
+      await pulsarDia(tester, ultimo);
+
+      expect(find.text('Registrar un entrenamiento en este día'), findsNothing);
+      expect(find.text('Cancelar'), findsNothing);
+    });
+  });
 }

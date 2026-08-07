@@ -16,8 +16,10 @@ import '../estado/providers.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
+import 'entrenar.dart';
 import 'medidas.dart';
 import 'resultado_rutina.dart';
+import 'sesion.dart';
 
 class PantallaProgreso extends ConsumerStatefulWidget {
   const PantallaProgreso({super.key});
@@ -617,6 +619,17 @@ class _Calendario extends ConsumerWidget {
                         dia: dia,
                         esHoy: dia == hoy,
                         colores: coloresDe(dia),
+                        // Los días que aún no han llegado no responden al
+                        // toque: no hay nada que ver ni nada que registrar.
+                        onPulsar: dia.isAfter(hoy)
+                            ? null
+                            : () => _abrirDia(
+                                context,
+                                ref,
+                                dia: dia,
+                                sesiones: entrenamientos[dia] ?? const [],
+                                colores: colores,
+                              ),
                       ),
                   ],
                 ),
@@ -668,8 +681,117 @@ class _Calendario extends ConsumerWidget {
   }
 }
 
+/// Lo que pasa al pulsar un día del calendario (C19).
+///
+/// Con entrenamientos, una hoja con las sesiones de ese día que lleva al
+/// detalle de A2 —donde ya se puede editar y eliminar—, así no se duplica
+/// interfaz. Sin ellos, y siendo un día pasado, ofrece registrar uno con esa
+/// fecha ya puesta.
+Future<void> _abrirDia(
+  BuildContext context,
+  WidgetRef ref, {
+  required DateTime dia,
+  required List<SesionDelDia> sesiones,
+  required Map<int, (String, String)> colores,
+}) async {
+  final ajustes = ref.read(ajustesProvider).value ?? const Ajustes();
+
+  if (sesiones.isEmpty) {
+    await _registrarEnDia(context, ref, dia);
+    return;
+  }
+
+  final elegida = await showCupertinoModalPopup<int>(
+    context: context,
+    builder: (hoja) => CupertinoActionSheet(
+      title: Text(formato.fechaLarga(dia)),
+      message: Text(formato.plural(sesiones.length, 'sesión', 'sesiones')),
+      actions: [
+        for (final s in sesiones)
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(hoja, s.id),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ui.PuntoColor(
+                      colorDesdeHex(colores[s.idRutina]?.$2, hoja.acento),
+                    ),
+                    const SizedBox(width: t.s),
+                    Flexible(
+                      child: Text(
+                        colores[s.idRutina]?.$1 ?? 'Sesión',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: t.xs),
+                Text(
+                  [
+                    formato.hora(s.fecha),
+                    if (s.duracionSeg case final segundos?)
+                      formato.duracion(segundos),
+                    formato.plural(s.nEjercicios, 'ejercicio', 'ejercicios'),
+                    formato.peso(s.volumen, ajustes),
+                  ].join(' · '),
+                  textAlign: TextAlign.center,
+                  style: ui.estilo(
+                    hoja,
+                    size: t.footnote,
+                    color: hoja.textoSec,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+      cancelButton: CupertinoActionSheetAction(
+        isDefaultAction: true,
+        onPressed: () => Navigator.pop(hoja),
+        child: const Text('Cancelar'),
+      ),
+    ),
+  );
+
+  if (elegida == null || !context.mounted) return;
+  await abrirSesion(context, elegida);
+}
+
+/// Ofrece registrar un entrenamiento en un día que quedó vacío.
+///
+/// Desde el calendario no hay rutina de contexto —a diferencia de cuando se
+/// entra desde la propia rutina—, así que primero hay que elegirla.
+Future<void> _registrarEnDia(
+  BuildContext context,
+  WidgetRef ref,
+  DateTime dia,
+) async {
+  final rutinas = ref.read(resumenRutinasProvider).value ?? const [];
+  if (rutinas.isEmpty) {
+    ui.aviso(context, 'Crea antes una rutina');
+    return;
+  }
+
+  final confirmado = await ui.elegirEnHoja<int>(
+    context,
+    titulo: formato.fechaLarga(dia),
+    mensaje: 'Registrar un entrenamiento en este día',
+    opciones: [for (final r in rutinas) (r.id, r.nombre)],
+  );
+  if (confirmado == null || !context.mounted) return;
+
+  await abrirRegistrarAnterior(context, confirmado.$1, fecha: dia);
+}
+
 class _Celda extends StatelessWidget {
-  const _Celda({required this.dia, required this.esHoy, required this.colores});
+  const _Celda({
+    required this.dia,
+    required this.esHoy,
+    required this.colores,
+    required this.onPulsar,
+  });
 
   final DateTime dia;
   final bool esHoy;
@@ -677,10 +799,13 @@ class _Celda extends StatelessWidget {
   /// Un color por rutina distinta entrenada ese día; vacío si no se entrenó.
   final List<Color> colores;
 
+  /// `null` en los días futuros, que no responden al toque.
+  final VoidCallback? onPulsar;
+
   @override
   Widget build(BuildContext context) {
     final entrenado = colores.isNotEmpty;
-    return DecoratedBox(
+    final circulo = DecoratedBox(
       decoration: BoxDecoration(
         // Con una sola rutina basta el relleno de siempre; con varias hay que
         // pintar los sectores, y entonces el fondo lo pone el pintor.
@@ -706,6 +831,17 @@ class _Celda extends StatelessWidget {
           ),
         ),
       ),
+    );
+
+    // `CupertinoButton` en vez del `GestureDetector` que pedía la
+    // especificación: la atenuación al pulsar la trae de serie y con
+    // `onPressed: null` un día futuro queda inerte, sin condicionales.
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      borderRadius: BorderRadius.circular(100),
+      onPressed: onPulsar,
+      child: SizedBox.expand(child: circulo),
     );
   }
 }

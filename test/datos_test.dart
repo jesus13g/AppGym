@@ -506,6 +506,29 @@ void main() {
       expect(series.first.calentamiento, isTrue);
     });
 
+    test('entrenamientosPorDia trae ya las cifras de cada sesión', () async {
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 4, 19), {
+        idEjercicio: const [
+          ValoresSerie(repeticiones: 10, peso: 20, calentamiento: true),
+          ValoresSerie(repeticiones: 10, peso: 60),
+          ValoresSerie(repeticiones: 8, peso: 65),
+        ],
+      }, duracionSeg: 2052);
+
+      final porDia = await bd.entrenamientosPorDia(
+        desde: DateTime(2026, 3),
+        hasta: DateTime(2026, 4),
+      );
+
+      final sesion = porDia[DateTime(2026, 3, 4)]!.single;
+      expect(sesion.nEjercicios, 1);
+      // Las tres series se cuentan; el calentamiento solo queda fuera del
+      // volumen, que es la regla de toda la app.
+      expect(sesion.nSeries, 3);
+      expect(sesion.volumen, 600 + 520);
+      expect(sesion.duracionSeg, 2052);
+    });
+
     test('sesionesConVolumen suma sin contar el calentamiento', () async {
       await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
         idEjercicio: const [

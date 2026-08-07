@@ -41,6 +41,10 @@ String fechaLarga(DateTime? valor) {
   return '${valor.day} de ${meses[valor.month - 1].toLowerCase()} de ${valor.year}';
 }
 
+/// '19:30'. La hora del día, en 24 h, que es como se lee en español.
+String hora(DateTime valor) =>
+    '${valor.hour}:${valor.minute.toString().padLeft(2, '0')}';
+
 /// Distancia en lenguaje natural hasta hoy: 'Hoy', 'Ayer', 'Hace 5 días'…
 String hace(DateTime? valor) {
   if (valor == null) return 'Sin entrenar';
