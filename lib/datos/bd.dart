@@ -13,6 +13,9 @@ library;
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
+import 'esquemas.dart';
+import 'respaldo.dart';
+
 part 'bd.g.dart';
 
 /// Paleta de iOS que se reparte entre las rutinas para identificarlas en el
@@ -46,6 +49,27 @@ class Entrenamientos extends Table {
   IntColumn get idRutina =>
       integer().references(Rutinas, #id, onDelete: KeyAction.cascade)();
   DateTimeColumn get fecha => dateTime()();
+
+  /// Texto libre de la sesión: «me dolía el hombro», «con cinturón».
+  ///
+  /// Es la información que explica un bajón en el gráfico tres semanas después.
+  TextColumn get nota => text().nullable()();
+}
+
+/// Preferencias de la app, en clave/valor.
+///
+/// Una tabla de dos columnas en vez de un fichero aparte: entra en la misma
+/// copia de seguridad y en la misma transacción que el resto de los datos.
+@DataClassName('Ajuste')
+class AjustesTabla extends Table {
+  @override
+  String get tableName => 'ajustes';
+
+  TextColumn get clave => text()();
+  TextColumn get valor => text()();
+
+  @override
+  Set<Column> get primaryKey => {clave};
 }
 
 /// Ejercicio del catálogo, sembrado desde assets/ejercicios.es.json.
@@ -96,8 +120,16 @@ class Ejercicios extends Table {
       text().nullable().references(CatalogoEjercicios, #id)();
   TextColumn get nombre => text()();
   TextColumn get descripcion => text().nullable()();
+
+  /// Posición dentro de la rutina, de 0 en adelante.
+  ///
+  /// En una rutina el orden **es** la rutina: no da igual hacer las aperturas
+  /// antes o después del press. Se desempata por `id` por si dos filas
+  /// comparten posición.
+  IntColumn get orden => integer().withDefault(const Constant(0))();
 }
 
+/// Una serie registrada: una fila por serie hecha.
 @DataClassName('Serie')
 class SeriesTabla extends Table {
   @override
@@ -108,9 +140,33 @@ class SeriesTabla extends Table {
       integer().references(Entrenamientos, #id, onDelete: KeyAction.cascade)();
   IntColumn get idEjercicio =>
       integer().references(Ejercicios, #id, onDelete: KeyAction.cascade)();
+
+  /// Índice de la serie, de 1 a N, dentro del ejercicio en esa sesión.
+  ///
+  /// **Ojo con el nombre**: en el esquema v1 esta columna guardaba el *recuento*
+  /// de series de una única fila agregada por ejercicio y sesión, de forma que
+  /// las cuatro series compartían repeticiones y peso. Desde la v2 hay una fila
+  /// por serie y esto es su índice. El nombre se conservó para no reescribir el
+  /// resto de consultas; la semántica es la nueva.
   IntColumn get nSerie => integer()();
+
   IntColumn get repeticiones => integer()();
   RealColumn get peso => real()();
+
+  /// Serie de calentamiento: se guarda, pero queda fuera del volumen, de los
+  /// máximos y del 1RM estimado.
+  BoolColumn get calentamiento =>
+      boolean().withDefault(const Constant(false))();
+
+  /// Esfuerzo percibido, de 6 a 10 en medios puntos.
+  ///
+  /// Se guarda **siempre en escala RPE**, aunque el usuario haya elegido ver
+  /// RIR en los ajustes: así cambiar de escala reinterpreta lo guardado en vez
+  /// de migrarlo.
+  RealColumn get rpe => real().nullable()();
+
+  /// Frase corta sobre esta serie: «fallo en la última», «con ayuda».
+  TextColumn get nota => text().nullable()();
 }
 
 // ── Resultados de las consultas preagregadas ─────────────────────────────────
@@ -136,15 +192,115 @@ class ResumenRutina {
 class RegistroSerie {
   const RegistroSerie({
     required this.fecha,
-    required this.series,
+    required this.nSerie,
     required this.repeticiones,
     required this.peso,
+    required this.calentamiento,
   });
 
   final DateTime fecha;
-  final int series;
+  final int nSerie;
   final int repeticiones;
   final double peso;
+  final bool calentamiento;
+}
+
+/// Lo que una sesión dio de sí en un ejercicio, ya agregado.
+///
+/// El calentamiento no cuenta en ninguna de las cifras.
+class ResumenSesionEjercicio {
+  const ResumenSesionEjercicio({
+    required this.idEntrenamiento,
+    required this.fecha,
+    required this.nSeries,
+    required this.volumen,
+    required this.pesoMaximo,
+    required this.mejor1RM,
+  });
+
+  final int idEntrenamiento;
+  final DateTime fecha;
+  final int nSeries;
+
+  /// Suma de peso × repeticiones de todas las series efectivas.
+  final double volumen;
+
+  final double pesoMaximo;
+
+  /// 1RM estimado por Epley: `peso × (1 + repeticiones / 30)`.
+  ///
+  /// Se calcula aquí porque sale de la misma agregación; la fórmula elegible y
+  /// la pantalla de récords son C16.
+  final double mejor1RM;
+}
+
+/// Una sesión vista desde el calendario.
+class SesionDelDia {
+  const SesionDelDia({
+    required this.id,
+    required this.idRutina,
+    required this.fecha,
+  });
+
+  final int id;
+  final int idRutina;
+  final DateTime fecha;
+}
+
+/// Una sesión en la lista del historial, con sus cifras ya calculadas.
+class ResumenSesion {
+  const ResumenSesion({
+    required this.id,
+    required this.fecha,
+    required this.nEjercicios,
+    required this.nSeries,
+    required this.volumen,
+    required this.tieneNota,
+  });
+
+  final int id;
+  final DateTime fecha;
+  final int nEjercicios;
+  final int nSeries;
+
+  /// Sin contar el calentamiento.
+  final double volumen;
+
+  /// La sesión, o alguna de sus series, tiene algo escrito.
+  final bool tieneNota;
+}
+
+/// Un ejercicio dentro de una sesión, con las series que se le hicieron.
+class EjercicioDeSesion {
+  const EjercicioDeSesion(this.ejercicio, this.series);
+
+  final EjercicioConFicha ejercicio;
+  final List<ValoresSerie> series;
+
+  double get volumen => series
+      .where((s) => !s.calentamiento)
+      .fold(0, (suma, s) => suma + s.peso * s.repeticiones);
+}
+
+/// Una sesión con todo lo necesario para pintarla o para reeditarla.
+class SesionCompleta {
+  const SesionCompleta({required this.entrenamiento, required this.ejercicios});
+
+  final Entrenamiento entrenamiento;
+  final List<EjercicioDeSesion> ejercicios;
+
+  int get id => entrenamiento.id;
+  int get idRutina => entrenamiento.idRutina;
+  DateTime get fecha => entrenamiento.fecha;
+  String? get nota => entrenamiento.nota;
+
+  double get volumen => ejercicios.fold(0, (suma, e) => suma + e.volumen);
+
+  /// Las series por id de ejercicio, tal y como las espera
+  /// [AppBD.actualizarEntrenamiento].
+  Map<int, List<ValoresSerie>> get series => {
+    for (final e in ejercicios) e.ejercicio.id: e.series,
+  };
 }
 
 /// Un ejercicio de rutina con su ficha de catálogo ya resuelta.
@@ -161,17 +317,89 @@ class EjercicioConFicha {
   String get nombre => ejercicio.nombre;
 }
 
-/// Valores del último registro de un ejercicio, para precargar el formulario.
-class UltimaSerie {
-  const UltimaSerie({
-    required this.series,
+/// Los valores de **una** serie, tal y como se registran o se precargan.
+///
+/// Sustituye a la antigua `UltimaSerie`, que además de guardar el recuento de
+/// series sugería por el nombre que solo servía para lo último registrado.
+class ValoresSerie {
+  const ValoresSerie({
     required this.repeticiones,
     required this.peso,
+    this.calentamiento = false,
+    this.rpe,
+    this.nota,
   });
 
-  final int series;
   final int repeticiones;
   final double peso;
+  final bool calentamiento;
+
+  /// Siempre en escala RPE (6–10), aunque se muestre como RIR.
+  final double? rpe;
+
+  final String? nota;
+
+  /// Copia cambiando algún valor. Para vaciar el RPE o la nota, [sinRpe] y
+  /// [sinNota]: un `null` en los parámetros significa «déjalo como está».
+  ValoresSerie copiar({
+    int? repeticiones,
+    double? peso,
+    bool? calentamiento,
+    double? rpe,
+    String? nota,
+    bool sinRpe = false,
+    bool sinNota = false,
+  }) => ValoresSerie(
+    repeticiones: repeticiones ?? this.repeticiones,
+    peso: peso ?? this.peso,
+    calentamiento: calentamiento ?? this.calentamiento,
+    rpe: sinRpe ? null : (rpe ?? this.rpe),
+    nota: sinNota ? null : (nota ?? this.nota),
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is ValoresSerie &&
+      other.repeticiones == repeticiones &&
+      other.peso == peso &&
+      other.calentamiento == calentamiento &&
+      other.rpe == rpe &&
+      other.nota == nota;
+
+  @override
+  int get hashCode => Object.hash(repeticiones, peso, calentamiento, rpe, nota);
+
+  @override
+  String toString() =>
+      'ValoresSerie($repeticiones × $peso kg'
+      '${calentamiento ? ', calentamiento' : ''}'
+      '${rpe == null ? '' : ', RPE $rpe'}'
+      '${nota == null ? '' : ', «$nota»'})';
+}
+
+/// Escala con la que se pide el esfuerzo al registrar.
+///
+/// Solo cambia cómo se muestra: en la base siempre se guarda RPE.
+enum EscalaEsfuerzo {
+  /// 6–10, donde 10 es el fallo.
+  rpe,
+
+  /// Repeticiones en recámara: `RIR = 10 − RPE`, así que 0 es el fallo.
+  rir,
+}
+
+/// Preferencias de la app, ya interpretadas.
+class Ajustes {
+  const Ajustes({
+    this.esfuerzoActivo = false,
+    this.escala = EscalaEsfuerzo.rpe,
+  });
+
+  /// Por defecto desactivado: quien no use el RPE no debe verlo estorbando en
+  /// el registro.
+  final bool esfuerzoActivo;
+
+  final EscalaEsfuerzo escala;
 }
 
 @DriftDatabase(
@@ -181,24 +409,101 @@ class UltimaSerie {
     CatalogoEjercicios,
     Ejercicios,
     SeriesTabla,
+    AjustesTabla,
   ],
 )
 class AppBD extends _$AppBD {
+  /// Sin [executor] abre el fichero de siempre; los tests pasan el suyo en
+  /// memoria.
+  ///
+  /// La ruta se calcula a mano en vez de dejársela a `drift_flutter` porque
+  /// `databasePath` es el único punto que se ejecuta con la base todavía
+  /// cerrada, que es cuando se puede respaldar el fichero antes de migrarlo.
+  /// Es la misma ruta por defecto del paquete, no una nueva.
   AppBD([QueryExecutor? executor])
-    : super(executor ?? driftDatabase(name: 'appgym'));
+    : super(
+        executor ??
+            driftDatabase(
+              name: 'appgym',
+              native: DriftNativeOptions(databasePath: rutaBaseDeDatos),
+            ),
+      );
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => m.createAll(),
+    // Los pasos se escriben contra el esquema *de esa versión* (`esquemas.dart`,
+    // generado con `drift_dev schema steps`), no contra las tablas de arriba:
+    // así una migración vieja no se rompe cuando el modelo actual cambie.
+    onUpgrade: stepByStep(from1To2: _de1A2, from2To3: _de2A3, from3To4: _de3A4),
     beforeOpen: (details) async {
       // Sin esto SQLite ignora las claves foráneas y los ON DELETE CASCADE
       // no llegan a ejecutarse.
       await customStatement('PRAGMA foreign_keys = ON');
     },
   );
+
+  /// v1 → v2: cada fila agregada se expande en una fila por serie.
+  ///
+  /// Es la única migración del proyecto que transforma datos. No se puede
+  /// insertar en `serie` mientras se la está recorriendo, así que las filas
+  /// viejas se apartan primero a una tabla temporal. Lo que sale es fiel a lo
+  /// que el usuario quiso decir: cuatro series de 10×60 kg se convierten en
+  /// cuatro filas de 10×60 kg, y el volumen total no cambia.
+  Future<void> _de1A2(Migrator m, Schema2 esquema) async {
+    await m.addColumn(esquema.serie, esquema.serie.calentamiento);
+
+    await customStatement(
+      'CREATE TEMPORARY TABLE serie_v1 AS SELECT * FROM serie',
+    );
+    await customStatement('DELETE FROM serie');
+    await customStatement('''
+      WITH RECURSIVE indices(i) AS (
+        SELECT 1
+        UNION ALL
+        SELECT i + 1 FROM indices
+        WHERE i < (SELECT COALESCE(MAX(n_serie), 0) FROM serie_v1)
+      )
+      INSERT INTO serie (
+        id_entrenamiento, id_ejercicio, n_serie, repeticiones, peso, calentamiento
+      )
+      SELECT v.id_entrenamiento, v.id_ejercicio, i.i, v.repeticiones, v.peso, 0
+      FROM serie_v1 v
+      JOIN indices i ON i.i <= v.n_serie
+      ORDER BY v.id, i.i
+    ''');
+    await customStatement('DROP TABLE serie_v1');
+  }
+
+  /// v3 → v4: notas, RPE y la tabla de ajustes.
+  ///
+  /// Solo añade; no hay nada que transformar.
+  Future<void> _de3A4(Migrator m, Schema4 esquema) async {
+    await m.addColumn(esquema.entrenamientos, esquema.entrenamientos.nota);
+    await m.addColumn(esquema.serie, esquema.serie.rpe);
+    await m.addColumn(esquema.serie, esquema.serie.nota);
+    await m.createTable(esquema.ajustes);
+  }
+
+  /// v2 → v3: los ejercicios ganan su posición dentro de la rutina.
+  ///
+  /// Las rutinas existentes conservan el orden que tenían, que era el de
+  /// inserción: a cada ejercicio le toca el número de ejercicios de su rutina
+  /// con un `id` menor. Una subconsulta correlacionada basta y no depende de
+  /// que la versión de SQLite del móvil traiga funciones de ventana.
+  Future<void> _de2A3(Migrator m, Schema3 esquema) async {
+    await m.addColumn(esquema.ejercicios, esquema.ejercicios.orden);
+    await customStatement('''
+      UPDATE ejercicios SET orden = (
+        SELECT COUNT(*) FROM ejercicios AS previos
+        WHERE previos.id_rutina = ejercicios.id_rutina
+          AND previos.id < ejercicios.id
+      )
+    ''');
+  }
 
   // ── Rutinas ────────────────────────────────────────────────────────────────
 
@@ -324,6 +629,68 @@ class AppBD extends _$AppBD {
         idCatalogo: Value(idCatalogo),
         nombre: nombre,
         descripcion: Value(descripcion),
+        orden: Value(await _siguienteOrden(idRutina)),
+      ),
+    );
+    return true;
+  }
+
+  /// Posición para un ejercicio nuevo: al final de su rutina.
+  Future<int> _siguienteOrden(int idRutina) async {
+    final maximo = ejercicios.orden.max();
+    final consulta = selectOnly(ejercicios)
+      ..addColumns([maximo])
+      ..where(ejercicios.idRutina.equals(idRutina));
+    final actual = await consulta.map((f) => f.read(maximo)).getSingle();
+    return actual == null ? 0 : actual + 1;
+  }
+
+  /// Fija el orden de los ejercicios de una rutina, en una transacción.
+  ///
+  /// [idsEnOrden] es la lista completa tal y como quedó tras arrastrar.
+  Future<void> reordenarEjercicios(int idRutina, List<int> idsEnOrden) =>
+      transaction(() async {
+        for (final (posicion, id) in idsEnOrden.indexed) {
+          await (update(ejercicios)
+                ..where((e) => e.id.equals(id) & e.idRutina.equals(idRutina)))
+              .write(EjerciciosCompanion(orden: Value(posicion)));
+        }
+      });
+
+  /// Mueve un ejercicio a otra rutina conservando su histórico de series.
+  ///
+  /// Las series no se tocan: siguen colgando de las sesiones en las que se
+  /// hicieron, que son las de la rutina de origen —es lo que de verdad pasó
+  /// aquel día—, así que ahí se siguen viendo. Lo que viaja con el ejercicio es
+  /// la precarga del registro ([ultimasSeriesEjercicio], que no mira la
+  /// rutina); el gráfico de la rutina de destino empieza de cero.
+  ///
+  /// Devuelve `false` si en la rutina de destino ya está ese ejercicio: es la
+  /// misma regla de duplicado que aplica [insertarEjercicio], solo que aquí el
+  /// choque se descubre al mover.
+  Future<bool> moverEjercicio(int idEjercicio, int idRutinaDestino) async {
+    final ejercicio = await (select(
+      ejercicios,
+    )..where((e) => e.id.equals(idEjercicio))).getSingleOrNull();
+    if (ejercicio == null) return false;
+    if (ejercicio.idRutina == idRutinaDestino) return false;
+
+    final consulta = select(ejercicios)
+      ..where((e) => e.idRutina.equals(idRutinaDestino))
+      ..limit(1);
+    if (ejercicio.idCatalogo case final idCatalogo?) {
+      consulta.where((e) => e.idCatalogo.equals(idCatalogo));
+    } else {
+      consulta.where(
+        (e) => e.idCatalogo.isNull() & e.nombre.equals(ejercicio.nombre),
+      );
+    }
+    if (await consulta.getSingleOrNull() != null) return false;
+
+    await (update(ejercicios)..where((e) => e.id.equals(idEjercicio))).write(
+      EjerciciosCompanion(
+        idRutina: Value(idRutinaDestino),
+        orden: Value(await _siguienteOrden(idRutinaDestino)),
       ),
     );
     return true;
@@ -356,7 +723,11 @@ class AppBD extends _$AppBD {
   Future<List<EjercicioConFicha>> ejerciciosDeRutina(int idRutina) async {
     final consulta = select(ejercicios)
       ..where((e) => e.idRutina.equals(idRutina))
-      ..orderBy([(e) => OrderingTerm(expression: e.id)]);
+      ..orderBy([
+        (e) => OrderingTerm(expression: e.orden),
+        // Desempate defensivo: si dos filas comparten posición, manda el id.
+        (e) => OrderingTerm(expression: e.id),
+      ]);
     final filas = await consulta.join([
       leftOuterJoin(
         catalogoEjercicios,
@@ -455,40 +826,114 @@ class AppBD extends _$AppBD {
 
   // ── Entrenamientos y series ────────────────────────────────────────────────
 
-  /// Guarda un entrenamiento con una serie por ejercicio.
+  /// Guarda un entrenamiento con todas las series de cada ejercicio.
   ///
-  /// [series] va de id de ejercicio a los valores registrados.
+  /// [series] va de id de ejercicio a la lista de series que se hicieron, en
+  /// orden. Un ejercicio con la lista vacía sencillamente no se guarda, que es
+  /// lo que sustituye al antiguo interruptor de «incluir ejercicio».
   Future<bool> insertarEntrenamiento(
     int idRutina,
     DateTime fecha,
-    Map<int, UltimaSerie> series,
-  ) async {
-    if (series.isEmpty) return false;
+    Map<int, List<ValoresSerie>> series, {
+    String? nota,
+  }) async {
+    final conSeries = _soloConSeries(series);
+    if (conSeries.isEmpty) return false;
 
     await transaction(() async {
       final idEntrenamiento = await into(entrenamientos).insert(
-        EntrenamientosCompanion.insert(idRutina: idRutina, fecha: fecha),
+        EntrenamientosCompanion.insert(
+          idRutina: idRutina,
+          fecha: fecha,
+          nota: Value(_limpiar(nota)),
+        ),
       );
-      await batch((b) {
-        b.insertAll(seriesTabla, [
-          for (final entrada in series.entries)
-            SeriesTablaCompanion.insert(
-              idEntrenamiento: idEntrenamiento,
-              idEjercicio: entrada.key,
-              nSerie: entrada.value.series,
-              repeticiones: entrada.value.repeticiones,
-              peso: entrada.value.peso,
-            ),
-        ]);
-      });
+      await _insertarSeries(idEntrenamiento, conSeries);
     });
     return true;
   }
 
-  /// Series de un ejercicio en una rutina, con su fecha, ordenadas por fecha.
+  /// Una nota en blanco es no tener nota: así el icono del historial no
+  /// aparece por un espacio suelto.
+  String? _limpiar(String? texto) {
+    final limpio = texto?.trim();
+    return (limpio == null || limpio.isEmpty) ? null : limpio;
+  }
+
+  Map<int, List<ValoresSerie>> _soloConSeries(
+    Map<int, List<ValoresSerie>> series,
+  ) => {
+    for (final entrada in series.entries)
+      if (entrada.value.isNotEmpty) entrada.key: entrada.value,
+  };
+
+  /// Reemplaza en bloque la fecha y las series de una sesión ya guardada.
+  ///
+  /// Borra las series y las reinserta en vez de calcular la diferencia: para
+  /// este tamaño de datos el *diff* no aporta nada y sí complica el código.
+  /// Devuelve `false` si la sesión no existe o si se queda sin ninguna serie,
+  /// en cuyo caso no se toca nada.
+  Future<bool> actualizarEntrenamiento(
+    int idEntrenamiento,
+    DateTime fecha,
+    Map<int, List<ValoresSerie>> series, {
+    String? nota,
+  }) async {
+    final conSeries = _soloConSeries(series);
+    if (conSeries.isEmpty) return false;
+
+    final existe = await (select(
+      entrenamientos,
+    )..where((e) => e.id.equals(idEntrenamiento))).getSingleOrNull();
+    if (existe == null) return false;
+
+    await transaction(() async {
+      await (update(
+        entrenamientos,
+      )..where((e) => e.id.equals(idEntrenamiento))).write(
+        EntrenamientosCompanion(
+          fecha: Value(fecha),
+          nota: Value(_limpiar(nota)),
+        ),
+      );
+      await (delete(
+        seriesTabla,
+      )..where((s) => s.idEntrenamiento.equals(idEntrenamiento))).go();
+      await _insertarSeries(idEntrenamiento, conSeries);
+    });
+    return true;
+  }
+
+  /// Borra una sesión con sus series (por el cascade).
+  Future<void> borrarEntrenamiento(int idEntrenamiento) =>
+      (delete(entrenamientos)..where((e) => e.id.equals(idEntrenamiento))).go();
+
+  Future<void> _insertarSeries(
+    int idEntrenamiento,
+    Map<int, List<ValoresSerie>> series,
+  ) => batch((b) {
+    b.insertAll(seriesTabla, [
+      for (final entrada in series.entries)
+        for (final (indice, valores) in entrada.value.indexed)
+          SeriesTablaCompanion.insert(
+            idEntrenamiento: idEntrenamiento,
+            idEjercicio: entrada.key,
+            nSerie: indice + 1,
+            repeticiones: valores.repeticiones,
+            peso: valores.peso,
+            calentamiento: Value(valores.calentamiento),
+            rpe: Value(valores.rpe),
+            nota: Value(_limpiar(valores.nota)),
+          ),
+    ]);
+  });
+
+  /// Series de un ejercicio en una rutina, una entrada por serie.
   ///
   /// Devolver la fecha aquí evita que la pantalla de progreso tenga que navegar
-  /// de la serie a su entrenamiento fila a fila.
+  /// de la serie a su entrenamiento fila a fila. Quien necesite el dato
+  /// agregado por sesión tiene [resumenSesionesEjercicio]; esto son las series
+  /// en crudo, calentamientos incluidos.
   Future<List<RegistroSerie>> seriesConFecha(
     int idRutina,
     int idEjercicio,
@@ -504,45 +949,228 @@ class AppBD extends _$AppBD {
             entrenamientos.idRutina.equals(idRutina) &
                 seriesTabla.idEjercicio.equals(idEjercicio),
           )
-          ..orderBy([OrderingTerm(expression: entrenamientos.fecha)]);
+          ..orderBy([
+            OrderingTerm(expression: entrenamientos.fecha),
+            OrderingTerm(expression: seriesTabla.idEntrenamiento),
+            OrderingTerm(expression: seriesTabla.nSerie),
+          ]);
 
     return [
       for (final f in await consulta.get())
         RegistroSerie(
           fecha: f.readTable(entrenamientos).fecha,
-          series: f.readTable(seriesTabla).nSerie,
+          nSerie: f.readTable(seriesTabla).nSerie,
           repeticiones: f.readTable(seriesTabla).repeticiones,
           peso: f.readTable(seriesTabla).peso,
+          calentamiento: f.readTable(seriesTabla).calentamiento,
         ),
     ];
   }
 
-  /// Valores del último registro de un ejercicio, o `null` si nunca se entrenó.
-  Future<UltimaSerie?> ultimaSerieEjercicio(int idEjercicio) async {
-    final consulta =
-        select(seriesTabla).join([
-            innerJoin(
-              entrenamientos,
-              entrenamientos.id.equalsExp(seriesTabla.idEntrenamiento),
-            ),
-          ])
-          ..where(seriesTabla.idEjercicio.equals(idEjercicio))
-          ..orderBy([
-            OrderingTerm(
-              expression: entrenamientos.fecha,
-              mode: OrderingMode.desc,
-            ),
-            OrderingTerm(expression: seriesTabla.id, mode: OrderingMode.desc),
-          ])
-          ..limit(1);
+  /// Lo que dio de sí cada **sesión** en un ejercicio, de la más antigua a la
+  /// más reciente.
+  ///
+  /// Es lo que consumen el gráfico y las listas de progreso: con
+  /// [seriesConFecha] pintarían una barra por serie en vez de una por sesión.
+  /// Las series de calentamiento no entran en ninguna de las cifras, así que
+  /// una sesión que solo fuera calentamiento no aparece aquí.
+  Future<List<ResumenSesionEjercicio>> resumenSesionesEjercicio(
+    int idRutina,
+    int idEjercicio,
+  ) async {
+    final filas = await customSelect(
+      '''
+      SELECT e.id            AS id,
+             e.fecha         AS fecha,
+             COUNT(*)        AS n_series,
+             SUM(s.peso * s.repeticiones)            AS volumen,
+             MAX(s.peso)                             AS maximo,
+             MAX(s.peso * (1 + s.repeticiones / 30.0)) AS mejor_1rm
+      FROM serie s
+      JOIN entrenamientos e ON e.id = s.id_entrenamiento
+      WHERE e.id_rutina = ? AND s.id_ejercicio = ? AND s.calentamiento = 0
+      GROUP BY e.id
+      ORDER BY e.fecha, e.id
+      ''',
+      variables: [Variable.withInt(idRutina), Variable.withInt(idEjercicio)],
+      readsFrom: {seriesTabla, entrenamientos},
+    ).get();
 
-    final fila = await consulta.getSingleOrNull();
-    if (fila == null) return null;
-    final serie = fila.readTable(seriesTabla);
-    return UltimaSerie(
-      series: serie.nSerie,
-      repeticiones: serie.repeticiones,
-      peso: serie.peso,
+    return [
+      for (final f in filas)
+        ResumenSesionEjercicio(
+          idEntrenamiento: f.read<int>('id'),
+          fecha: f.read<DateTime>('fecha'),
+          nSeries: f.read<int>('n_series'),
+          volumen: f.read<double>('volumen'),
+          pesoMaximo: f.read<double>('maximo'),
+          mejor1RM: f.read<double>('mejor_1rm'),
+        ),
+    ];
+  }
+
+  /// Series de la **última sesión** de un ejercicio, para precargar el registro.
+  ///
+  /// Devuelve tantas entradas como series tuvo aquel día, con sus valores; la
+  /// lista vacía significa que el ejercicio nunca se ha entrenado.
+  Future<List<ValoresSerie>> ultimasSeriesEjercicio(int idEjercicio) async {
+    final ultima =
+        await (select(seriesTabla).join([
+                innerJoin(
+                  entrenamientos,
+                  entrenamientos.id.equalsExp(seriesTabla.idEntrenamiento),
+                ),
+              ])
+              ..where(seriesTabla.idEjercicio.equals(idEjercicio))
+              ..orderBy([
+                OrderingTerm(
+                  expression: entrenamientos.fecha,
+                  mode: OrderingMode.desc,
+                ),
+                OrderingTerm(
+                  expression: entrenamientos.id,
+                  mode: OrderingMode.desc,
+                ),
+              ])
+              ..limit(1))
+            .getSingleOrNull();
+    if (ultima == null) return const [];
+
+    final idEntrenamiento = ultima.readTable(entrenamientos).id;
+    final series =
+        await (select(seriesTabla)
+              ..where(
+                (s) =>
+                    s.idEjercicio.equals(idEjercicio) &
+                    s.idEntrenamiento.equals(idEntrenamiento),
+              )
+              ..orderBy([(s) => OrderingTerm(expression: s.nSerie)]))
+            .get();
+
+    return [
+      for (final s in series)
+        ValoresSerie(
+          repeticiones: s.repeticiones,
+          peso: s.peso,
+          calentamiento: s.calentamiento,
+          rpe: s.rpe,
+          nota: s.nota,
+        ),
+    ];
+  }
+
+  /// Sesiones de una rutina, de la más reciente a la más antigua.
+  ///
+  /// Trae las tres cifras que pinta la lista —ejercicios, series y volumen— ya
+  /// agregadas, para no consultar una vez por fila. Las sesiones sin ninguna
+  /// serie (que no deberían existir, pero podrían) también aparecen: si no, no
+  /// habría forma de borrarlas desde la app.
+  Future<List<ResumenSesion>> historialRutina(
+    int idRutina, {
+    int limite = 50,
+    int desplazamiento = 0,
+  }) async {
+    final filas = await customSelect(
+      '''
+      SELECT e.id                          AS id,
+             e.fecha                       AS fecha,
+             COUNT(DISTINCT s.id_ejercicio) AS n_ejercicios,
+             COUNT(s.id)                   AS n_series,
+             COALESCE(SUM(
+               CASE WHEN s.calentamiento = 0 THEN s.peso * s.repeticiones ELSE 0 END
+             ), 0)                         AS volumen,
+             (e.nota IS NOT NULL OR COUNT(s.nota) > 0) AS tiene_nota
+      FROM entrenamientos e
+      LEFT JOIN serie s ON s.id_entrenamiento = e.id
+      WHERE e.id_rutina = ?
+      GROUP BY e.id
+      ORDER BY e.fecha DESC, e.id DESC
+      LIMIT ? OFFSET ?
+      ''',
+      variables: [
+        Variable.withInt(idRutina),
+        Variable.withInt(limite),
+        Variable.withInt(desplazamiento),
+      ],
+      readsFrom: {entrenamientos, seriesTabla},
+    ).get();
+
+    return [
+      for (final f in filas)
+        ResumenSesion(
+          id: f.read<int>('id'),
+          fecha: f.read<DateTime>('fecha'),
+          nEjercicios: f.read<int>('n_ejercicios'),
+          nSeries: f.read<int>('n_series'),
+          volumen: f.read<double>('volumen'),
+          tieneNota: f.read<bool>('tiene_nota'),
+        ),
+    ];
+  }
+
+  /// Una sesión con sus ejercicios y series, o `null` si ya no existe.
+  ///
+  /// Es lo que pinta el detalle y lo que precarga la edición, así que resuelve
+  /// también la ficha de catálogo de cada ejercicio.
+  Future<SesionCompleta?> sesion(int idEntrenamiento) async {
+    final entrenamiento = await (select(
+      entrenamientos,
+    )..where((e) => e.id.equals(idEntrenamiento))).getSingleOrNull();
+    if (entrenamiento == null) return null;
+
+    final filas =
+        await (select(
+          seriesTabla,
+        )..where((s) => s.idEntrenamiento.equals(idEntrenamiento))).join([
+          innerJoin(
+            ejercicios,
+            ejercicios.id.equalsExp(seriesTabla.idEjercicio),
+          ),
+          leftOuterJoin(
+            catalogoEjercicios,
+            catalogoEjercicios.id.equalsExp(ejercicios.idCatalogo),
+          ),
+        ]).get();
+
+    // Se agrupa en memoria manteniendo el orden de la rutina y, dentro de cada
+    // ejercicio, el de las series.
+    final porEjercicio = <int, List<Serie>>{};
+    final fichas = <int, EjercicioConFicha>{};
+    for (final f in filas) {
+      final ejercicio = f.readTable(ejercicios);
+      fichas[ejercicio.id] = EjercicioConFicha(
+        ejercicio,
+        f.readTableOrNull(catalogoEjercicios),
+      );
+      (porEjercicio[ejercicio.id] ??= []).add(f.readTable(seriesTabla));
+    }
+
+    // El orden de la rutina, con el id de desempate, igual que en
+    // [ejerciciosDeRutina].
+    final ordenados = fichas.keys.toList()
+      ..sort((a, b) {
+        final porOrden = fichas[a]!.ejercicio.orden.compareTo(
+          fichas[b]!.ejercicio.orden,
+        );
+        return porOrden != 0 ? porOrden : a.compareTo(b);
+      });
+    return SesionCompleta(
+      entrenamiento: entrenamiento,
+      ejercicios: [
+        for (final id in ordenados)
+          EjercicioDeSesion(fichas[id]!, [
+            for (final s
+                in porEjercicio[id]!
+                  ..sort((a, b) => a.nSerie.compareTo(b.nSerie)))
+              ValoresSerie(
+                repeticiones: s.repeticiones,
+                peso: s.peso,
+                calentamiento: s.calentamiento,
+                rpe: s.rpe,
+                nota: s.nota,
+              ),
+          ]),
+      ],
     );
   }
 
@@ -563,17 +1191,63 @@ class AppBD extends _$AppBD {
     return consulta.map((f) => f.read(cuenta) ?? 0).getSingle();
   }
 
-  /// Día -> id de rutina, con todos los entrenamientos.
+  // ── Ajustes ────────────────────────────────────────────────────────────────
+
+  /// Clave del interruptor de esfuerzo percibido.
+  static const claveEsfuerzoActivo = 'esfuerzo_activo';
+
+  /// Clave de la escala con la que se muestra el esfuerzo.
+  static const claveEsfuerzoEscala = 'esfuerzo_escala';
+
+  /// Las preferencias, ya interpretadas y con sus valores por defecto.
+  Future<Ajustes> ajustes() async {
+    final filas = await select(ajustesTabla).get();
+    final valores = {for (final f in filas) f.clave: f.valor};
+    return Ajustes(
+      esfuerzoActivo: valores[claveEsfuerzoActivo] == '1',
+      escala: valores[claveEsfuerzoEscala] == 'rir'
+          ? EscalaEsfuerzo.rir
+          : EscalaEsfuerzo.rpe,
+    );
+  }
+
+  Future<void> fijarAjuste(String clave, String valor) =>
+      into(ajustesTabla).insertOnConflictUpdate(
+        AjustesTablaCompanion.insert(clave: clave, valor: valor),
+      );
+
+  /// Sesiones de cada día dentro del rango pedido, en orden.
   ///
-  /// Si un día tiene varios, se queda el más reciente, que es el que colorea la
-  /// celda del calendario.
-  Future<Map<DateTime, int>> entrenamientosPorDia() async {
-    final filas = await (select(
-      entrenamientos,
-    )..orderBy([(e) => OrderingTerm(expression: e.fecha)])).get();
-    return {
-      for (final e in filas)
-        DateTime(e.fecha.year, e.fecha.month, e.fecha.day): e.idRutina,
-    };
+  /// Un día puede tener varias, de la misma rutina o de rutinas distintas: la
+  /// versión anterior devolvía `Map<DateTime, int>` y la segunda sesión del día
+  /// pisaba a la primera, de modo que el calendario solo pintaba una.
+  ///
+  /// El rango no es un adorno: antes se cargaban en memoria todos los
+  /// entrenamientos de la historia para pintar un solo mes.
+  Future<Map<DateTime, List<SesionDelDia>>> entrenamientosPorDia({
+    required DateTime desde,
+    required DateTime hasta,
+  }) async {
+    final filas =
+        await (select(entrenamientos)
+              ..where(
+                (e) =>
+                    e.fecha.isBiggerOrEqualValue(desde) &
+                    e.fecha.isSmallerThanValue(hasta),
+              )
+              ..orderBy([
+                (e) => OrderingTerm(expression: e.fecha),
+                (e) => OrderingTerm(expression: e.id),
+              ]))
+            .get();
+
+    final porDia = <DateTime, List<SesionDelDia>>{};
+    for (final e in filas) {
+      final dia = DateTime(e.fecha.year, e.fecha.month, e.fecha.day);
+      (porDia[dia] ??= []).add(
+        SesionDelDia(id: e.id, idRutina: e.idRutina, fecha: e.fecha),
+      );
+    }
+    return porDia;
   }
 }

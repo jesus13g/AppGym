@@ -83,6 +83,10 @@ negocian punto por punto:
 
 ## A. Limitaciones del modelo de datos
 
+> **Bloque implementado.** A1–A6 están en el código desde la iteración de agosto de 2026, con sus
+> migraciones (esquema v2 a v4) y sus tests. Lo que sigue se conserva como el porqué de cada
+> decisión; donde la implementación se desvió, se dice en la sección [E](#e-modelo-de-datos-consolidado).
+
 ### A1. Series independientes por ejercicio
 
 > **Es la especificación central de esta iteración.** C16, C17 y D dependen de ella, y B8 se
@@ -1474,20 +1478,27 @@ SeriesTabla          id, idEntrenamiento, idEjercicio,
 
 **Secuencia de `schemaVersion`:**
 
-| Versión | Contenido | Destructiva |
-|---|---|---|
-| 1 | Estado actual | — |
-| 2 | **A1** — expansión de series agregadas a filas por serie + `calentamiento` | **Sí** |
-| 3 | A4 (`orden`), A5 (`nota`, `rpe`) | No |
-| 4 | B7 (`descansoSeg`), B8 (`duracionSeg`, `SesionesActivas`) | No |
-| 5 | B9 (`Ajustes`), B12 (`Favoritos`, `Vistos`, índice de `target`), B13 (`Medidas`) | No |
+| Versión | Contenido | Destructiva | Estado |
+|---|---|---|---|
+| 1 | Estado inicial | — | — |
+| 2 | **A1** — expansión de series agregadas a filas por serie + `calentamiento` | **Sí** | **Hecha** |
+| 3 | A4 (`orden`) | No | **Hecha** |
+| 4 | A5 (`nota` de sesión y de serie, `rpe`) y la tabla `Ajustes` | No | **Hecha** |
+| 5 | B7 (`descansoSeg`), B8 (`duracionSeg`, `SesionesActivas`) | No | Pendiente |
+| 6 | B12 (`Favoritos`, `Vistos`, índice de `target`), B13 (`Medidas`) | No | Pendiente |
 
 Solo la versión 2 transforma datos existentes. Todas las demás añaden columnas, tablas o índices y
 son seguras. Antes de la 2 se copia el fichero de base de datos.
 
-Conviene montar el flujo de esquemas versionados de drift (`drift_dev schema dump` y
-`schema generate`) al abordar la v2, para poder escribir tests que migren una base real de una
-versión a la siguiente. Una vez montado sirve para las cuatro migraciones restantes.
+> **Desviación al implementar.** La tabla `Ajustes` se adelantó a la v4, junto con A5: el
+> interruptor del RPE tenía que poder tocarse desde algún sitio y no había ninguno. Eso corrió una
+> versión el resto de la secuencia. La pantalla de Ajustes que existe hoy tiene **solo** esa
+> opción y la escala RPE/RIR; B9 sigue pendiente entera.
+
+El flujo de esquemas versionados de drift (`drift_dev schema dump`, `schema steps` y
+`schema generate`) se montó al abordar la v2 y ya sirve para las que quedan:
+`test/migraciones_test.dart` monta una base real de cada versión anterior y la migra hasta la
+actual, comparando el esquema resultante con el volcado. El flujo está en `CLAUDE.md`.
 
 ---
 
@@ -1501,22 +1512,24 @@ Orden propuesto. Cada fase deja la app funcionando y es publicable por separado.
 > sobrescribiendo `bdProvider`, `flutter analyze` en 0 issues y CI que verifica cada pull request y
 > publica una release por cada merge a `main`. Esa fase desaparece.
 
-### Fase 0 — Herramienta de migraciones
+### Fase 0 — Herramienta de migraciones ✅
 
-Lo único que falta antes de tocar el esquema: `schemaVersion` lleva en 1 desde el principio y no hay
-ninguna migración escrita todavía. Antes de la primera, montar el volcado de esquemas versionados de
-drift y un test que migre una base de la v1 a la v2. Es media jornada y protege el histórico del
-usuario.
+Hecha. El volcado de esquemas versionados de drift está montado (`drift_schemas/`,
+`lib/datos/esquemas.dart`, `test/esquemas/`) y `test/migraciones_test.dart` migra bases reales de
+cada versión anterior hasta la actual. Hubo que ponerle techo a `drift` en `pubspec.yaml`: desde
+2.34.3 el CLI de `drift_dev` no compila, y `drift_dev` no se puede subir por el analyzer.
 
-### Fase 1 — Cimientos del modelo
+### Fase 1 — Cimientos del modelo ✅
 
-**A1** (series independientes) → **A2** (editar/borrar) → **A3** (fecha) → **A6** (varias sesiones
-por día). Es el bloque con más riesgo y el que desbloquea el resto; conviene hacerlo de una pieza.
+Hecha. **A1** (series independientes, con la migración destructiva y el respaldo previo) → **A2**
+(editar/borrar, con historial y detalle de sesión) → **A3** (fecha) → **A6** (varias sesiones por
+día).
 
 ### Fase 2 — Uso diario
 
-**B9** (Ajustes, porque B7 y A5 necesitan dónde configurarse) → **A5** (notas y RPE) →
-**B7** (descanso) → **B8** (sesión viva) → **A4** (orden).
+**A4** (orden) y **A5** (notas y RPE) ✅ ya están; A5 se adelantó a B9 llevándose consigo la tabla
+de ajustes y una pantalla mínima con su interruptor. Queda **B9** (la pantalla de Ajustes completa)
+→ **B7** (descanso) → **B8** (sesión viva).
 
 ### Fase 3 — Protección de datos y comodidad
 

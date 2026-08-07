@@ -5,10 +5,16 @@
 library;
 
 import 'package:appgym/datos/bd.dart';
+import 'package:appgym/datos/formato.dart' as formato;
 import 'package:appgym/datos/semilla.dart';
 import 'package:appgym/estado/providers.dart';
 import 'package:appgym/pantallas/catalogo.dart';
+import 'package:appgym/pantallas/entrenar.dart';
+import 'package:appgym/pantallas/historial.dart';
+import 'package:appgym/pantallas/rutina.dart';
 import 'package:appgym/pantallas/rutinas.dart';
+import 'package:appgym/pantallas/sesion.dart';
+import 'package:appgym/tema/ui.dart' as ui;
 import 'package:drift/native.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -55,6 +61,18 @@ Widget _app(AppBD bd, Widget pantalla) => ProviderScope(
     home: pantalla,
   ),
 );
+
+/// Pone la ventana del tamaño de un móvil.
+///
+/// Por defecto los tests miden 800×600, donde casi nada desborda; el ancho que
+/// importa es el del teléfono, que es donde caben —o no— los cuatro controles
+/// de una fila de serie.
+void _comoUnMovil(WidgetTester tester) {
+  tester.view.physicalSize = const Size(375 * 3, 812 * 3);
+  tester.view.devicePixelRatio = 3;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+}
 
 void main() {
   late AppBD bd;
@@ -168,6 +186,382 @@ void main() {
 
       expect(find.text('barbell bench press'), findsOneWidget);
       expect(find.text('dumbbell curl'), findsNothing);
+    });
+  });
+
+  group('registro de entrenamiento', () {
+    late int idRutina;
+    late int idEjercicio;
+
+    setUp(() async {
+      idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarEjercicio(idRutina, 'Press banca');
+      idEjercicio = (await bd.ejerciciosDeRutina(idRutina)).single.id;
+    });
+
+    testWidgets('sin histórico propone cuatro series editables', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      // Dos selectores por serie: repeticiones y peso.
+      expect(find.byType(ui.SelectorEnLinea), findsNWidgets(8));
+      expect(find.text('Primera vez con este ejercicio'), findsOneWidget);
+    });
+
+    testWidgets('precarga tantas filas como series tuvo la última sesión', (
+      tester,
+    ) async {
+      // Seis series, que es el caso que el ancho de un móvil aprieta.
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [
+          ValoresSerie(repeticiones: 12, peso: 40, calentamiento: true),
+          ValoresSerie(repeticiones: 10, peso: 60),
+          ValoresSerie(repeticiones: 10, peso: 60),
+          ValoresSerie(repeticiones: 8, peso: 65),
+          ValoresSerie(repeticiones: 6, peso: 70),
+          ValoresSerie(repeticiones: 6, peso: 70),
+        ],
+      });
+
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      // Seis filas pintadas y ni un RenderFlex desbordado: el test falla solo
+      // si alguna fila no cabe.
+      expect(find.byType(ui.SelectorEnLinea), findsNWidgets(12));
+      expect(find.text('65,0 kg'), findsOneWidget);
+      expect(find.text('70,0 kg'), findsNWidgets(2));
+      expect(find.textContaining('Último: 6 series'), findsOneWidget);
+    });
+
+    testWidgets('añadir serie copia la última y se guarda una fila por serie', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Añadir serie'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ui.SelectorEnLinea), findsNWidgets(10));
+
+      // Subir las repeticiones de la primera serie no toca a las demás: es lo
+      // que el esquema agregado no permitía.
+      await tester.tap(find.byIcon(CupertinoIcons.plus).first);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Guardar entrenamiento'));
+      await tester.pumpAndSettle();
+
+      final series = await bd.seriesConFecha(idRutina, idEjercicio);
+      expect(series.length, 5);
+      expect(series.map((s) => s.nSerie), [1, 2, 3, 4, 5]);
+      expect(series.first.repeticiones, 11);
+      expect(series.skip(1).map((s) => s.repeticiones), everyElement(10));
+      expect(series.map((s) => s.peso), everyElement(20));
+    });
+  });
+
+  group('notas y esfuerzo', () {
+    late int idRutina;
+    late int idEjercicio;
+
+    setUp(() async {
+      idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarEjercicio(idRutina, 'Press banca');
+      idEjercicio = (await bd.ejerciciosDeRutina(idRutina)).single.id;
+    });
+
+    testWidgets('con el esfuerzo desactivado el registro no lo enseña', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      expect(find.text('RPE'), findsNothing);
+      expect(find.text('RIR'), findsNothing);
+      // La nota de sesión sí está siempre.
+      expect(find.text('Nota de la sesión'), findsOneWidget);
+    });
+
+    testWidgets('activado en Ajustes, se elige y se guarda como RPE', (
+      tester,
+    ) async {
+      await bd.fijarAjuste(AppBD.claveEsfuerzoActivo, '1');
+      await bd.fijarAjuste(AppBD.claveEsfuerzoEscala, 'rir');
+
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      // Con la escala en RIR se rotulan las repeticiones en recámara.
+      expect(find.text('RIR'), findsNWidgets(4));
+
+      // RIR 2 en la primera serie, que se guarda como RPE 8.
+      await tester.tap(find.text('2').first);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Guardar entrenamiento'));
+      await tester.pumpAndSettle();
+
+      final sesion = (await bd.sesion(1))!;
+      expect(sesion.ejercicios.single.series.first.rpe, 8);
+      expect(sesion.ejercicios.single.series[1].rpe, isNull);
+      expect(await bd.seriesConFecha(idRutina, idEjercicio), hasLength(4));
+    });
+
+    testWidgets('la nota de la sesión se guarda y se ve al abrirla', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byType(CupertinoTextField),
+        'Me dolía el hombro',
+      );
+      await tester.tap(find.text('Guardar entrenamiento'));
+      await tester.pumpAndSettle();
+
+      expect((await bd.sesion(1))!.nota, 'Me dolía el hombro');
+    });
+
+    testWidgets('el detalle enseña la nota y el esfuerzo de cada serie', (
+      tester,
+    ) async {
+      await bd.fijarAjuste(AppBD.claveEsfuerzoActivo, '1');
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [
+          ValoresSerie(
+            repeticiones: 8,
+            peso: 65,
+            rpe: 9,
+            nota: 'Fallo en la última',
+          ),
+        ],
+      }, nota: 'Me dolía el hombro');
+
+      _comoUnMovil(tester);
+      await tester.pumpWidget(
+        _app(bd, const PantallaSesion(idEntrenamiento: 1)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Me dolía el hombro'), findsOneWidget);
+      expect(find.text('RPE 9 · Fallo en la última'), findsOneWidget);
+    });
+  });
+
+  group('orden de los ejercicios', () {
+    late int idRutina;
+
+    setUp(() async {
+      idRutina = (await bd.insertarRutina('Empuje'))!;
+      for (final nombre in ['Press banca', 'Aperturas', 'Fondos']) {
+        await bd.insertarEjercicio(idRutina, nombre);
+      }
+    });
+
+    testWidgets('arrastrar en modo edición cambia el orden guardado', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaRutina(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(CupertinoIcons.arrow_up_arrow_down));
+      await tester.pumpAndSettle();
+
+      final asas = find.byIcon(CupertinoIcons.line_horizontal_3);
+      expect(asas, findsNWidgets(3));
+
+      // Se agarra el press de banca y se baja una fila.
+      final gesto = await tester.startGesture(tester.getCenter(asas.first));
+      await tester.pump(const Duration(milliseconds: 100));
+      for (var i = 0; i < 7; i++) {
+        await gesto.moveBy(const Offset(0, 10));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await gesto.up();
+      await tester.pumpAndSettle();
+
+      expect((await bd.ejerciciosDeRutina(idRutina)).map((e) => e.nombre), [
+        'Aperturas',
+        'Press banca',
+        'Fondos',
+      ]);
+    });
+
+    testWidgets('mover un ejercicio a otra rutina lo saca de esta', (
+      tester,
+    ) async {
+      final destino = (await bd.insertarRutina('Full body'))!;
+
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaRutina(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(CupertinoIcons.arrow_up_arrow_down));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byIcon(CupertinoIcons.arrow_right_arrow_left).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Full body'));
+      await tester.pumpAndSettle();
+
+      expect((await bd.ejerciciosDeRutina(idRutina)).map((e) => e.nombre), [
+        'Aperturas',
+        'Fondos',
+      ]);
+      expect(
+        (await bd.ejerciciosDeRutina(destino)).single.nombre,
+        'Press banca',
+      );
+    });
+  });
+
+  group('fecha del entrenamiento', () {
+    late int idRutina;
+
+    setUp(() async {
+      idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarEjercicio(idRutina, 'Press banca');
+    });
+
+    testWidgets('por defecto es hoy y se puede cambiar a un día pasado', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      final hoy = DateTime.now();
+      expect(find.text(formato.fechaLarga(hoy)), findsOneWidget);
+
+      await tester.tap(find.text(formato.fechaLarga(hoy)));
+      await tester.pumpAndSettle();
+
+      // Se mueve la rueda por su callback en vez de arrastrando: la física del
+      // scroll haría el test dependiente de píxeles y de la altura de la fila.
+      final ayer = hoy.subtract(const Duration(days: 1));
+      tester
+          .widget<CupertinoDatePicker>(find.byType(CupertinoDatePicker))
+          .onDateTimeChanged(ayer);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Listo'));
+      await tester.pumpAndSettle();
+
+      expect(find.text(formato.fechaLarga(ayer)), findsOneWidget);
+
+      await tester.tap(find.text('Guardar entrenamiento'));
+      await tester.pumpAndSettle();
+
+      // Un día pasado se guarda a las 12:00, para que el orden dentro del día
+      // no dependa de la hora a la que se anotó.
+      final sesion = (await bd.historialRutina(idRutina)).single;
+      expect(sesion.fecha, DateTime(ayer.year, ayer.month, ayer.day, 12));
+    });
+
+    testWidgets('no deja elegir una fecha futura', (tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text(formato.fechaLarga(DateTime.now())));
+      await tester.pumpAndSettle();
+
+      final selector = tester.widget<CupertinoDatePicker>(
+        find.byType(CupertinoDatePicker),
+      );
+      expect(selector.maximumDate, isNotNull);
+      expect(
+        selector.maximumDate!.isAfter(
+          DateTime.now().add(const Duration(minutes: 1)),
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('historial de sesiones', () {
+    late int idRutina;
+    late int idEjercicio;
+
+    setUp(() async {
+      idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarEjercicio(idRutina, 'Press banca');
+      idEjercicio = (await bd.ejerciciosDeRutina(idRutina)).single.id;
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [
+          ValoresSerie(repeticiones: 10, peso: 60),
+          ValoresSerie(repeticiones: 8, peso: 65),
+        ],
+      });
+    });
+
+    testWidgets('lista las sesiones con sus cifras', (tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaHistorial(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      expect(find.text('1 de marzo de 2026'), findsOneWidget);
+      expect(find.text('1 ejercicio · 2 series · 1120 kg'), findsOneWidget);
+    });
+
+    testWidgets('editar una sesión desde el historial repinta la lista', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaHistorial(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('1 de marzo de 2026'));
+      await tester.pumpAndSettle();
+      expect(find.text('10 repeticiones'), findsOneWidget);
+
+      await tester.tap(find.text('Editar'));
+      await tester.pumpAndSettle();
+      expect(find.text('Editar entrenamiento'), findsOneWidget);
+
+      // Una serie más y a guardar: la lista de detrás tiene que enterarse.
+      await tester.tap(find.text('Añadir serie'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Guardar entrenamiento'));
+      await tester.pumpAndSettle();
+
+      expect(await bd.seriesConFecha(idRutina, idEjercicio), hasLength(3));
+      // Se edita, no se duplica.
+      expect(await bd.contarEntrenamientosRutina(idRutina), 1);
+
+      // Al volver, la lista de detrás está al día sin reiniciar la app.
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('1 ejercicio · 3 series · 1640 kg'), findsOneWidget);
+    });
+
+    testWidgets('eliminar una sesión la saca de la lista', (tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(_app(bd, PantallaHistorial(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('1 de marzo de 2026'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Eliminar sesión'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Eliminar').last);
+      await tester.pumpAndSettle();
+
+      expect(await bd.contarEntrenamientosRutina(idRutina), 0);
+      expect(find.text('Todavía no hay sesiones'), findsOneWidget);
     });
   });
 }

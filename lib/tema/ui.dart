@@ -214,14 +214,17 @@ class BotonPrincipal extends StatelessWidget {
   );
 }
 
-/// Control `−  valor  +` para ajustar series, repeticiones o peso.
+/// Control `−  valor  +` para ajustar repeticiones o peso.
 ///
 /// Más preciso a dedo que un slider, y no obliga a abrir el teclado. No hay
 /// equivalente Cupertino en Flutter, así que se compone a mano.
-class SelectorNumerico extends StatefulWidget {
-  const SelectorNumerico({
+///
+/// Va en horizontal y sin etiqueta para que repeticiones y peso quepan en la
+/// misma fila de una serie. El valor lo manda quien lo monta: la lista de
+/// series vive en la pantalla, no aquí.
+class SelectorEnLinea extends StatelessWidget {
+  const SelectorEnLinea({
     super.key,
-    required this.etiqueta,
     required this.valor,
     required this.onChanged,
     this.minimo = 0,
@@ -229,9 +232,9 @@ class SelectorNumerico extends StatefulWidget {
     this.paso = 1,
     this.unidad = '',
     this.decimales = 0,
+    this.semantica,
   });
 
-  final String etiqueta;
   final double valor;
   final ValueChanged<double> onChanged;
   final double minimo;
@@ -240,67 +243,59 @@ class SelectorNumerico extends StatefulWidget {
   final String unidad;
   final int decimales;
 
-  @override
-  State<SelectorNumerico> createState() => _SelectorNumericoState();
-}
-
-class _SelectorNumericoState extends State<SelectorNumerico> {
-  late double _valor = widget.valor;
+  /// Nombre del campo para lectores de pantalla («Repeticiones», «Peso»).
+  final String? semantica;
 
   String get _formateado {
-    final cuerpo = widget.decimales > 0
-        ? _valor.toStringAsFixed(widget.decimales)
-        : _valor.round().toString();
-    return widget.unidad.isEmpty ? cuerpo : '$cuerpo ${widget.unidad}';
+    // Coma decimal: la interfaz está en español y `toStringAsFixed` siempre
+    // escribe el punto, sea cual sea la localización.
+    final cuerpo = decimales > 0
+        ? valor.toStringAsFixed(decimales).replaceAll('.', ',')
+        : valor.round().toString();
+    return unidad.isEmpty ? cuerpo : '$cuerpo $unidad';
   }
 
   void _ajustar(double delta) {
-    final nuevo = (_valor + delta).clamp(widget.minimo, widget.maximo);
-    if (nuevo == _valor) return;
-    setState(() => _valor = nuevo);
-    widget.onChanged(nuevo);
+    final nuevo = (valor + delta).clamp(minimo, maximo);
+    if (nuevo == valor) return;
+    onChanged(nuevo);
   }
 
-  Widget _signo(IconData icono, double delta) => CupertinoButton(
-    onPressed: () => _ajustar(delta),
-    padding: const EdgeInsets.symmetric(horizontal: t.m, vertical: t.s),
-    minimumSize: Size.zero,
-    child: Icon(icono, size: 18, color: context.acento),
-  );
+  Widget _signo(BuildContext context, IconData icono, double delta) =>
+      CupertinoButton(
+        onPressed: () => _ajustar(delta),
+        padding: const EdgeInsets.symmetric(horizontal: t.xs, vertical: t.s),
+        minimumSize: Size.zero,
+        child: Icon(icono, size: 16, color: context.acento),
+      );
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: t.l, vertical: t.s),
-    child: Row(
-      children: [
-        Expanded(
-          child: Text(
-            widget.etiqueta,
-            style: estilo(context, size: t.subhead, color: context.textoSec),
+  Widget build(BuildContext context) => Semantics(
+    label: semantica,
+    value: _formateado,
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        color: context.relleno,
+        borderRadius: BorderRadius.circular(t.radioS),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _signo(context, CupertinoIcons.minus, -paso),
+          // Flexible y con ellipsis: cuatro controles en una fila es justo el
+          // caso en el que un tamaño de texto grande desbordaría el ancho.
+          Flexible(
+            child: Text(
+              _formateado,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: estilo(context, size: t.subhead, weight: t.semibold),
+            ),
           ),
-        ),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: context.relleno,
-            borderRadius: BorderRadius.circular(t.radioS),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _signo(CupertinoIcons.minus, -widget.paso),
-              SizedBox(
-                width: 74,
-                child: Text(
-                  _formateado,
-                  textAlign: TextAlign.center,
-                  style: estilo(context, weight: t.semibold),
-                ),
-              ),
-              _signo(CupertinoIcons.plus, widget.paso),
-            ],
-          ),
-        ),
-      ],
+          _signo(context, CupertinoIcons.plus, paso),
+        ],
+      ),
     ),
   );
 }
@@ -477,6 +472,61 @@ CupertinoNavigationBar barra(
   border: Border(bottom: BorderSide(color: context.separador, width: 0.5)),
 );
 
+/// Selector de fecha en una hoja inferior. Devuelve null si se cancela.
+///
+/// Es `CupertinoDatePicker` tal cual: la localización en español ya la resuelve
+/// `flutter_localizations` desde `main.dart`, así que no hace falta ni
+/// dependencia ni componente propio.
+Future<DateTime?> selectorFecha(
+  BuildContext context, {
+  required DateTime inicial,
+  DateTime? maxima,
+  DateTime? minima,
+}) {
+  var elegida = inicial;
+
+  return showCupertinoModalPopup<DateTime>(
+    context: context,
+    builder: (hoja) => Container(
+      height: 300,
+      padding: const EdgeInsets.only(top: t.s),
+      color: hoja.tarjeta,
+      child: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                CupertinoButton(
+                  onPressed: () => Navigator.pop(hoja),
+                  child: const Text('Cancelar'),
+                ),
+                CupertinoButton(
+                  onPressed: () => Navigator.pop(hoja, elegida),
+                  child: Text(
+                    'Listo',
+                    style: estilo(hoja, weight: t.semibold, color: hoja.acento),
+                  ),
+                ),
+              ],
+            ),
+            Expanded(
+              child: CupertinoDatePicker(
+                mode: CupertinoDatePickerMode.date,
+                initialDateTime: inicial,
+                minimumDate: minima,
+                maximumDate: maxima,
+                onDateTimeChanged: (valor) => elegida = valor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 /// Diálogo con un campo de texto. Devuelve el texto, o null si se cancela.
 Future<String?> dialogoTexto(
   BuildContext context, {
@@ -485,6 +535,7 @@ Future<String?> dialogoTexto(
   String valor = '',
   String? mensaje,
   String etiquetaAceptar = 'Guardar',
+  bool permitirVacio = false,
 }) {
   final controlador = TextEditingController(text: valor);
 
@@ -493,7 +544,9 @@ Future<String?> dialogoTexto(
     builder: (dialogo) {
       void aceptar() {
         final actual = controlador.text.trim();
-        if (actual.isEmpty) return;
+        // Un nombre de rutina en blanco no vale; una nota vaciada sí, que es
+        // como se borra.
+        if (actual.isEmpty && !permitirVacio) return;
         Navigator.pop(dialogo, actual);
       }
 

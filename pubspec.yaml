@@ -19,7 +19,13 @@ dependencies:
 
   # Base de datos: drift arrastra sqlite3, las librerías nativas y path_provider,
   # así que no hay que declararlos aparte.
-  drift: ^2.34.3
+  #
+  # El techo en 2.34.3 no es capricho: esa versión mueve `GeneratedDatabase` al
+  # paquete `drift3_preview`, y el CLI de drift_dev 2.34.0 —el que vuelca los
+  # esquemas versionados y hace posibles los tests de migración— deja de
+  # compilar contra ella. drift_dev no se puede subir: desde 2.34.1 exige
+  # analyzer ^13, que choca con el que admite el flutter_test de este SDK.
+  drift: ">=2.34.0 <2.34.3"
   drift_flutter: ^0.3.1
 
   # Estado. Se usan providers declarados a mano en vez de riverpod_generator:

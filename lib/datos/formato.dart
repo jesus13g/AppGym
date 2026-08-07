@@ -66,9 +66,12 @@ String plural(int cantidad, String singular, String plural) =>
     '$cantidad ${cantidad == 1 ? singular : plural}';
 
 /// Formatea un número quitando el '.0' cuando es entero, como el '%g' de Python.
+///
+/// Con coma decimal: la interfaz está en español y `toString` siempre escribe
+/// el punto, sea cual sea la localización.
 String numero(num valor) {
   if (valor == valor.roundToDouble()) return valor.round().toString();
-  return valor.toString();
+  return valor.toString().replaceAll('.', ',');
 }
 
 /// Deserializa una columna de texto que guarda una lista JSON.
@@ -82,6 +85,15 @@ List<String> listaJson(String? valor) {
     return const [];
   }
 }
+
+/// El esfuerzo guardado (siempre RPE) escrito en la escala elegida.
+///
+/// `RIR = 10 − RPE`: son la misma información contada al revés, así que cambiar
+/// de escala reinterpreta lo guardado y no hace falta migrar nada.
+String esfuerzo(double valorRpe, EscalaEsfuerzo escala) => switch (escala) {
+  EscalaEsfuerzo.rpe => 'RPE ${numero(valorRpe)}',
+  EscalaEsfuerzo.rir => 'RIR ${numero(10 - valorRpe)}',
+};
 
 // ── Ejercicios ───────────────────────────────────────────────────────────────
 

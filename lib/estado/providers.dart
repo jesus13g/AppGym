@@ -80,9 +80,10 @@ final idsCatalogoEnRutinaProvider = FutureProvider.family<Set<String>, int>(
   (ref, idRutina) => ref.watch(bdProvider).idsCatalogoEnRutina(idRutina),
 );
 
-/// Valores del último registro de un ejercicio, para precargar el formulario.
-final ultimaSerieProvider = FutureProvider.family<UltimaSerie?, int>(
-  (ref, idEjercicio) => ref.watch(bdProvider).ultimaSerieEjercicio(idEjercicio),
+/// Series de la última sesión de un ejercicio, para precargar el registro.
+final ultimasSeriesProvider = FutureProvider.family<List<ValoresSerie>, int>(
+  (ref, idEjercicio) =>
+      ref.watch(bdProvider).ultimasSeriesEjercicio(idEjercicio),
 );
 
 // ── Catálogo ─────────────────────────────────────────────────────────────────
@@ -107,8 +108,46 @@ final seriesConFechaProvider =
           .seriesConFecha(clave.idRutina, clave.idEjercicio),
     );
 
-final entrenamientosPorDiaProvider = FutureProvider<Map<DateTime, int>>(
-  (ref) => ref.watch(bdProvider).entrenamientosPorDia(),
+/// Una entrada por sesión, que es lo que pintan el gráfico y las listas.
+final resumenSesionesEjercicioProvider =
+    FutureProvider.family<List<ResumenSesionEjercicio>, ClaveSeries>(
+      (ref, clave) => ref
+          .watch(bdProvider)
+          .resumenSesionesEjercicio(clave.idRutina, clave.idEjercicio),
+    );
+
+/// Sesiones del mes visible del calendario, día a día.
+///
+/// Recibe el mes como parámetro —igual que `seriesConFechaProvider` recibe su
+/// [ClaveSeries]— para que pintar un mes no consulte los demás.
+final entrenamientosPorDiaProvider =
+    FutureProvider.family<Map<DateTime, List<SesionDelDia>>, DateTime>((
+      ref,
+      mes,
+    ) {
+      final desde = DateTime(mes.year, mes.month);
+      return ref
+          .watch(bdProvider)
+          .entrenamientosPorDia(
+            desde: desde,
+            hasta: DateTime(mes.year, mes.month + 1),
+          );
+    });
+
+// ── Sesiones ─────────────────────────────────────────────────────────────────
+
+final historialRutinaProvider = FutureProvider.family<List<ResumenSesion>, int>(
+  (ref, idRutina) => ref.watch(bdProvider).historialRutina(idRutina),
+);
+
+final sesionProvider = FutureProvider.family<SesionCompleta?, int>(
+  (ref, idEntrenamiento) => ref.watch(bdProvider).sesion(idEntrenamiento),
+);
+
+// ── Ajustes ──────────────────────────────────────────────────────────────────
+
+final ajustesProvider = FutureProvider<Ajustes>(
+  (ref) => ref.watch(bdProvider).ajustes(),
 );
 
 // ── Invalidación ─────────────────────────────────────────────────────────────
@@ -132,7 +171,15 @@ void invalidarRutina(WidgetRef ref, int idRutina) {
 void invalidarEntrenamientos(WidgetRef ref, int idRutina) {
   ref.invalidate(entrenamientosPorDiaProvider);
   ref.invalidate(seriesConFechaProvider);
-  ref.invalidate(ultimaSerieProvider);
+  ref.invalidate(resumenSesionesEjercicioProvider);
+  ref.invalidate(ultimasSeriesProvider);
+  // El historial y el detalle de sesión son fáciles de olvidar aquí, y dejarlos
+  // fuera se nota enseguida: una pantalla mostrando lo que ya no está.
+  ref.invalidate(historialRutinaProvider(idRutina));
+  ref.invalidate(sesionProvider);
   ref.invalidate(estadisticasRutinaProvider(idRutina));
   invalidarRutinas(ref);
 }
+
+/// Refresca lo que depende de las preferencias.
+void invalidarAjustes(WidgetRef ref) => ref.invalidate(ajustesProvider);

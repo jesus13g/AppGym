@@ -100,7 +100,7 @@ class _Fila extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final registros = ref
         .watch(
-          seriesConFechaProvider((
+          resumenSesionesEjercicioProvider((
             idRutina: idRutina,
             idEjercicio: ejercicio.id,
           )),
@@ -119,11 +119,11 @@ class _Fila extends ConsumerWidget {
     } else {
       final ultimo = registros.last;
       final maximo = registros
-          .map((r) => r.peso)
+          .map((r) => r.pesoMaximo)
           .reduce((a, b) => a > b ? a : b);
       subtitulo =
-          '${formato.plural(registros.length, 'registro', 'registros')} · '
-          'último ${formato.numero(ultimo.peso)} kg · '
+          '${formato.plural(registros.length, 'sesión', 'sesiones')} · '
+          'último ${formato.numero(ultimo.pesoMaximo)} kg · '
           'máx ${formato.numero(maximo)} kg';
       alTocar = () => abrirResultadoEjercicio(context, idRutina, ejercicio.id);
     }
