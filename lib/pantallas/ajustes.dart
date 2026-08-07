@@ -223,28 +223,42 @@ class PantallaAjustes extends ConsumerWidget {
 
   // ── Objetivos ──────────────────────────────────────────────────────────────
 
-  Widget _objetivos(BuildContext context, WidgetRef ref, Ajustes ajustes) =>
-      ui.Grupo(
-        cabecera: 'Objetivos',
-        filas: [
-          _fila(
-            context,
-            titulo: 'Sesiones por semana',
-            valor: '${ajustes.sesionesPorSemana}',
-            onTap: () => _elegir<int>(
-              context,
-              ref,
-              clave: Claves.sesionesPorSemana,
-              titulo: 'Sesiones por semana',
-              actual: ajustes.sesionesPorSemana,
-              opciones: [
-                for (var n = 1; n <= 7; n++)
-                  (n, formato.plural(n, 'sesión', 'sesiones')),
-              ],
-            ),
-          ),
-        ],
-      );
+  Widget _objetivos(
+    BuildContext context,
+    WidgetRef ref,
+    Ajustes ajustes,
+  ) => ui.Grupo(
+    cabecera: 'Objetivos',
+    pie:
+        'El objetivo semanal es contra lo que se mide la racha en Progreso. '
+        'Brzycki estima algo más bajo que Epley en series largas; con pocas '
+        'repeticiones apenas se distinguen.',
+    filas: [
+      _fila(
+        context,
+        titulo: 'Sesiones por semana',
+        valor: '${ajustes.sesionesPorSemana}',
+        onTap: () => _elegir<int>(
+          context,
+          ref,
+          clave: Claves.sesionesPorSemana,
+          titulo: 'Sesiones por semana',
+          actual: ajustes.sesionesPorSemana,
+          opciones: [
+            for (var n = 1; n <= 7; n++)
+              (n, formato.plural(n, 'sesión', 'sesiones')),
+          ],
+        ),
+      ),
+      _segmentos<Formula>(
+        context,
+        etiqueta: 'Fórmula de 1RM',
+        valor: ajustes.formula,
+        opciones: const {Formula.epley: 'Epley', Formula.brzycki: 'Brzycki'},
+        onValor: (valor) => _fijar(ref, Claves.formula1RM, valor),
+      ),
+    ],
+  );
 
   // ── Apariencia ─────────────────────────────────────────────────────────────
 

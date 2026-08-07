@@ -1,4 +1,8 @@
-/// Evolución de un ejercicio: gráfico de peso e histórico de series.
+/// Evolución de un ejercicio: récords, gráfico e histórico de sesiones.
+///
+/// La métrica del gráfico y el rango de fechas son **estado del widget**: se
+/// eligen aquí, se aplican sobre la lista que ya está cargada y no vuelven a
+/// consultar la base de datos.
 library;
 
 import 'package:fl_chart/fl_chart.dart';
@@ -7,13 +11,45 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
 import '../datos/formato.dart' as formato;
+import '../datos/metricas.dart' as metricas;
 import '../estado/providers.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
 
-/// Se muestran las últimas N sesiones para que el gráfico siga legible.
-const _maxBarras = 12;
+/// Lo que se pinta en el eje Y del gráfico.
+enum Metrica {
+  peso('Peso'),
+  unoRm('1RM'),
+  volumen('Volumen');
+
+  const Metrica(this.etiqueta);
+
+  final String etiqueta;
+
+  /// El valor de esta métrica en una sesión. Las tres son kilos: el volumen es
+  /// kilos × repeticiones, así que también se convierte a la unidad activa.
+  double de(ResumenSesionEjercicio sesion) => switch (this) {
+    Metrica.peso => sesion.pesoMaximo,
+    Metrica.unoRm => sesion.mejor1RM,
+    Metrica.volumen => sesion.volumen,
+  };
+}
+
+/// Cuánto histórico se pinta. Sustituye al tope fijo de doce barras.
+enum Rango {
+  mes('1M', 30),
+  trimestre('3M', 91),
+  ano('1A', 365),
+  todo('Todo', null);
+
+  const Rango(this.etiqueta, this.dias);
+
+  final String etiqueta;
+
+  /// `null` es «sin límite».
+  final int? dias;
+}
 
 Future<void> abrirResultadoEjercicio(
   BuildContext context,
@@ -73,56 +109,81 @@ class PantallaResultadoEjercicio extends ConsumerWidget {
                     'Registra un entrenamiento con este ejercicio para '
                     'ver aquí su evolución.',
               )
-            : _Contenido(nombre: nombre, registros: lista, ajustes: ajustes),
+            : _Contenido(registros: lista, ajustes: ajustes),
       ),
     );
   }
 }
 
-class _Contenido extends StatelessWidget {
-  const _Contenido({
-    required this.nombre,
-    required this.registros,
-    required this.ajustes,
-  });
+class _Contenido extends StatefulWidget {
+  const _Contenido({required this.registros, required this.ajustes});
 
-  final String nombre;
   final List<ResumenSesionEjercicio> registros;
 
-  /// De aquí sale la unidad en la que se escriben los pesos.
+  /// De aquí salen la unidad en la que se escriben los pesos y la fórmula con
+  /// la que ya se estimó el 1RM.
   final Ajustes ajustes;
 
   @override
+  State<_Contenido> createState() => _ContenidoState();
+}
+
+class _ContenidoState extends State<_Contenido> {
+  Metrica _metrica = Metrica.peso;
+  Rango _rango = Rango.todo;
+
+  /// Las sesiones que caen dentro del rango elegido.
+  ///
+  /// Se filtra la lista que ya está en memoria: cambiar de rango o de métrica
+  /// no vuelve a consultar.
+  List<ResumenSesionEjercicio> get _enRango {
+    final dias = _rango.dias;
+    if (dias == null) return widget.registros;
+    final desde = DateTime.now().subtract(Duration(days: dias));
+    final recortada = [
+      for (final r in widget.registros)
+        if (r.fecha.isAfter(desde)) r,
+    ];
+    // Un rango sin ninguna sesión dejaría el gráfico en blanco y sin explicar
+    // por qué; se enseña la última que hubo.
+    return recortada.isEmpty
+        ? widget.registros.sublist(widget.registros.length - 1)
+        : recortada;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final recientes = registros.length > _maxBarras
-        ? registros.sublist(registros.length - _maxBarras)
-        : registros;
-    final maximo = registros
-        .map((r) => r.pesoMaximo)
-        .reduce((a, b) => a > b ? a : b);
-    final ultimo = registros.last;
+    final ajustes = widget.ajustes;
+    final records = metricas.recordsEjercicio(widget.registros);
+    final conRecord = metricas.sesionesConRecord(widget.registros);
+    final enRango = _enRango;
+    final maximo = enRango.map(_metrica.de).reduce((a, b) => a > b ? a : b);
 
     return SafeArea(
       child: ListView(
         children: [
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: t.l, vertical: t.s),
-            padding: const EdgeInsets.symmetric(vertical: t.l),
-            decoration: BoxDecoration(
-              color: context.tarjeta,
-              borderRadius: BorderRadius.circular(t.radioL),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _Dato(
-                    formato.peso(ultimo.pesoMaximo, ajustes),
-                    'Último',
-                  ),
-                ),
-                Expanded(child: _Dato(formato.peso(maximo, ajustes), 'Máximo')),
-                Expanded(child: _Dato('${registros.length}', 'Sesiones')),
-              ],
+          _Tarjeta(
+            records: records,
+            sesiones: widget.registros,
+            ajustes: ajustes,
+          ),
+          const SizedBox(height: t.s),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: t.l),
+            child: SizedBox(
+              width: double.infinity,
+              child: CupertinoSlidingSegmentedControl<Metrica>(
+                groupValue: _metrica,
+                onValueChanged: (valor) =>
+                    setState(() => _metrica = valor ?? Metrica.peso),
+                children: {
+                  for (final m in Metrica.values)
+                    m: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: t.xs),
+                      child: Text(m.etiqueta),
+                    ),
+                },
+              ),
             ),
           ),
           const SizedBox(height: t.s),
@@ -140,16 +201,37 @@ class _Contenido extends StatelessWidget {
               borderRadius: BorderRadius.circular(t.radioL),
             ),
             child: _Grafico(
-              registros: recientes,
+              registros: enRango,
               maximo: maximo,
+              metrica: _metrica,
               ajustes: ajustes,
+            ),
+          ),
+          const SizedBox(height: t.s),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: t.l),
+            child: SizedBox(
+              width: double.infinity,
+              child: CupertinoSlidingSegmentedControl<Rango>(
+                groupValue: _rango,
+                onValueChanged: (valor) =>
+                    setState(() => _rango = valor ?? Rango.todo),
+                children: {
+                  for (final r in Rango.values)
+                    r: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: t.xs),
+                      child: Text(r.etiqueta),
+                    ),
+                },
+              ),
             ),
           ),
           const SizedBox(height: t.l),
           ui.Grupo(
             cabecera: 'Histórico',
+            pie: 'El trofeo marca las sesiones que batieron algún récord.',
             filas: [
-              for (final r in registros.reversed)
+              for (final r in widget.registros.reversed)
                 CupertinoListTile(
                   backgroundColor: context.tarjeta,
                   title: Text(
@@ -165,6 +247,13 @@ class _Contenido extends StatelessWidget {
                       color: context.textoSec,
                     ),
                   ),
+                  trailing: conRecord.contains(r.idEntrenamiento)
+                      ? Icon(
+                          CupertinoIcons.rosette,
+                          size: 18,
+                          color: context.acento,
+                        )
+                      : null,
                   additionalInfo: Text(
                     formato.peso(r.pesoMaximo, ajustes),
                     style: ui.estilo(context, color: context.textoSec),
@@ -179,10 +268,96 @@ class _Contenido extends StatelessWidget {
   }
 }
 
+/// Las cuatro cifras de cabecera, en dos filas de dos.
+///
+/// En una sola fila de cuatro los números se apretaban hasta partirse en un
+/// móvil estrecho, que es donde hay que mirar.
+class _Tarjeta extends StatelessWidget {
+  const _Tarjeta({
+    required this.records,
+    required this.sesiones,
+    required this.ajustes,
+  });
+
+  final metricas.RecordsEjercicio records;
+  final List<ResumenSesionEjercicio> sesiones;
+  final Ajustes ajustes;
+
+  @override
+  Widget build(BuildContext context) {
+    // Sin ninguna serie fiable no hay récord de 1RM: se enseña la mejor
+    // estimación que haya, en gris y con asterisco, para no dejar el hueco en
+    // blanco sin decir por qué.
+    final mejorDeTodas = sesiones
+        .map((s) => s.mejor1RM)
+        .reduce((a, b) => a > b ? a : b);
+    final fiable = records.mejor1RM != null;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: t.l, vertical: t.s),
+      padding: const EdgeInsets.symmetric(vertical: t.l),
+      decoration: BoxDecoration(
+        color: context.tarjeta,
+        borderRadius: BorderRadius.circular(t.radioL),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _Dato(
+                  '${formato.peso(records.mejor1RM ?? mejorDeTodas, ajustes)}'
+                      '${fiable ? '' : ' *'}',
+                  '1RM estimado',
+                  atenuado: !fiable,
+                ),
+              ),
+              Expanded(
+                child: _Dato(
+                  formato.peso(records.pesoMaximo ?? 0, ajustes),
+                  'Peso máximo',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: t.l),
+          Row(
+            children: [
+              Expanded(
+                child: _Dato(
+                  formato.peso(records.volumenTotal, ajustes),
+                  'Volumen total',
+                ),
+              ),
+              Expanded(child: _Dato('${sesiones.length}', 'Sesiones')),
+            ],
+          ),
+          if (!fiable)
+            Padding(
+              padding: const EdgeInsets.only(top: t.s, left: t.l, right: t.l),
+              child: Text(
+                '* Estimado a partir de series de más de '
+                '${metricas.maxRepeticionesFiables} repeticiones, así que es '
+                'poco fiable y no cuenta como récord.',
+                textAlign: TextAlign.center,
+                style: ui.estilo(
+                  context,
+                  size: t.caption,
+                  color: context.textoTer,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _Grafico extends StatelessWidget {
   const _Grafico({
     required this.registros,
     required this.maximo,
+    required this.metrica,
     required this.ajustes,
   });
 
@@ -191,6 +366,7 @@ class _Grafico extends StatelessWidget {
   /// El máximo en kilos; el eje se dibuja en la unidad activa.
   final double maximo;
 
+  final Metrica metrica;
   final Ajustes ajustes;
 
   @override
@@ -213,7 +389,7 @@ class _Grafico extends StatelessWidget {
         leftTitles: AxisTitles(
           sideTitles: SideTitles(
             showTitles: true,
-            reservedSize: 34,
+            reservedSize: 40,
             getTitlesWidget: (valor, meta) => Text(
               formato.numero(valor),
               style: ui.estilo(
@@ -254,9 +430,13 @@ class _Grafico extends StatelessWidget {
             x: indice,
             barRods: [
               BarChartRodData(
-                toY: ajustes.desdeKilos(r.pesoMaximo),
+                toY: ajustes.desdeKilos(metrica.de(r)),
                 width: 16,
-                color: context.acento,
+                // La estimación que sale de una serie larga se pinta apagada,
+                // igual que el número de la tarjeta.
+                color: metrica == Metrica.unoRm && !r.fiable
+                    ? context.textoTer
+                    : context.acento,
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(6),
                 ),
@@ -269,10 +449,13 @@ class _Grafico extends StatelessWidget {
 }
 
 class _Dato extends StatelessWidget {
-  const _Dato(this.valor, this.etiqueta);
+  const _Dato(this.valor, this.etiqueta, {this.atenuado = false});
 
   final String valor;
   final String etiqueta;
+
+  /// Para la estimación de baja confianza.
+  final bool atenuado;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -281,7 +464,14 @@ class _Dato extends StatelessWidget {
       Text(
         valor,
         textAlign: TextAlign.center,
-        style: ui.estilo(context, size: t.title3, weight: t.semibold),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: ui.estilo(
+          context,
+          size: t.title3,
+          weight: t.semibold,
+          color: atenuado ? context.textoSec : null,
+        ),
       ),
       const SizedBox(height: 2),
       Text(

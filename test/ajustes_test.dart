@@ -27,6 +27,7 @@ void main() {
       expect(ajustes.esfuerzoActivo, isFalse);
       expect(ajustes.escala, EscalaEsfuerzo.rpe);
       expect(ajustes.sesionesPorSemana, 3);
+      expect(ajustes.formula, Formula.epley);
       expect(ajustes.tema, Tema.sistema);
     });
 
@@ -41,6 +42,7 @@ void main() {
         Claves.esfuerzoActivo: '1',
         Claves.esfuerzoEscala: 'rir',
         Claves.sesionesPorSemana: '5',
+        Claves.formula1RM: 'brzycki',
         Claves.tema: 'oscuro',
       });
 
@@ -53,6 +55,7 @@ void main() {
       expect(ajustes.esfuerzoActivo, isTrue);
       expect(ajustes.escala, EscalaEsfuerzo.rir);
       expect(ajustes.sesionesPorSemana, 5);
+      expect(ajustes.formula, Formula.brzycki);
       expect(ajustes.tema, Tema.oscuro);
     });
 
@@ -64,6 +67,7 @@ void main() {
         Claves.pasoPeso: '3',
         Claves.tema: 'fucsia',
         Claves.unidad: 'piedras',
+        Claves.formula1RM: 'lombardi',
       });
 
       expect(ajustes.descansoSeg, 90);
@@ -73,6 +77,7 @@ void main() {
       expect(ajustes.pasoPeso, 2.5);
       expect(ajustes.tema, Tema.sistema);
       expect(ajustes.unidad, Unidad.kg);
+      expect(ajustes.formula, Formula.epley);
     });
 
     test('lo que escribe `texto` es lo que lee `desdeMapa`', () {

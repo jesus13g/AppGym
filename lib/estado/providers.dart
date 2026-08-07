@@ -14,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
 import '../datos/media.dart';
+import '../datos/reloj.dart' as reloj;
 import '../datos/semilla.dart';
 
 /// La base de datos, viva mientras viva la app.
@@ -141,12 +142,34 @@ final seriesConFechaProvider =
     );
 
 /// Una entrada por sesión, que es lo que pintan el gráfico y las listas.
+///
+/// Depende de los ajustes por la fórmula de 1RM: cambiarla en Ajustes invalida
+/// `ajustesProvider` y esto se recalcula solo.
 final resumenSesionesEjercicioProvider =
-    FutureProvider.family<List<ResumenSesionEjercicio>, ClaveSeries>(
-      (ref, clave) => ref
+    FutureProvider.family<List<ResumenSesionEjercicio>, ClaveSeries>((
+      ref,
+      clave,
+    ) async {
+      final ajustes = await ref.watch(ajustesProvider.future);
+      return ref
           .watch(bdProvider)
-          .resumenSesionesEjercicio(clave.idRutina, clave.idEjercicio),
-    );
+          .resumenSesionesEjercicio(
+            clave.idRutina,
+            clave.idEjercicio,
+            formula: ajustes.formula,
+          );
+    });
+
+/// Las sesiones de los últimos dos años con su volumen, para el resumen
+/// semanal.
+///
+/// Dos años son de sobra para la racha más larga que nadie va a encomendarse, y
+/// ponen techo a lo que se carga en memoria en una pantalla que se abre
+/// constantemente.
+final sesionesRecientesProvider = FutureProvider<List<SesionConVolumen>>((ref) {
+  final desde = reloj.ahora().subtract(const Duration(days: 730));
+  return ref.watch(bdProvider).sesionesConVolumen(desde: desde);
+});
 
 /// Sesiones del mes visible del calendario, día a día.
 ///
@@ -177,10 +200,15 @@ final sesionProvider = FutureProvider.family<SesionCompleta?, int>(
 );
 
 /// Récords batidos en una sesión, para el resumen de cierre.
-final recordsSesionProvider = FutureProvider.family<List<RecordSesion>, int>(
-  (ref, idEntrenamiento) =>
-      ref.watch(bdProvider).recordsDeSesion(idEntrenamiento),
-);
+final recordsSesionProvider = FutureProvider.family<List<RecordSesion>, int>((
+  ref,
+  idEntrenamiento,
+) async {
+  final ajustes = await ref.watch(ajustesProvider.future);
+  return ref
+      .watch(bdProvider)
+      .recordsDeSesion(idEntrenamiento, formula: ajustes.formula);
+});
 
 /// El borrador de la sesión en curso, si lo hay.
 ///
@@ -218,6 +246,7 @@ void invalidarEntrenamientos(WidgetRef ref, int idRutina) {
   ref.invalidate(entrenamientosPorDiaProvider);
   ref.invalidate(seriesConFechaProvider);
   ref.invalidate(resumenSesionesEjercicioProvider);
+  ref.invalidate(sesionesRecientesProvider);
   ref.invalidate(ultimasSeriesProvider);
   // El historial y el detalle de sesión son fáciles de olvidar aquí, y dejarlos
   // fuera se nota enseguida: una pantalla mostrando lo que ya no está.
@@ -263,6 +292,7 @@ void invalidarTodo(WidgetRef ref) {
   ref.invalidate(ultimasSeriesProvider);
   ref.invalidate(seriesConFechaProvider);
   ref.invalidate(resumenSesionesEjercicioProvider);
+  ref.invalidate(sesionesRecientesProvider);
   ref.invalidate(entrenamientosPorDiaProvider);
   ref.invalidate(historialRutinaProvider);
   ref.invalidate(sesionProvider);

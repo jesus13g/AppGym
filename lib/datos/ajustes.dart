@@ -38,6 +38,22 @@ enum EscalaEsfuerzo {
   rir,
 }
 
+/// Fórmula con la que se estima el máximo de una repetición.
+///
+/// Vive aquí, con el resto de los tipos de las preferencias, y no en
+/// `metricas.dart`, que es quien la aplica: si estuviera allí, `ajustes.dart`
+/// tendría que importar un módulo que a su vez importa `bd.dart`, que importa
+/// este. Es el mismo sitio en el que están [EscalaEsfuerzo] y [Unidad], que
+/// también las usa otro.
+enum Formula {
+  /// `peso × (1 + repeticiones / 30)`.
+  epley,
+
+  /// `peso × 36 / (37 − repeticiones)`, algo más conservadora en repeticiones
+  /// altas.
+  brzycki,
+}
+
 /// Brillo de la interfaz.
 enum Tema { sistema, claro, oscuro }
 
@@ -55,6 +71,7 @@ abstract final class Claves {
   static const esfuerzoActivo = 'esfuerzo_activo';
   static const esfuerzoEscala = 'esfuerzo_escala';
   static const sesionesPorSemana = 'sesiones_por_semana';
+  static const formula1RM = 'formula_1rm';
   static const tema = 'tema';
 }
 
@@ -76,6 +93,7 @@ class Ajustes {
     this.esfuerzoActivo = false,
     this.escala = EscalaEsfuerzo.rpe,
     this.sesionesPorSemana = 3,
+    this.formula = Formula.epley,
     this.tema = Tema.sistema,
   });
 
@@ -132,6 +150,9 @@ class Ajustes {
         minimo: 1,
         maximo: 7,
       ),
+      formula: valores[Claves.formula1RM] == 'brzycki'
+          ? Formula.brzycki
+          : Formula.epley,
       tema: switch (valores[Claves.tema]) {
         'claro' => Tema.claro,
         'oscuro' => Tema.oscuro,
@@ -155,7 +176,13 @@ class Ajustes {
   final bool esfuerzoActivo;
 
   final EscalaEsfuerzo escala;
+
+  /// Objetivo de sesiones semanales; es contra esto que se mide la racha.
   final int sesionesPorSemana;
+
+  /// Con la que se estiman el 1RM y sus récords.
+  final Formula formula;
+
   final Tema tema;
 
   /// Cómo se escribe cada ajuste en la tabla. Es la vuelta de [desdeMapa].
@@ -165,6 +192,8 @@ class Ajustes {
     Unidad.kg => 'kg',
     EscalaEsfuerzo.rir => 'rir',
     EscalaEsfuerzo.rpe => 'rpe',
+    Formula.epley => 'epley',
+    Formula.brzycki => 'brzycki',
     Tema.claro => 'claro',
     Tema.oscuro => 'oscuro',
     Tema.sistema => 'sistema',

@@ -18,6 +18,7 @@ import 'package:appgym/pantallas/ficha.dart';
 import 'package:appgym/pantallas/historial.dart';
 import 'package:appgym/pantallas/medidas.dart';
 import 'package:appgym/pantallas/progreso.dart';
+import 'package:appgym/pantallas/resultado_ejercicio.dart';
 import 'package:appgym/pantallas/resumen_sesion.dart';
 import 'package:appgym/pantallas/rutina.dart';
 import 'package:appgym/pantallas/rutinas.dart';
@@ -912,9 +913,15 @@ void main() {
       expect(find.text('2'), findsOneWidget);
       expect(find.text('1.040 kg'), findsNothing);
       expect(find.text('34:12'), findsOneWidget);
-      // Récord: 65 kg contra los 60 de la semana anterior.
+      // Récord: 65 kg contra los 60 de la semana anterior. Se baten los tres,
+      // porque subir el peso sube también la estimación y el volumen.
       expect(find.text('Récords'.toUpperCase()), findsOneWidget);
-      expect(find.text('Antes: 60 kg'), findsOneWidget);
+      expect(
+        find.text(
+          'Peso (antes 60 kg) · 1RM (antes 80 kg) · Volumen (antes 600 kg)',
+        ),
+        findsOneWidget,
+      );
     });
   });
 
@@ -1397,6 +1404,127 @@ void main() {
       await bd.fijarAjuste(Claves.tema, 'claro');
 
       expect(await brilloDe(tester, bd), Brightness.light);
+    });
+  });
+
+  // ── C16: 1RM estimado y récords ────────────────────────────────────────────
+
+  group('evolución de un ejercicio', () {
+    late int idRutina;
+    late int idEjercicio;
+
+    setUp(() async {
+      idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarEjercicio(idRutina, 'Press banca');
+      idEjercicio = (await bd.ejerciciosDeRutina(idRutina)).single.id;
+    });
+
+    Future<void> abrir(WidgetTester tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(
+        _app(
+          bd,
+          PantallaResultadoEjercicio(
+            idRutina: idRutina,
+            idEjercicio: idEjercicio,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('la tarjeta enseña las cuatro cifras', (tester) async {
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
+      });
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 8), {
+        idEjercicio: const [ValoresSerie(repeticiones: 8, peso: 65)],
+      });
+
+      await abrir(tester);
+
+      expect(find.text('1RM estimado'), findsOneWidget);
+      expect(find.text('Peso máximo'), findsOneWidget);
+      expect(find.text('Volumen total'), findsOneWidget);
+      expect(find.text('Sesiones'), findsOneWidget);
+
+      expect(find.text('65 kg'), findsWidgets); // peso máximo
+      expect(find.text('1.120 kg'), findsNothing); // el volumen no lleva puntos
+      expect(find.text('2'), findsOneWidget); // sesiones
+      // Epley sobre 8 × 65 = 82,3, mejor que los 80 de la primera sesión.
+      expect(find.text('82,3 kg'), findsOneWidget);
+    });
+
+    testWidgets('cambiar el eje a Volumen repinta sin volver a consultar', (
+      tester,
+    ) async {
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
+      });
+
+      await abrir(tester);
+      await tester.tap(find.text('Volumen').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('1RM'));
+      await tester.pumpAndSettle();
+
+      // Si el gráfico reventara al cambiar de métrica, el árbol no llegaría
+      // aquí entero.
+      expect(find.text('Histórico'.toUpperCase()), findsOneWidget);
+    });
+
+    testWidgets('el rango recorta el gráfico sin perder el histórico', (
+      tester,
+    ) async {
+      // Una sesión de hace dos años y otra de ayer: con «1M» solo entra la
+      // reciente en el gráfico, pero la lista de abajo las enseña las dos.
+      final ahora = DateTime.now();
+      await bd.insertarEntrenamiento(
+        idRutina,
+        ahora.subtract(const Duration(days: 730)),
+        {
+          idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 50)],
+        },
+      );
+      await bd.insertarEntrenamiento(
+        idRutina,
+        ahora.subtract(const Duration(days: 1)),
+        {
+          idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
+        },
+      );
+
+      await abrir(tester);
+      await tester.tap(find.text('1M'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('2'), findsOneWidget); // siguen siendo dos sesiones
+      expect(find.byIcon(CupertinoIcons.rosette), findsNWidgets(2));
+    });
+
+    testWidgets('una serie larga se marca como estimación poco fiable', (
+      tester,
+    ) async {
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [ValoresSerie(repeticiones: 20, peso: 40)],
+      });
+
+      await abrir(tester);
+
+      expect(find.textContaining('*'), findsWidgets);
+      expect(
+        find.textContaining('no cuenta como récord', findRichText: true),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('sin registros no se pinta ni tarjeta ni gráfico', (
+      tester,
+    ) async {
+      await abrir(tester);
+
+      expect(find.text('Sin registros todavía'), findsOneWidget);
+      expect(find.text('1RM estimado'), findsNothing);
     });
   });
 }

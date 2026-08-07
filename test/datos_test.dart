@@ -419,7 +419,71 @@ void main() {
       expect(resumen.first.pesoMaximo, 70);
       // Epley: 70 × (1 + 8/30) = 88,67, mejor que 60 × (1 + 10/30) = 80.
       expect(resumen.first.mejor1RM, closeTo(88.67, 0.01));
+      // Ocho repeticiones son de fiar, así que las dos estimaciones coinciden.
+      expect(resumen.first.mejor1RMFiable, closeTo(88.67, 0.01));
+      expect(resumen.first.fiable, isTrue);
       expect(resumen.last.fecha, DateTime(2026, 3, 8));
+    });
+
+    test('una sesión de series largas no deja estimación fiable', () async {
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [
+          ValoresSerie(repeticiones: 20, peso: 40),
+          ValoresSerie(repeticiones: 15, peso: 45),
+        ],
+      });
+
+      final resumen = await bd.resumenSesionesEjercicio(idRutina, idEjercicio);
+      // Se estima igual —hay que enseñar algo—, pero marcado: nada de esto
+      // puede convertirse en un récord de 1RM.
+      expect(resumen.single.mejor1RM, isPositive);
+      expect(resumen.single.mejor1RMFiable, isNull);
+      expect(resumen.single.fiable, isFalse);
+    });
+
+    test('las dos estimaciones conviven en la misma sesión', () async {
+      // La serie larga estima más alto que la corta, así que `mejor1RM` sale de
+      // ella y la sesión queda marcada; `mejor1RMFiable` conserva la buena, que
+      // es la que puede llegar a ser récord.
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [
+          ValoresSerie(repeticiones: 5, peso: 60), // Epley: 70
+          ValoresSerie(repeticiones: 20, peso: 60), // Epley: 100
+        ],
+      });
+
+      final resumen = await bd.resumenSesionesEjercicio(idRutina, idEjercicio);
+      expect(resumen.single.mejor1RM, closeTo(100, 0.01));
+      expect(resumen.single.mejor1RMFiable, closeTo(70, 0.01));
+      expect(resumen.single.fiable, isFalse);
+    });
+
+    test('la fórmula elegida cambia la estimación', () async {
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [ValoresSerie(repeticiones: 12, peso: 60)],
+      });
+
+      final epley = await bd.resumenSesionesEjercicio(idRutina, idEjercicio);
+      expect(epley.single.mejor1RM, closeTo(84, 0.01));
+
+      // Brzycki: 60 × 36 / 25 = 86,4.
+      final brzycki = await bd.resumenSesionesEjercicio(
+        idRutina,
+        idEjercicio,
+        formula: Formula.brzycki,
+      );
+      expect(brzycki.single.mejor1RM, closeTo(86.4, 0.01));
+    });
+
+    test('una repetición se estima como el peso, no como Epley cruda', () async {
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [ValoresSerie(repeticiones: 1, peso: 100)],
+      });
+
+      final resumen = await bd.resumenSesionesEjercicio(idRutina, idEjercicio);
+      // La fórmula cruda daría 103,33; el SQL lleva el mismo caso especial que
+      // `metricas.unoRm`, y que no se separen es justo lo que fija este test.
+      expect(resumen.single.mejor1RM, 100);
     });
 
     test('el calentamiento no cuenta en volumen, máximo ni 1RM', () async {
@@ -830,15 +894,30 @@ void main() {
       await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
         idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
       });
-      final igual = (await bd.insertarEntrenamiento(
+      // Más repeticiones con el mismo peso: no bate el peso máximo, pero sí el
+      // 1RM estimado (60 × 1,4 = 84 contra 80) y el volumen (720 contra 600).
+      // Antes de C16 esto no era récord de nada, porque solo se miraba el peso.
+      final masReps = (await bd.insertarEntrenamiento(
         idRutina,
         DateTime(2026, 3, 8),
         {
           idEjercicio: const [ValoresSerie(repeticiones: 12, peso: 60)],
         },
       ))!;
-      // Más repeticiones pero el mismo peso: no es récord de peso máximo.
-      expect(await bd.recordsDeSesion(igual), isEmpty);
+      expect((await bd.recordsDeSesion(masReps)).single.batidos, {
+        TipoRecord.unoRm,
+        TipoRecord.volumen,
+      });
+
+      // Menos peso y menos repeticiones: no bate absolutamente nada.
+      final peor = (await bd.insertarEntrenamiento(
+        idRutina,
+        DateTime(2026, 3, 12),
+        {
+          idEjercicio: const [ValoresSerie(repeticiones: 6, peso: 55)],
+        },
+      ))!;
+      expect(await bd.recordsDeSesion(peor), isEmpty);
 
       final mejor = (await bd.insertarEntrenamiento(
         idRutina,
@@ -850,10 +929,68 @@ void main() {
       final records = await bd.recordsDeSesion(mejor);
       expect(records.single.pesoMaximo, 65);
       expect(records.single.pesoAnterior, 60);
+      expect(records.single.batidos, contains(TipoRecord.peso));
 
-      // Y no depende de cuándo se pregunte: la sesión de en medio sigue sin
-      // ser récord ahora que existe una posterior mejor.
-      expect(await bd.recordsDeSesion(igual), isEmpty);
+      // Y no depende de cuándo se pregunte: la sesión floja sigue sin ser
+      // récord ahora que existe una posterior mejor.
+      expect(await bd.recordsDeSesion(peor), isEmpty);
+    });
+
+    test('una serie larga no da récord de 1RM', () async {
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
+      });
+      // Epley daría 40 × (1 + 20/30) = 66,7, por debajo de 80; pero aunque
+      // saliera más alto, veinte repeticiones no estiman un máximo.
+      final larga = (await bd.insertarEntrenamiento(
+        idRutina,
+        DateTime(2026, 3, 8),
+        {
+          idEjercicio: const [ValoresSerie(repeticiones: 20, peso: 45)],
+        },
+      ))!;
+
+      final records = await bd.recordsDeSesion(larga);
+      // Sí bate el volumen (900 contra 600), pero el 1RM ni se calcula.
+      expect(records.single.mejor1RM, isNull);
+      expect(records.single.batidos, {TipoRecord.volumen});
+    });
+
+    test('con Brzycki la estimación cambia', () async {
+      final id = (await bd.insertarEntrenamiento(
+        idRutina,
+        DateTime(2026, 3, 1),
+        {
+          idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
+        },
+      ))!;
+
+      final epley = await bd.recordsDeSesion(id);
+      expect(epley.single.mejor1RM, closeTo(80, 0.001));
+
+      // Brzycki: 60 × 36 / 27 = 80.
+      final brzycki = await bd.recordsDeSesion(id, formula: Formula.brzycki);
+      expect(brzycki.single.mejor1RM, closeTo(80, 0.001));
+
+      // Con doce repeticiones sí se separan: Epley 84, Brzycki 86,4.
+      final doce = (await bd.insertarEntrenamiento(
+        idRutina,
+        DateTime(2026, 3, 8),
+        {
+          idEjercicio: const [ValoresSerie(repeticiones: 12, peso: 60)],
+        },
+      ))!;
+      expect(
+        (await bd.recordsDeSesion(doce)).single.mejor1RM,
+        closeTo(84, 0.001),
+      );
+      expect(
+        (await bd.recordsDeSesion(
+          doce,
+          formula: Formula.brzycki,
+        )).single.mejor1RM,
+        closeTo(86.4, 0.001),
+      );
     });
 
     test('el calentamiento no bate récords', () async {

@@ -15,12 +15,17 @@ import 'package:drift_flutter/drift_flutter.dart';
 
 import 'ajustes.dart';
 import 'esquemas.dart';
+// Solo por el umbral de repeticiones fiables, que las agregaciones de 1RM
+// necesitan escribir en el SQL. `metricas.dart` importa a su vez este fichero
+// por los tipos de sus parámetros; el ciclo es legal en Dart y preferible a
+// tener el mismo 12 escrito en dos sitios.
+import 'metricas.dart' show maxRepeticionesFiables;
 import 'respaldo.dart';
 
 // Los tipos de las preferencias se reexportan para que las pantallas sigan
 // pidiéndolos donde ya los pedían. Las claves y los valores admitidos viven en
 // `ajustes.dart` y solo los necesita la pantalla de Ajustes.
-export 'ajustes.dart' show Ajustes, EscalaEsfuerzo, Tema, Unidad;
+export 'ajustes.dart' show Ajustes, EscalaEsfuerzo, Formula, Tema, Unidad;
 
 part 'bd.g.dart';
 
@@ -333,6 +338,7 @@ class ResumenSesionEjercicio {
     required this.volumen,
     required this.pesoMaximo,
     required this.mejor1RM,
+    required this.mejor1RMFiable,
   });
 
   final int idEntrenamiento;
@@ -344,24 +350,71 @@ class ResumenSesionEjercicio {
 
   final double pesoMaximo;
 
-  /// 1RM estimado por Epley: `peso × (1 + repeticiones / 30)`.
-  ///
-  /// Se calcula aquí porque sale de la misma agregación; la fórmula elegible y
-  /// la pantalla de récords son C16.
+  /// El mejor 1RM estimado de la sesión, con la fórmula que pidió quien
+  /// consultó.
   final double mejor1RM;
+
+  /// El mejor 1RM contando **solo las series fiables** (hasta doce
+  /// repeticiones).
+  ///
+  /// `null` cuando todas las series de la sesión pasaron de ahí: se sigue
+  /// enseñando [mejor1RM], pero marcado como estimación de baja confianza y sin
+  /// contar para un récord.
+  final double? mejor1RMFiable;
+
+  /// Si el [mejor1RM] de la sesión sale de una serie de las de fiar.
+  bool get fiable => mejor1RMFiable != null && mejor1RMFiable == mejor1RM;
 }
 
 /// Una sesión vista desde el calendario.
+///
+/// Trae ya las cifras que pinta la hoja del día: el calendario solo necesita el
+/// color de la rutina, pero pulsar una celda no puede desatar una consulta por
+/// sesión mostrada.
 class SesionDelDia {
   const SesionDelDia({
     required this.id,
     required this.idRutina,
     required this.fecha,
+    this.duracionSeg,
+    this.nEjercicios = 0,
+    this.nSeries = 0,
+    this.volumen = 0,
   });
 
   final int id;
   final int idRutina;
   final DateTime fecha;
+
+  /// Solo lo tienen las sesiones registradas en vivo.
+  final int? duracionSeg;
+
+  final int nEjercicios;
+  final int nSeries;
+
+  /// Sin contar el calentamiento.
+  final double volumen;
+}
+
+/// Una sesión con su volumen ya sumado, para los cálculos de la semana.
+///
+/// Es deliberadamente escueta: el resumen semanal necesita muchas sesiones a la
+/// vez —hasta dos años atrás para la racha— y de cada una solo cuándo fue, de
+/// qué rutina y cuánto se movió.
+class SesionConVolumen {
+  const SesionConVolumen({
+    required this.id,
+    required this.idRutina,
+    required this.fecha,
+    required this.volumen,
+  });
+
+  final int id;
+  final int idRutina;
+  final DateTime fecha;
+
+  /// Sin contar el calentamiento.
+  final double volumen;
 }
 
 /// Una sesión en la lista del historial, con sus cifras ya calculadas.
@@ -494,7 +547,19 @@ class ValoresSerie {
       '${nota == null ? '' : ', «$nota»'})';
 }
 
-/// Un ejercicio en el que la sesión recién cerrada batió un récord.
+/// Qué récord se ha batido.
+enum TipoRecord {
+  /// El peso más alto movido en una serie efectiva.
+  peso,
+
+  /// El mejor 1RM estimado, contando solo series de hasta doce repeticiones.
+  unoRm,
+
+  /// El volumen de la sesión en ese ejercicio.
+  volumen,
+}
+
+/// Un ejercicio en el que la sesión recién cerrada batió algún récord.
 ///
 /// Se calcula al terminar para el resumen de cierre: es la respuesta a «¿ha
 /// servido de algo lo de hoy?», y sale de comparar con lo que había **antes**
@@ -504,17 +569,36 @@ class RecordSesion {
     required this.nombre,
     required this.pesoMaximo,
     required this.mejor1RM,
+    required this.volumen,
     required this.pesoAnterior,
+    required this.unoRmAnterior,
+    required this.volumenAnterior,
   });
 
   final String nombre;
+
   final double pesoMaximo;
 
-  /// 1RM estimado por Epley: `peso × (1 + repeticiones / 30)`.
-  final double mejor1RM;
+  /// El mejor 1RM estimado **de las series fiables**; `null` si ninguna lo era.
+  final double? mejor1RM;
 
-  /// El mejor peso anterior a esta sesión, o `null` si es la primera vez.
+  final double volumen;
+
+  /// Lo mejor anterior a esta sesión, o `null` si es la primera vez.
   final double? pesoAnterior;
+  final double? unoRmAnterior;
+  final double? volumenAnterior;
+
+  /// Cuáles de los tres se han batido. Nunca está vacío: la consulta solo
+  /// devuelve ejercicios en los que se batió alguno.
+  Set<TipoRecord> get batidos => {
+    if (pesoAnterior == null || pesoMaximo > pesoAnterior!) TipoRecord.peso,
+    if (mejor1RM != null &&
+        (unoRmAnterior == null || mejor1RM! > unoRmAnterior!))
+      TipoRecord.unoRm,
+    if (volumenAnterior == null || volumen > volumenAnterior!)
+      TipoRecord.volumen,
+  };
 }
 
 @DriftDatabase(
@@ -1366,6 +1450,27 @@ class AppBD extends _$AppBD {
     ];
   }
 
+  /// La expresión SQL del 1RM estimado de una serie, según la fórmula.
+  ///
+  /// Se compone aquí y no se incrusta en cada consulta para que las dos que lo
+  /// estiman —el histórico de un ejercicio y los récords de una sesión— no
+  /// puedan discrepar. `alias` es el de la tabla `serie` en la consulta.
+  ///
+  /// Con una repetición devuelve el peso tal cual, igual que `metricas.unoRm`:
+  /// levantar 100 kg una vez es un máximo de 100, no de 103,3. Brzycki se
+  /// satura en 36 repeticiones, que es donde su denominador llega a cero.
+  static String _expresion1RM(
+    Formula formula,
+    String alias,
+  ) => switch (formula) {
+    Formula.epley =>
+      'CASE WHEN $alias.repeticiones <= 1 THEN $alias.peso '
+          'ELSE $alias.peso * (1 + $alias.repeticiones / 30.0) END',
+    Formula.brzycki =>
+      'CASE WHEN $alias.repeticiones <= 1 THEN $alias.peso '
+          'ELSE $alias.peso * 36.0 / (37 - MIN($alias.repeticiones, 36)) END',
+  };
+
   /// Lo que dio de sí cada **sesión** en un ejercicio, de la más antigua a la
   /// más reciente.
   ///
@@ -1373,18 +1478,28 @@ class AppBD extends _$AppBD {
   /// [seriesConFecha] pintarían una barra por serie en vez de una por sesión.
   /// Las series de calentamiento no entran en ninguna de las cifras, así que
   /// una sesión que solo fuera calentamiento no aparece aquí.
+  ///
+  /// De cada sesión salen **dos** estimaciones de 1RM: la mejor de todas y la
+  /// mejor entre las series de hasta doce repeticiones. La segunda es la que
+  /// vale para un récord; la primera se enseña igual, marcada.
   Future<List<ResumenSesionEjercicio>> resumenSesionesEjercicio(
     int idRutina,
-    int idEjercicio,
-  ) async {
+    int idEjercicio, {
+    Formula formula = Formula.epley,
+  }) async {
+    final estimado = _expresion1RM(formula, 's');
+    // `MAX(CASE WHEN ...)` en vez de `FILTER`, que es más legible pero exige
+    // SQLite 3.30 y no hay motivo para poner ese suelo.
     final filas = await customSelect(
       '''
       SELECT e.id            AS id,
              e.fecha         AS fecha,
              COUNT(*)        AS n_series,
-             SUM(s.peso * s.repeticiones)            AS volumen,
-             MAX(s.peso)                             AS maximo,
-             MAX(s.peso * (1 + s.repeticiones / 30.0)) AS mejor_1rm
+             SUM(s.peso * s.repeticiones) AS volumen,
+             MAX(s.peso)                  AS maximo,
+             MAX($estimado)               AS mejor_1rm,
+             MAX(CASE WHEN s.repeticiones <= $maxRepeticionesFiables
+                      THEN $estimado END) AS mejor_1rm_fiable
       FROM serie s
       JOIN entrenamientos e ON e.id = s.id_entrenamiento
       WHERE e.id_rutina = ? AND s.id_ejercicio = ? AND s.calentamiento = 0
@@ -1404,6 +1519,7 @@ class AppBD extends _$AppBD {
           volumen: f.read<double>('volumen'),
           pesoMaximo: f.read<double>('maximo'),
           mejor1RM: f.read<double>('mejor_1rm'),
+          mejor1RMFiable: f.read<double?>('mejor_1rm_fiable'),
         ),
     ];
   }
@@ -1573,18 +1689,34 @@ class AppBD extends _$AppBD {
     );
   }
 
-  /// Ejercicios en los que la sesión [idEntrenamiento] batió el peso máximo.
+  /// Ejercicios en los que la sesión [idEntrenamiento] batió algún récord.
+  ///
+  /// Los tres de C16: peso máximo en una serie, 1RM estimado —solo con las
+  /// series de hasta doce repeticiones, que son las que dan una estimación de
+  /// fiar— y volumen de la sesión.
   ///
   /// La comparación es contra lo anterior **a esta sesión** dentro de la misma
   /// rutina, así que llamarlo dos veces devuelve lo mismo: no depende de cuándo
-  /// se pregunte. Un ejercicio estrenado ese día también cuenta como récord,
-  /// con [RecordSesion.pesoAnterior] nulo. El calentamiento no entra.
-  Future<List<RecordSesion>> recordsDeSesion(int idEntrenamiento) async {
+  /// se pregunte, ni editar una sesión antigua convierte retroactivamente en
+  /// récord algo que no lo fue. Un ejercicio estrenado ese día también cuenta,
+  /// con los «anterior» nulos. El calentamiento no entra.
+  Future<List<RecordSesion>> recordsDeSesion(
+    int idEntrenamiento, {
+    Formula formula = Formula.epley,
+  }) async {
+    final estimado = _expresion1RM(formula, 's');
+    final estimadoPrevio = _expresion1RM(formula, 'sp');
+
+    // Las tres subconsultas comparten el mismo «antes de esta sesión»:
+    // fecha anterior, o la misma fecha con id menor. Es el desempate que ya usa
+    // el resto de la app para ordenar dos sesiones del mismo día.
     final filas = await customSelect(
       '''
-      SELECT ej.nombre                              AS nombre,
-             MAX(s.peso)                            AS maximo,
-             MAX(s.peso * (1 + s.repeticiones / 30.0)) AS mejor_1rm,
+      SELECT ej.nombre       AS nombre,
+             MAX(s.peso)     AS maximo,
+             MAX(CASE WHEN s.repeticiones <= $maxRepeticionesFiables
+                      THEN $estimado END)      AS mejor_1rm,
+             SUM(s.peso * s.repeticiones)      AS volumen,
              (SELECT MAX(sp.peso)
                 FROM serie sp
                 JOIN entrenamientos ep ON ep.id = sp.id_entrenamiento
@@ -1592,13 +1724,36 @@ class AppBD extends _$AppBD {
                  AND sp.calentamiento = 0
                  AND ep.id_rutina = e.id_rutina
                  AND (ep.fecha < e.fecha
-                      OR (ep.fecha = e.fecha AND ep.id < e.id))) AS anterior
+                      OR (ep.fecha = e.fecha AND ep.id < e.id))) AS anterior,
+             (SELECT MAX(CASE WHEN sp.repeticiones <= $maxRepeticionesFiables
+                              THEN $estimadoPrevio END)
+                FROM serie sp
+                JOIN entrenamientos ep ON ep.id = sp.id_entrenamiento
+               WHERE sp.id_ejercicio = s.id_ejercicio
+                 AND sp.calentamiento = 0
+                 AND ep.id_rutina = e.id_rutina
+                 AND (ep.fecha < e.fecha
+                      OR (ep.fecha = e.fecha AND ep.id < e.id))) AS anterior_1rm,
+             (SELECT MAX(previo.total)
+                FROM (SELECT SUM(sp.peso * sp.repeticiones) AS total
+                        FROM serie sp
+                        JOIN entrenamientos ep ON ep.id = sp.id_entrenamiento
+                       WHERE sp.id_ejercicio = s.id_ejercicio
+                         AND sp.calentamiento = 0
+                         AND ep.id_rutina = e.id_rutina
+                         AND (ep.fecha < e.fecha
+                              OR (ep.fecha = e.fecha AND ep.id < e.id))
+                       GROUP BY ep.id) AS previo) AS anterior_volumen
       FROM serie s
       JOIN entrenamientos e ON e.id = s.id_entrenamiento
       JOIN ejercicios ej    ON ej.id = s.id_ejercicio
       WHERE s.id_entrenamiento = ? AND s.calentamiento = 0
       GROUP BY s.id_ejercicio
-      HAVING anterior IS NULL OR MAX(s.peso) > anterior
+      HAVING (anterior IS NULL OR MAX(s.peso) > anterior)
+          OR (mejor_1rm IS NOT NULL
+              AND (anterior_1rm IS NULL OR mejor_1rm > anterior_1rm))
+          OR (anterior_volumen IS NULL
+              OR SUM(s.peso * s.repeticiones) > anterior_volumen)
       ORDER BY ej.orden, ej.id
       ''',
       variables: [Variable.withInt(idEntrenamiento)],
@@ -1610,8 +1765,11 @@ class AppBD extends _$AppBD {
         RecordSesion(
           nombre: f.read<String>('nombre'),
           pesoMaximo: f.read<double>('maximo'),
-          mejor1RM: f.read<double>('mejor_1rm'),
+          mejor1RM: f.read<double?>('mejor_1rm'),
+          volumen: f.read<double>('volumen'),
           pesoAnterior: f.read<double?>('anterior'),
+          unoRmAnterior: f.read<double?>('anterior_1rm'),
+          volumenAnterior: f.read<double?>('anterior_volumen'),
         ),
     ];
   }
@@ -1704,31 +1862,89 @@ class AppBD extends _$AppBD {
   ///
   /// El rango no es un adorno: antes se cargaban en memoria todos los
   /// entrenamientos de la historia para pintar un solo mes.
+  ///
+  /// Trae de paso las cifras de cada sesión, que el calendario en sí no
+  /// necesita pero sí la hoja que se abre al pulsar un día (C19): sin ellas,
+  /// pulsar una celda dispararía una consulta por sesión listada.
   Future<Map<DateTime, List<SesionDelDia>>> entrenamientosPorDia({
     required DateTime desde,
     required DateTime hasta,
   }) async {
-    final filas =
-        await (select(entrenamientos)
-              ..where(
-                (e) =>
-                    e.fecha.isBiggerOrEqualValue(desde) &
-                    e.fecha.isSmallerThanValue(hasta),
-              )
-              ..orderBy([
-                (e) => OrderingTerm(expression: e.fecha),
-                (e) => OrderingTerm(expression: e.id),
-              ]))
-            .get();
+    final filas = await customSelect(
+      '''
+      SELECT e.id                           AS id,
+             e.id_rutina                    AS id_rutina,
+             e.fecha                        AS fecha,
+             e.duracion_seg                 AS duracion_seg,
+             COUNT(DISTINCT s.id_ejercicio) AS n_ejercicios,
+             COUNT(s.id)                    AS n_series,
+             COALESCE(SUM(
+               CASE WHEN s.calentamiento = 0 THEN s.peso * s.repeticiones ELSE 0 END
+             ), 0)                          AS volumen
+      FROM entrenamientos e
+      LEFT JOIN serie s ON s.id_entrenamiento = e.id
+      WHERE e.fecha >= ? AND e.fecha < ?
+      GROUP BY e.id
+      ORDER BY e.fecha, e.id
+      ''',
+      variables: [Variable.withDateTime(desde), Variable.withDateTime(hasta)],
+      readsFrom: {entrenamientos, seriesTabla},
+    ).get();
 
     final porDia = <DateTime, List<SesionDelDia>>{};
-    for (final e in filas) {
-      final dia = DateTime(e.fecha.year, e.fecha.month, e.fecha.day);
+    for (final f in filas) {
+      final fecha = f.read<DateTime>('fecha');
+      final dia = DateTime(fecha.year, fecha.month, fecha.day);
       (porDia[dia] ??= []).add(
-        SesionDelDia(id: e.id, idRutina: e.idRutina, fecha: e.fecha),
+        SesionDelDia(
+          id: f.read<int>('id'),
+          idRutina: f.read<int>('id_rutina'),
+          fecha: fecha,
+          duracionSeg: f.read<int?>('duracion_seg'),
+          nEjercicios: f.read<int>('n_ejercicios'),
+          nSeries: f.read<int>('n_series'),
+          volumen: f.read<double>('volumen'),
+        ),
       );
     }
     return porDia;
+  }
+
+  /// Cada sesión con su volumen ya sumado, de la más reciente hacia atrás.
+  ///
+  /// Es **la única consulta** del resumen semanal: de aquí salen las sesiones y
+  /// el volumen de esta semana, los de la anterior y la racha, porque el
+  /// reparto por semanas se hace en Dart (`metricas.porSemana`). Las funciones
+  /// de fecha de SQLite trabajan en UTC y partirían mal las semanas en huso
+  /// local.
+  Future<List<SesionConVolumen>> sesionesConVolumen({DateTime? desde}) async {
+    final filas = await customSelect(
+      '''
+      SELECT e.id        AS id,
+             e.id_rutina AS id_rutina,
+             e.fecha     AS fecha,
+             COALESCE(SUM(
+               CASE WHEN s.calentamiento = 0 THEN s.peso * s.repeticiones ELSE 0 END
+             ), 0)       AS volumen
+      FROM entrenamientos e
+      LEFT JOIN serie s ON s.id_entrenamiento = e.id
+      ${desde == null ? '' : 'WHERE e.fecha >= ?'}
+      GROUP BY e.id
+      ORDER BY e.fecha DESC, e.id DESC
+      ''',
+      variables: [if (desde != null) Variable.withDateTime(desde)],
+      readsFrom: {entrenamientos, seriesTabla},
+    ).get();
+
+    return [
+      for (final f in filas)
+        SesionConVolumen(
+          id: f.read<int>('id'),
+          idRutina: f.read<int>('id_rutina'),
+          fecha: f.read<DateTime>('fecha'),
+          volumen: f.read<double>('volumen'),
+        ),
+    ];
   }
 
   // ── Volcado completo, para la copia de seguridad ───────────────────────────
