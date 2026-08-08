@@ -134,7 +134,8 @@ assets/musculatura.json     el modelo anatómico del mapa muscular
 tool/musculatura.py         genera el modelo anatómico y una previa para verlo
 drift_schemas/              un JSON por versión del esquema
 test/                       tests de datos, de widget y de migración
-docs/especificaciones.md    funcionalidades previstas y su plan de entrega
+docs/especificaciones.md    primera iteración, completada (bloques A–D)
+docs/especificaciones-2.md  lo previsto: idiomas, progresiones y sincronización
 ```
 
 ## Créditos y licencias
