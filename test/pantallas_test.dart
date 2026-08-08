@@ -7,6 +7,8 @@ library;
 import 'package:appgym/datos/ajustes.dart';
 import 'package:appgym/datos/bd.dart';
 import 'package:appgym/datos/formato.dart' as formato;
+import 'package:appgym/datos/geometria.dart';
+import 'package:appgym/datos/musculos.dart';
 import 'package:appgym/datos/reloj.dart' as reloj;
 import 'package:appgym/estado/descanso.dart';
 import 'package:appgym/main.dart';
@@ -17,6 +19,7 @@ import 'package:appgym/pantallas/entrenar.dart';
 import 'package:appgym/pantallas/ficha.dart';
 import 'package:appgym/pantallas/historial.dart';
 import 'package:appgym/pantallas/medidas.dart';
+import 'package:appgym/pantallas/musculatura.dart';
 import 'package:appgym/pantallas/progreso.dart';
 import 'package:appgym/pantallas/resultado_ejercicio.dart';
 import 'package:appgym/pantallas/resumen_sesion.dart';
@@ -26,6 +29,9 @@ import 'package:appgym/pantallas/sesion.dart';
 import 'package:appgym/tema/ui.dart' as ui;
 import 'package:drift/native.dart';
 import 'package:flutter/cupertino.dart';
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -58,8 +64,16 @@ final _catalogoFalso = [
   ),
 ];
 
-Widget _app(AppBD bd, Widget pantalla) => ProviderScope(
-  overrides: [bdProvider.overrideWithValue(bd)],
+Widget _app(
+  AppBD bd,
+  Widget pantalla, {
+  Brightness? brillo,
+  MapaCuerpo<Region>? modelo,
+}) => ProviderScope(
+  overrides: [
+    bdProvider.overrideWithValue(bd),
+    if (modelo != null) modeloCuerpoProvider.overrideWith((ref) => modelo),
+  ],
   child: CupertinoApp(
     locale: const Locale('es'),
     supportedLocales: const [Locale('es')],
@@ -68,6 +82,7 @@ Widget _app(AppBD bd, Widget pantalla) => ProviderScope(
       GlobalMaterialLocalizations.delegate,
       GlobalWidgetsLocalizations.delegate,
     ],
+    theme: CupertinoThemeData(brightness: brillo),
     home: pantalla,
   ),
 );
@@ -1795,6 +1810,226 @@ void main() {
 
       expect(find.text('Registrar un entrenamiento en este día'), findsNothing);
       expect(find.text('Cancelar'), findsNothing);
+    });
+  });
+
+  // ── D: el mapa muscular ────────────────────────────────────────────────────
+
+  group('mapa muscular', () {
+    late _RelojFalso hoy;
+    late int idRutina;
+    late MapaCuerpo<Region> modelo;
+
+    // El dibujo se lee del asset una sola vez y se inyecta ya construido: leer
+    // un fichero compite con el reloj falso de `pumpAndSettle` y hace los tests
+    // dependientes de lo rápido que vaya el disco. Que el asset se parsea bien
+    // lo prueba `geometria_test.dart`, que es su sitio.
+    setUpAll(() {
+      // Se lee del disco y no con `rootBundle`: `setUpAll` corre antes de que
+      // exista el binding de Flutter, y ahí el bundle se queda esperando.
+      modelo = cargarMapa(
+        jsonDecode(File('assets/musculatura.json').readAsStringSync())
+            as Map<String, dynamic>,
+        (nombre) => Region.values.asNameMap()[nombre],
+      );
+    });
+
+    setUp(() async {
+      hoy = _RelojFalso()..instalar();
+      await sembrarCatalogo(bd, datos: _catalogoFalso);
+      idRutina = (await bd.insertarRutina('Empuje'))!;
+    });
+
+    /// Registra un press de banca, que en el catálogo falso es de pectorales.
+    Future<void> entrenarPecho() async {
+      await bd.insertarEjercicio(idRutina, 'Press banca', idCatalogo: '0001');
+      final id = (await bd.ejerciciosDeRutina(idRutina)).first.id;
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 7, 30), {
+        id: const [
+          ValoresSerie(repeticiones: 10, peso: 60),
+          ValoresSerie(repeticiones: 8, peso: 70),
+        ],
+      });
+    }
+
+    /// Monta Progreso y abre la pestaña «Cuerpo».
+    Future<void> abrirCuerpo(WidgetTester tester, {Brightness? brillo}) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(
+        _app(bd, const PantallaProgreso(), brillo: brillo, modelo: modelo),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cuerpo'));
+      await tester.pumpAndSettle();
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('se pinta con su conmutador, su periodo y su leyenda', (
+      tester,
+    ) async {
+      await entrenarPecho();
+      await abrirCuerpo(tester);
+
+      expect(find.byType(MapaMuscular), findsOneWidget);
+      expect(find.text('Frente'), findsOneWidget);
+      expect(find.text('Espalda'), findsOneWidget);
+      expect(find.text('30 días'), findsOneWidget);
+      expect(find.text('Sin trabajar'), findsOneWidget);
+      expect(find.text('MENOS TRABAJADOS'), findsOneWidget);
+      // Y las medidas siguen debajo, en la misma sección.
+      expect(find.text('MEDIDAS'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('el conmutador alterna de cara sin recargar', (tester) async {
+      await entrenarPecho();
+      await abrirCuerpo(tester);
+
+      await tester.tap(find.text('Espalda'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(MapaMuscular), findsOneWidget);
+    });
+
+    testWidgets('cambiar de periodo recolorea sin excepciones', (tester) async {
+      await entrenarPecho();
+      await abrirCuerpo(tester);
+
+      for (final periodo in ['7 días', '90 días', '30 días']) {
+        await tester.tap(find.text(periodo));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull, reason: periodo);
+      }
+    });
+
+    testWidgets('sin entrenamientos explica el modelo en gris', (tester) async {
+      await abrirCuerpo(tester);
+
+      expect(find.text('Aún no hay nada que colorear'), findsOneWidget);
+      // El modelo se sigue pintando: la vista es útil sin histórico, porque el
+      // catálogo por músculo se navega igual.
+      expect(find.byType(CustomPaint), findsWidgets);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('la lista de abandonados abre la hoja del músculo', (
+      tester,
+    ) async {
+      await entrenarPecho();
+      await abrirCuerpo(tester);
+
+      // Un músculo que no se ha tocado nunca: la lista de abandonados es
+      // justamente el camino fiable para las regiones pequeñas. Hay que
+      // acercarla antes, que con el modelo delante cae bajo el pliegue.
+      await tester.ensureVisible(find.text('Bíceps'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Bíceps'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('ÚLTIMOS 30 DÍAS'), findsOneWidget);
+      expect(find.text('EJERCICIOS'), findsOneWidget);
+      expect(find.text('Listo'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('la hoja de un músculo entrenado trae sus sesiones', (
+      tester,
+    ) async {
+      await entrenarPecho();
+      hoy.instalar();
+      await abrirCuerpo(tester);
+
+      // Este va tocando el dibujo, que es el camino que la lista no cubre: un
+      // músculo entrenado nunca sale entre los abandonados. El punto se calcula
+      // con el mismo encaje que usa la pantalla, así que no depende del tamaño.
+      await tester.ensureVisible(find.byKey(claveLienzo));
+      await tester.pumpAndSettle();
+      final caja = tester.getRect(find.byKey(claveLienzo));
+      final encaje = Encaje.contener(
+        destino: caja.size,
+        lienzo: const Size(1000, 2000),
+      );
+      await tester.tapAt(
+        caja.topLeft +
+            encaje.desplazamiento +
+            const Offset(590, 480) * encaje.escala,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Pecho'), findsWidgets);
+      expect(find.text('TUS ENTRENAMIENTOS'), findsOneWidget);
+      expect(find.text('Press banca'), findsWidgets);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('avisa de los ejercicios que no salen en el modelo', (
+      tester,
+    ) async {
+      await bd.insertarEjercicio(idRutina, 'Remo con goma');
+      final id = (await bd.ejerciciosDeRutina(idRutina)).first.id;
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 7, 30), {
+        id: const [ValoresSerie(repeticiones: 12, peso: 10)],
+      });
+      await abrirCuerpo(tester);
+
+      expect(find.textContaining('ejercicio personalizado'), findsOneWidget);
+    });
+
+    testWidgets('se pinta en claro y en oscuro', (tester) async {
+      await entrenarPecho();
+      for (final brillo in [Brightness.light, Brightness.dark]) {
+        await abrirCuerpo(tester, brillo: brillo);
+        expect(tester.takeException(), isNull, reason: '$brillo');
+        expect(find.byType(MapaMuscular), findsOneWidget);
+      }
+    });
+
+    testWidgets('los colores del mapa se resuelven contra el tema', (
+      tester,
+    ) async {
+      // Montar en oscuro sin más solo demuestra que no revienta. Lo que hay que
+      // fijar es que los colores salen del contexto: si alguien usara
+      // `CupertinoColors` en crudo, el mapa se vería igual en los dos temas.
+      Future<List<Color>> colores(Brightness brillo) async {
+        late List<Color> vistos;
+        await tester.pumpWidget(
+          CupertinoApp(
+            theme: CupertinoThemeData(brightness: brillo),
+            home: Builder(
+              builder: (context) {
+                vistos = [
+                  for (var n = 0; n < nivelesColor; n++) colorNivel(context, n),
+                ];
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+        return vistos;
+      }
+
+      final claro = await colores(Brightness.light);
+      final oscuro = await colores(Brightness.dark);
+
+      // El nivel 0 tiene que distinguirse del 4: es lo que responde a «¿qué no
+      // estoy tocando?».
+      expect(claro.first, isNot(claro.last));
+      // Y el mismo nivel cambia con el tema.
+      expect(claro.first, isNot(oscuro.first));
+      expect(claro.last, isNot(oscuro.last));
+    });
+
+    testWidgets('el catálogo se abre filtrado por la región', (tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(
+        _app(bd, const PantallaCatalogo(region: Region.pectoral)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Pecho'), findsWidgets);
+      expect(find.text('barbell bench press'), findsOneWidget);
+      // El curl de bíceps no es de pecho y no debe salir.
+      expect(find.text('dumbbell curl'), findsNothing);
     });
   });
 }

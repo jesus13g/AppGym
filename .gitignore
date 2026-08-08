@@ -37,3 +37,7 @@ ios/Flutter/ephemeral/
 # solo cubren el caso de que alguien las genere aquí a mano.
 *.db
 media/
+
+# Previas de usar y tirar de tool/musculatura.py
+tool/previa.svg
+tool/previa.html

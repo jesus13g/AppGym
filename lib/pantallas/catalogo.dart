@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../datos/bd.dart';
 import '../datos/formato.dart' as formato;
 import '../datos/i18n.dart' as i18n;
+import '../datos/musculos.dart';
 import '../datos/media.dart' as media;
 import '../estado/providers.dart';
 import '../tema/tokens.dart';
@@ -49,12 +50,30 @@ Future<void> abrirAnadirEjercicio(BuildContext context, int idRutina) =>
       ),
     );
 
+/// Abre el catálogo como pantalla, opcionalmente filtrado por una región.
+///
+/// Se empuja en el navegador de la pestaña de quien llama —no en el raíz—, para
+/// que desde el mapa muscular se pueda volver deslizando sin salir de Progreso.
+Future<void> abrirCatalogo(BuildContext context, {Region? region}) =>
+    Navigator.of(context).push(
+      CupertinoPageRoute<void>(
+        builder: (_) => PantallaCatalogo(region: region),
+      ),
+    );
+
 class PantallaCatalogo extends ConsumerStatefulWidget {
-  const PantallaCatalogo({super.key, this.idRutina});
+  const PantallaCatalogo({super.key, this.idRutina, this.region});
 
   /// Si es null, la pantalla es la pestaña de exploración: al tocar un
   /// ejercicio se abre su ficha en vez de añadirlo.
   final int? idRutina;
+
+  /// Región muscular con la que llega ya filtrada, desde el mapa.
+  ///
+  /// Filtra por los mismos términos que usa la atribución del mapa, y no solo
+  /// por `target`: cuatro regiones —deltoides posterior, oblicuos, flexores de
+  /// cadera y tibial— no tienen ningún `target` propio y saldrían vacías.
+  final Region? region;
 
   @override
   ConsumerState<PantallaCatalogo> createState() => _PantallaCatalogoState();
@@ -65,6 +84,7 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
   final _campo = TextEditingController();
 
   String _texto = '';
+  late Region? _region = widget.region;
   String? _zona;
   String? _equipo;
   String? _objetivo;
@@ -129,6 +149,7 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
           bodyPart: _zona,
           equipment: _equipo,
           target: _objetivo,
+          musculos: _region == null ? null : terminosDe(_region!),
           limite: _pagina,
           desplazamiento: _desplazamiento,
         );
@@ -253,11 +274,19 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
   /// True cuando no hay ni búsqueda ni filtros: es el estado inicial, donde en
   /// vez de los 1.324 de golpe se enseñan los favoritos y lo visto hace poco.
   bool get _sinFiltros =>
-      _texto.isEmpty && _zona == null && _equipo == null && _objetivo == null;
+      _texto.isEmpty &&
+      _zona == null &&
+      _equipo == null &&
+      _objetivo == null &&
+      _region == null;
 
   @override
   Widget build(BuildContext context) {
-    final titulo = _esModal ? 'Añadir ejercicio' : 'Ejercicios';
+    final titulo = switch ((_esModal, widget.region)) {
+      (true, _) => 'Añadir ejercicio',
+      (false, final region?) => regiones[region]!.nombre,
+      _ => 'Ejercicios',
+    };
 
     return CupertinoPageScaffold(
       backgroundColor: context.fondo,
@@ -306,7 +335,12 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
               zona: _zona,
               equipo: _equipo,
               objetivo: _objetivo,
+              region: _region,
               contador: _contador,
+              onQuitarRegion: () {
+                setState(() => _region = null);
+                _cargar(reiniciar: true);
+              },
               onZona: (valor) {
                 setState(() => _zona = valor);
                 _cargar(reiniciar: true);
@@ -538,19 +572,23 @@ class _Filtros extends StatelessWidget {
     required this.zona,
     required this.equipo,
     required this.objetivo,
+    required this.region,
     required this.contador,
     required this.onZona,
     required this.onEquipo,
     required this.onObjetivo,
+    required this.onQuitarRegion,
   });
 
   final String? zona;
   final String? equipo;
   final String? objetivo;
+  final Region? region;
   final VoidCallback onObjetivo;
   final String contador;
   final ValueChanged<String?> onZona;
   final VoidCallback onEquipo;
+  final VoidCallback onQuitarRegion;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -587,11 +625,23 @@ class _Filtros extends StatelessWidget {
               onEquipo,
             ),
             const SizedBox(width: t.l),
-            _desplegable(
-              context,
-              objetivo == null ? 'Músculo' : i18n.musculo(objetivo),
-              onObjetivo,
-            ),
+            // Con una región puesta manda ella: dos filtros musculares a la
+            // vez confunden, y quitarla devuelve el desplegable de siempre.
+            if (region case final region?)
+              GestureDetector(
+                onTap: onQuitarRegion,
+                child: ui.Pildora(
+                  '${regiones[region]!.nombre}  ✕',
+                  color: CupertinoColors.white,
+                  relleno: context.acento,
+                ),
+              )
+            else
+              _desplegable(
+                context,
+                objetivo == null ? 'Músculo' : i18n.musculo(objetivo),
+                onObjetivo,
+              ),
             const Spacer(),
             // El contador se encoge antes que los filtros: es informativo y
             // «1.324+ ejercicios» junto a dos desplegables no cabe en un móvil.

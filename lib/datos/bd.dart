@@ -487,6 +487,60 @@ class EjercicioConFicha {
   String get nombre => ejercicio.nombre;
 }
 
+/// Lo que un ejercicio dio de sí dentro de una sesión, con la clasificación
+/// muscular de su ficha ya resuelta. Es la fila del mapa muscular.
+///
+/// Los tres campos de clasificación llegan **crudos**, tal cual están en las
+/// columnas: `secondaryMuscles` es una lista JSON en texto y quien la parsea es
+/// `musculos.dart`, que es también quien sabe traducirlos a regiones.
+///
+/// En un ejercicio personalizado [idCatalogo] es nulo y los tres son cadena
+/// vacía: llegan igualmente, porque hay que poder contarlos para el aviso de
+/// «no están representados en el modelo».
+class TrabajoMuscular {
+  const TrabajoMuscular({
+    required this.idEntrenamiento,
+    required this.idRutina,
+    required this.fecha,
+    required this.idEjercicio,
+    required this.ejercicio,
+    required this.idCatalogo,
+    required this.target,
+    required this.muscleGroup,
+    required this.secondaryMuscles,
+    required this.nSeries,
+    required this.volumen,
+  });
+
+  final int idEntrenamiento;
+  final int idRutina;
+  final DateTime fecha;
+  final int idEjercicio;
+  final String ejercicio;
+  final String? idCatalogo;
+  final String target;
+  final String muscleGroup;
+  final String secondaryMuscles;
+
+  /// Series efectivas del ejercicio en esa sesión. El calentamiento no cuenta.
+  final int nSeries;
+
+  /// Repeticiones × peso, con el peso elevado a un mínimo de 1 para que el
+  /// trabajo con el propio peso corporal no sume cero. Es exclusivo del mapa.
+  final double volumen;
+}
+
+/// Un ejercicio de una rutina del usuario que viene del catálogo.
+///
+/// Trae el nombre de la rutina y no su id porque quien lo usa —la hoja del
+/// músculo— lo que enseña es «aparece en Empuje y en Full body».
+class EjercicioEnRutina {
+  const EjercicioEnRutina(this.rutina, this.ficha);
+
+  final String rutina;
+  final FichaCatalogo ficha;
+}
+
 /// Los valores de **una** serie, tal y como se registran o se precargan.
 ///
 /// Sustituye a la antigua `UltimaSerie`, que además de guardar el recuento de
@@ -1055,11 +1109,15 @@ class AppBD extends _$AppBD {
   /// [texto] se busca palabra a palabra en la columna `busqueda`, que guarda el
   /// nombre en inglés más las traducciones, normalizado y sin acentos.
   /// [bodyPart], [equipment] y [target] son los valores originales en inglés.
+  /// [musculos] es un conjunto de valores del catálogo que casa contra
+  /// `target`, `muscleGroup` **o** `secondaryMuscles`; lo usa el mapa muscular,
+  /// que agrupa varios términos en cada región.
   Future<List<FichaCatalogo>> buscarCatalogo({
     String? texto,
     String? bodyPart,
     String? equipment,
     String? target,
+    Set<String>? musculos,
     int limite = 40,
     int desplazamiento = 0,
   }) {
@@ -1079,10 +1137,46 @@ class AppBD extends _$AppBD {
     if (target != null) {
       consulta.where((c) => c.target.equals(target));
     }
+    if (musculos != null && musculos.isNotEmpty) {
+      consulta.where((c) => _casaMusculos(c, musculos));
+    }
     consulta
       ..orderBy([(c) => OrderingTerm(expression: c.nombre)])
       ..limit(limite, offset: desplazamiento);
     return consulta.get();
+  }
+
+  /// Cuántos ejercicios del catálogo casan con un conjunto de músculos.
+  ///
+  /// Va aparte de [contarCatalogo], que no lleva filtros a propósito: la usa
+  /// `semilla.dart` para decidir si hay que resembrar y añadirle parámetros
+  /// sería tocar el arranque de la app para nada.
+  Future<int> contarCatalogoPorMusculos(Set<String> musculos) {
+    if (musculos.isEmpty) return Future.value(0);
+    final cuenta = catalogoEjercicios.id.count();
+    final consulta = selectOnly(catalogoEjercicios)
+      ..addColumns([cuenta])
+      ..where(_casaMusculos(catalogoEjercicios, musculos));
+    return consulta.map((f) => f.read(cuenta)!).getSingle();
+  }
+
+  /// Un ejercicio casa si el músculo está en su objetivo, en su grupo o entre
+  /// sus secundarios.
+  ///
+  /// Los secundarios son una lista JSON en una columna de texto, así que se
+  /// buscan con `LIKE` **entrecomillados**: `"back"` no casa dentro de
+  /// `"upper back"` ni `"traps"` dentro de `"trapezius"`, que es justo lo que
+  /// pasaría sin las comillas. Ninguno de los 40 valores del dataset lleva `%`
+  /// ni `_`, de modo que no hace falta escaparlos.
+  Expression<bool> _casaMusculos(
+    $CatalogoEjerciciosTable c,
+    Set<String> musculos,
+  ) {
+    var condicion = c.target.isIn(musculos) | c.muscleGroup.isIn(musculos);
+    for (final musculo in musculos) {
+      condicion = condicion | c.secondaryMuscles.like('%"$musculo"%');
+    }
+    return condicion;
   }
 
   /// Músculos objetivo presentes en el catálogo, con cuántos ejercicios tiene
@@ -1943,6 +2037,93 @@ class AppBD extends _$AppBD {
           idRutina: f.read<int>('id_rutina'),
           fecha: f.read<DateTime>('fecha'),
           volumen: f.read<double>('volumen'),
+        ),
+    ];
+  }
+
+  // ── Mapa muscular ──────────────────────────────────────────────────────────
+
+  /// Todo el trabajo por ejercicio y sesión desde [desde], con la clasificación
+  /// muscular de la ficha del catálogo.
+  ///
+  /// Es **la única consulta** del mapa muscular. El reparto entre regiones, el
+  /// corte por periodo y los niveles de color se hacen luego en Dart, en
+  /// `musculos.dart`, igual que el resumen semanal reparte con `porSemana`. Por
+  /// eso cambiar el periodo de 7 a 90 días recorre otra vez la misma lista y no
+  /// vuelve a la base.
+  ///
+  /// El `LEFT JOIN` al catálogo es deliberado: los ejercicios personalizados no
+  /// tienen ficha y aun así tienen que llegar, porque se cuentan en el aviso de
+  /// «no están representados».
+  Future<List<TrabajoMuscular>> trabajoPorMusculo({
+    required DateTime desde,
+  }) async {
+    final filas = await customSelect(
+      '''
+      SELECT e.id           AS id_entrenamiento,
+             e.id_rutina    AS id_rutina,
+             e.fecha        AS fecha,
+             j.id           AS id_ejercicio,
+             j.nombre       AS ejercicio,
+             j.id_catalogo  AS id_catalogo,
+             COALESCE(c.target, '')            AS target,
+             COALESCE(c.muscle_group, '')      AS muscle_group,
+             COALESCE(c.secondary_muscles, '') AS secondary_muscles,
+             COUNT(*)                          AS n_series,
+             -- El peso se eleva a un mínimo de 1 para que las dominadas, que se
+             -- registran con peso 0, no sumen cero: el mapa mide atención
+             -- dedicada y no carga. El literal va con decimal para que SUM
+             -- devuelva REAL aunque todas las series sean de peso corporal.
+             SUM(s.repeticiones *
+                 CASE WHEN s.peso < 1.0 THEN 1.0 ELSE s.peso END) AS volumen
+      FROM serie s
+      JOIN entrenamientos e ON e.id = s.id_entrenamiento
+      JOIN ejercicios j     ON j.id = s.id_ejercicio
+      LEFT JOIN catalogo_ejercicios c ON c.id = j.id_catalogo
+      WHERE s.calentamiento = 0 AND e.fecha >= ?
+      GROUP BY e.id, j.id
+      ORDER BY e.fecha DESC, e.id DESC
+      ''',
+      variables: [Variable.withDateTime(desde)],
+      readsFrom: {seriesTabla, entrenamientos, ejercicios, catalogoEjercicios},
+    ).get();
+
+    return [
+      for (final f in filas)
+        TrabajoMuscular(
+          idEntrenamiento: f.read<int>('id_entrenamiento'),
+          idRutina: f.read<int>('id_rutina'),
+          fecha: f.read<DateTime>('fecha'),
+          idEjercicio: f.read<int>('id_ejercicio'),
+          ejercicio: f.read<String>('ejercicio'),
+          idCatalogo: f.read<String?>('id_catalogo'),
+          target: f.read<String>('target'),
+          muscleGroup: f.read<String>('muscle_group'),
+          secondaryMuscles: f.read<String>('secondary_muscles'),
+          nSeries: f.read<int>('n_series'),
+          volumen: f.read<double>('volumen'),
+        ),
+    ];
+  }
+
+  /// Los ejercicios del catálogo que el usuario tiene en alguna rutina.
+  ///
+  /// Sirve para dos cosas de la hoja del músculo a la vez: decir en qué rutinas
+  /// aparece un músculo y poner delante, en la lista de ejercicios, los que ya
+  /// se usan. Son decenas de filas, así que se trae entera.
+  Future<List<EjercicioEnRutina>> catalogoEnRutinas() async {
+    final filas = await select(ejercicios).join([
+      innerJoin(rutinas, rutinas.id.equalsExp(ejercicios.idRutina)),
+      innerJoin(
+        catalogoEjercicios,
+        catalogoEjercicios.id.equalsExp(ejercicios.idCatalogo),
+      ),
+    ]).get();
+    return [
+      for (final f in filas)
+        EjercicioEnRutina(
+          f.readTable(rutinas).nombre,
+          f.readTable(catalogoEjercicios),
         ),
     ];
   }

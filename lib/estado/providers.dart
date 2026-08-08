@@ -10,10 +10,15 @@
 /// de drift no coinciden en la versión de analyzer que admite este SDK.
 library;
 
+import 'dart:convert';
+
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
+import '../datos/geometria.dart';
 import '../datos/media.dart';
+import '../datos/musculos.dart';
 import '../datos/reloj.dart' as reloj;
 import '../datos/semilla.dart';
 
@@ -224,12 +229,63 @@ final ajustesProvider = FutureProvider<Ajustes>(
   (ref) => ref.watch(bdProvider).ajustes(),
 );
 
+// ── Mapa muscular ────────────────────────────────────────────────────────────
+
+/// El dibujo anatómico, ya convertido en `Path`.
+///
+/// Se carga y se convierte **una sola vez** por arranque: son unos 32 KB de
+/// trazados y reconstruirlos cada vez que se entra en Progreso sería tirar el
+/// trabajo. Si el fichero creciera, el parseo se llevaría a un isolate con
+/// `compute()`, igual que hace `semilla.dart` con el megabyte del catálogo.
+final modeloCuerpoProvider = FutureProvider<MapaCuerpo<Region>>((ref) async {
+  final contenido = await rootBundle.loadString('assets/musculatura.json');
+  final json = jsonDecode(contenido) as Map<String, dynamic>;
+  return cargarMapa(json, (nombre) => Region.values.asNameMap()[nombre]);
+});
+
+/// El trabajo por ejercicio y sesión de los últimos dos años.
+///
+/// Dos años por lo mismo que [sesionesRecientesProvider], y por el mismo reloj
+/// inyectable para que los tests puedan fijar la fecha. Es **la única consulta**
+/// del mapa: los tres periodos (7, 30 y 90 días) se recortan luego en memoria.
+final trabajoMuscularProvider = FutureProvider<List<TrabajoMuscular>>((ref) {
+  final desde = reloj.ahora().subtract(const Duration(days: 730));
+  return ref.watch(bdProvider).trabajoPorMusculo(desde: desde);
+});
+
+/// Los ejercicios del catálogo que el usuario tiene en alguna rutina.
+final catalogoEnRutinasProvider = FutureProvider<List<EjercicioEnRutina>>(
+  (ref) => ref.watch(bdProvider).catalogoEnRutinas(),
+);
+
+/// Los ejercicios del catálogo de una región, y cuántos hay en total.
+///
+/// Devuelve las dos cosas juntas porque la hoja del músculo necesita las dos:
+/// la lista enseña los primeros y el enlace de abajo dice «Ver los 151».
+final catalogoRegionProvider =
+    FutureProvider.family<({List<FichaCatalogo> fichas, int total}), Region>((
+      ref,
+      region,
+    ) async {
+      final bd = ref.watch(bdProvider);
+      final terminos = terminosDe(region);
+      return (
+        fichas: await bd.buscarCatalogo(musculos: terminos, limite: 20),
+        total: await bd.contarCatalogoPorMusculos(terminos),
+      );
+    });
+
 // ── Invalidación ─────────────────────────────────────────────────────────────
 
 /// Refresca todo lo que depende de la lista de rutinas.
 void invalidarRutinas(WidgetRef ref) {
   ref.invalidate(resumenRutinasProvider);
   ref.invalidate(coloresRutinasProvider);
+  // Qué ejercicios hay en las rutinas cambia con cualquier cosa que toque una
+  // rutina, y de ahí salen tanto «aparece en Empuje» como el orden de la lista
+  // de ejercicios de la hoja del músculo.
+  ref.invalidate(catalogoEnRutinasProvider);
+  ref.invalidate(catalogoRegionProvider);
 }
 
 /// Refresca todo lo que cuelga de una rutina concreta.
@@ -248,6 +304,8 @@ void invalidarEntrenamientos(WidgetRef ref, int idRutina) {
   ref.invalidate(resumenSesionesEjercicioProvider);
   ref.invalidate(sesionesRecientesProvider);
   ref.invalidate(ultimasSeriesProvider);
+  // Un entrenamiento nuevo cambia el mapa muscular.
+  ref.invalidate(trabajoMuscularProvider);
   // El historial y el detalle de sesión son fáciles de olvidar aquí, y dejarlos
   // fuera se nota enseguida: una pantalla mostrando lo que ya no está.
   ref.invalidate(historialRutinaProvider(idRutina));
@@ -298,4 +356,7 @@ void invalidarTodo(WidgetRef ref) {
   ref.invalidate(sesionProvider);
   ref.invalidate(recordsSesionProvider);
   ref.invalidate(sesionActivaProvider);
+  // El mapa muscular sí; el dibujo que lo pinta no, que sale de un asset y no
+  // cambia nunca.
+  ref.invalidate(trabajoMuscularProvider);
 }

@@ -25,8 +25,11 @@ aquella versión.
   al volver te ofrece continuar donde lo dejaste.
 - **Progreso.** Evolución del peso por ejercicio, historial de sesiones editable y
   calendario mensual coloreado según la rutina entrenada cada día.
-- **Cuerpo.** Peso corporal y perímetros, con media móvil de 7 días para ver la
-  tendencia por debajo del ruido diario.
+- **Cuerpo.** Un **mapa muscular** con vista frontal y dorsal, coloreado según lo que
+  has trabajado cada músculo en los últimos 7, 30 o 90 días: se ve de un vistazo qué
+  estás descuidando. Toca un músculo y salen sus últimas sesiones y los ejercicios del
+  catálogo para él. Debajo, peso corporal y perímetros, con media móvil de 7 días para
+  ver la tendencia por debajo del ruido diario.
 - **Ajustes.** Kilos o libras, paso del peso, descanso por defecto, valores de partida,
   objetivo semanal y tema claro / oscuro / del sistema.
 - **Copia de seguridad.** Exporta todo tu histórico a un archivo y vuelve a importarlo
@@ -114,6 +117,8 @@ lib/
 │   ├── semilla.dart        carga del catálogo en la base de datos
 │   ├── media.dart          descarga y resolución de imágenes y GIFs
 │   ├── i18n.dart           traducciones del vocabulario del catálogo
+│   ├── musculos.dart       las 21 regiones del mapa y el reparto del trabajo
+│   ├── geometria.dart      los trazados del modelo anatómico y el toque
 │   ├── reloj.dart          la hora, en un punto que los tests pueden adelantar
 │   └── formato.dart        formateo de fechas, pesos y textos
 ├── estado/
@@ -125,6 +130,8 @@ lib/
 └── pantallas/              una pantalla por fichero
 assets/ejercicios.es.json   catálogo de ejercicios en español
 assets/plantillas.json      rutinas predefinidas
+assets/musculatura.json     el modelo anatómico del mapa muscular
+tool/musculatura.py         genera el modelo anatómico y una previa para verlo
 drift_schemas/              un JSON por versión del esquema
 test/                       tests de datos, de widget y de migración
 docs/especificaciones.md    funcionalidades previstas y su plan de entrega
@@ -141,3 +148,12 @@ Los ejercicios provienen del dataset
   **no incluye** los archivos ni se empaquetan en el APK: se descargan del origen. Su uso
   se rige por los
   [términos de Gym visual](https://gymvisual.com/content/3-terms-and-conditions-of-use).
+
+El **modelo anatómico** del mapa muscular (`assets/musculatura.json`) es **obra original
+de este repositorio** y se distribuye con la misma licencia que el resto del código. No
+deriva de ninguna lámina de terceros: es un dibujo esquemático propio, con la silueta y
+las 21 regiones musculares escritas directamente como trazados vectoriales (punto inicial
+y segmentos cúbicos de Bézier) sobre un lienzo de 1000 × 2000. Los músculos bilaterales se
+definen una vez y se reflejan al cargar. Se genera con `python3 tool/musculatura.py`, que
+escribe además una previa en SVG para poder mirar el resultado; el JSON no se edita a
+mano.
