@@ -29,6 +29,12 @@ void main() {
       expect(ajustes.sesionesPorSemana, 3);
       expect(ajustes.formula, Formula.epley);
       expect(ajustes.tema, Tema.sistema);
+      // La progresión, en cambio, arranca encendida: no estorba a nadie hasta
+      // que hay dos sesiones de un ejercicio, y entonces es lo útil.
+      expect(ajustes.progresionActiva, isTrue);
+      expect(ajustes.repMinGlobal, 8);
+      expect(ajustes.repMaxGlobal, 12);
+      expect(ajustes.perfilProgresion, Perfil.estandar);
     });
 
     test('lee lo guardado', () {
@@ -44,6 +50,10 @@ void main() {
         Claves.sesionesPorSemana: '5',
         Claves.formula1RM: 'brzycki',
         Claves.tema: 'oscuro',
+        Claves.progresionActiva: '0',
+        Claves.repMin: '3',
+        Claves.repMax: '5',
+        Claves.perfilProgresion: 'agresivo',
       });
 
       expect(ajustes.unidad, Unidad.lb);
@@ -57,6 +67,10 @@ void main() {
       expect(ajustes.sesionesPorSemana, 5);
       expect(ajustes.formula, Formula.brzycki);
       expect(ajustes.tema, Tema.oscuro);
+      expect(ajustes.progresionActiva, isFalse);
+      expect(ajustes.repMinGlobal, 3);
+      expect(ajustes.repMaxGlobal, 5);
+      expect(ajustes.perfilProgresion, Perfil.agresivo);
     });
 
     test('un valor con basura o fuera de rango se queda con el de fábrica', () {
@@ -85,17 +99,23 @@ void main() {
         Claves.unidad: 'lb',
         Claves.tema: 'claro',
         Claves.sonidoDescanso: '0',
+        Claves.perfilProgresion: 'conservador',
+        Claves.repMin: '6',
       });
       final ida = {
         Claves.unidad: Ajustes.texto(original.unidad),
         Claves.tema: Ajustes.texto(original.tema),
         Claves.sonidoDescanso: Ajustes.texto(original.sonidoDescanso),
+        Claves.perfilProgresion: Ajustes.texto(original.perfilProgresion),
+        Claves.repMin: Ajustes.texto(original.repMinGlobal),
       };
       final vuelta = Ajustes.desdeMapa(ida);
 
       expect(vuelta.unidad, original.unidad);
       expect(vuelta.tema, original.tema);
       expect(vuelta.sonidoDescanso, original.sonidoDescanso);
+      expect(vuelta.perfilProgresion, Perfil.conservador);
+      expect(vuelta.repMinGlobal, 6);
     });
   });
 
@@ -225,6 +245,21 @@ void main() {
 
       expect(vuelta.series[7]![0].valores.calentamiento, isTrue);
       expect(vuelta.series[7]![2].hecha, isFalse);
+    });
+
+    test('las sugerencias descartadas viajan en el borrador', () {
+      final descartado = Borrador(
+        series: borrador.series,
+        descartadas: const {7},
+      );
+      expect(Borrador.desdeJson(descartado.aJson()).descartadas, {7});
+
+      // Y un borrador escrito antes de que existieran no trae la clave: sale
+      // vacío en vez de reventar, que es como se tolera todo aquí.
+      expect(
+        Borrador.desdeJson('{"nota":"","ejercicios":{}}').descartadas,
+        isEmpty,
+      );
     });
 
     test('el progreso cuenta las marcadas sobre el total', () {

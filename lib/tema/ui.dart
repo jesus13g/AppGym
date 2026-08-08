@@ -403,6 +403,113 @@ class BarraProgreso extends StatelessWidget {
   );
 }
 
+/// Línea de sugerencia: icono, título, motivo y una acción opcional.
+///
+/// Una [Pildora] no sirve —esto lleva dos líneas de texto, una acción y un
+/// descarte— y Flutter no trae nada parecido, así que vive aquí.
+///
+/// **Cuidado con el ancho.** «↑ Sugerido 4×8 · 62,5 kg [Aplicar]» en 375 px es
+/// justo el tipo de fila que ya ha provocado tres desbordamientos en este
+/// proyecto: el texto va en un [Expanded] y los botones con su tamaño mínimo.
+class Sugerencia extends StatelessWidget {
+  const Sugerencia({
+    super.key,
+    required this.icono,
+    required this.titulo,
+    required this.motivo,
+    this.color,
+    this.fiable = true,
+    this.textoAccion,
+    this.onAccion,
+    this.onDescartar,
+  });
+
+  final IconData icono;
+
+  /// Qué se propone: «4×8 · 62,5 kg».
+  final String titulo;
+
+  /// Por qué se propone. Va en gris, debajo.
+  final String motivo;
+
+  /// Tinte del icono y del título. Por defecto, el acento.
+  final Color? color;
+
+  /// Con `false` se enseña igual pero marcada, como el 1RM de más de doce
+  /// repeticiones: la estimación se da, y se dice que es floja.
+  final bool fiable;
+
+  final String? textoAccion;
+  final VoidCallback? onAccion;
+
+  /// Sin esto no aparece la «x»: en la pantalla de resultados no se descarta
+  /// nada, porque desde ahí no se está entrenando.
+  final VoidCallback? onDescartar;
+
+  @override
+  Widget build(BuildContext context) {
+    final tinte = color ?? context.acento;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(t.l, t.s, t.s, t.s),
+      child: Row(
+        children: [
+          Icon(icono, size: 18, color: tinte),
+          const SizedBox(width: t.s),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  fiable ? titulo : '$titulo *',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: estilo(
+                    context,
+                    size: t.subhead,
+                    weight: t.semibold,
+                    color: tinte,
+                  ),
+                ),
+                Text(
+                  motivo,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: estilo(
+                    context,
+                    size: t.caption,
+                    color: context.textoTer,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (onAccion != null)
+            CupertinoButton(
+              onPressed: onAccion,
+              padding: const EdgeInsets.symmetric(horizontal: t.s),
+              minimumSize: Size.zero,
+              child: Text(
+                textoAccion ?? 'Aplicar',
+                style: estilo(context, size: t.subhead, color: tinte),
+              ),
+            ),
+          if (onDescartar != null)
+            CupertinoButton(
+              onPressed: onDescartar,
+              padding: const EdgeInsets.all(t.xs),
+              minimumSize: Size.zero,
+              child: Icon(
+                CupertinoIcons.xmark,
+                size: 14,
+                color: context.textoTer,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Barra fija del descanso, con el tiempo en grande y sus tres botones.
 ///
 /// Se apoya en [BarraProgreso], que ya existía. Al pasarse de la cuenta el

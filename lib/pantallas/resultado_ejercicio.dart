@@ -12,10 +12,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../datos/bd.dart';
 import '../datos/formato.dart' as formato;
 import '../datos/metricas.dart' as metricas;
+import '../datos/progresion.dart' as progresion;
 import '../estado/providers.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
+import 'sugerencia.dart';
 
 /// Lo que se pinta en el eje Y del gráfico.
 enum Metrica {
@@ -109,20 +111,39 @@ class PantallaResultadoEjercicio extends ConsumerWidget {
                     'Registra un entrenamiento con este ejercicio para '
                     'ver aquí su evolución.',
               )
-            : _Contenido(registros: lista, ajustes: ajustes),
+            : _Contenido(
+                registros: lista,
+                ajustes: ajustes,
+                // Aquí se analiza, no se entrena: la sugerencia se enseña con su
+                // motivo y sin botón de aplicar.
+                sugerencia: ref
+                    .watch(
+                      sugerenciaProvider((
+                        idRutina: idRutina,
+                        idEjercicio: idEjercicio,
+                      )),
+                    )
+                    .value,
+              ),
       ),
     );
   }
 }
 
 class _Contenido extends StatefulWidget {
-  const _Contenido({required this.registros, required this.ajustes});
+  const _Contenido({
+    required this.registros,
+    required this.ajustes,
+    this.sugerencia,
+  });
 
   final List<ResumenSesionEjercicio> registros;
 
   /// De aquí salen la unidad en la que se escriben los pesos y la fórmula con
   /// la que ya se estimó el 1RM.
   final Ajustes ajustes;
+
+  final progresion.Sugerencia? sugerencia;
 
   @override
   State<_Contenido> createState() => _ContenidoState();
@@ -167,6 +188,8 @@ class _ContenidoState extends State<_Contenido> {
             sesiones: widget.registros,
             ajustes: ajustes,
           ),
+          if (widget.sugerencia case final propuesta?)
+            _TarjetaSugerencia(sugerencia: propuesta, ajustes: ajustes),
           const SizedBox(height: t.s),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: t.l),
@@ -266,6 +289,45 @@ class _ContenidoState extends State<_Contenido> {
       ),
     );
   }
+}
+
+/// La sugerencia, como una tarjeta más junto a los récords.
+///
+/// Sin botón de aplicar: desde esta pantalla no se está entrenando. La descarga
+/// además lleva su nota, que es donde J4 pedía decir lo que la app no sabe.
+class _TarjetaSugerencia extends StatelessWidget {
+  const _TarjetaSugerencia({required this.sugerencia, required this.ajustes});
+
+  final progresion.Sugerencia sugerencia;
+  final Ajustes ajustes;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.symmetric(horizontal: t.l, vertical: t.s),
+    decoration: BoxDecoration(
+      color: context.tarjeta,
+      borderRadius: BorderRadius.circular(t.radioL),
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        LineaSugerencia(sugerencia: sugerencia, ajustes: ajustes),
+        if (sugerencia.tipo == progresion.TipoSugerencia.descarga)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(t.l, 0, t.l, t.m),
+            child: Text(
+              avisoDescarga,
+              style: ui.estilo(
+                context,
+                size: t.caption,
+                color: context.textoSec,
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
 }
 
 /// Las cuatro cifras de cabecera, en dos filas de dos.

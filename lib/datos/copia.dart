@@ -31,7 +31,11 @@ import 'bd.dart';
 const formatoCopia = 'appgym-backup';
 
 /// Versión del formato. Sube cuando cambie de forma incompatible.
-const versionCopia = 2;
+///
+/// La 3 añade la configuración de progresión de cada ejercicio. Una copia de la
+/// 2 se sigue importando: lo que falta entra como `null`, que en esas columnas
+/// significa «como el global».
+const versionCopia = 3;
 
 /// Qué hacer con lo que ya hay al importar.
 enum ModoImportacion {
@@ -100,6 +104,10 @@ Future<Map<String, dynamic>> exportar(AppBD bd) async {
             'descripcion': e.ejercicio.descripcion,
             'orden': e.ejercicio.orden,
             'descansoSeg': e.ejercicio.descansoSeg,
+            'repMin': e.ejercicio.repMin,
+            'repMax': e.ejercicio.repMax,
+            'incrementoKg': e.ejercicio.incrementoKg,
+            'estrategia': e.ejercicio.estrategia,
           },
       ],
       'entrenamientos': [
@@ -333,6 +341,12 @@ Future<InformeImportacion> importar(
           idCatalogo: idsValidos.contains(idCatalogo) ? idCatalogo : null,
           descripcion: e['descripcion'] as String?,
           descansoSeg: _entero(e['descansoSeg']),
+          // Una copia de la versión 2 no trae nada de esto y los coercedores
+          // devuelven `null`, que es «como el global»: justo lo que se quiere.
+          repMin: _entero(e['repMin']),
+          repMax: _entero(e['repMax']),
+          incrementoKg: _real(e['incrementoKg']),
+          estrategia: _entero(e['estrategia']),
         );
         nEjercicios++;
       }

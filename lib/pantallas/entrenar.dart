@@ -20,17 +20,19 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../datos/ajustes.dart' show descansos;
 import '../datos/bd.dart';
 import '../datos/borrador.dart';
 import '../datos/formato.dart' as formato;
+import '../datos/progresion.dart' as progresion;
 import '../datos/reloj.dart' as reloj;
 import '../estado/descanso.dart';
 import '../estado/providers.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
+import 'opciones_ejercicio.dart';
 import 'resumen_sesion.dart';
+import 'sugerencia.dart';
 
 /// Cada cuánto se escribe el borrador en disco.
 ///
@@ -134,6 +136,9 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
   /// id de ejercicio -> lo que se registró la última vez, para la referencia.
   final _ultimas = <int, List<ValoresSerie>>{};
 
+  /// Ejercicios cuya sugerencia se ha descartado. Viaja en el borrador.
+  final _descartadas = <int>{};
+
   List<EjercicioConFicha>? _ejercicios;
   bool _guardando = false;
 
@@ -220,7 +225,10 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
       _ => null,
     };
     if (widget.borrador case final b?) _inicio = b.inicio;
-    if (recuperado != null) _nota.text = recuperado.nota;
+    if (recuperado != null) {
+      _nota.text = recuperado.nota;
+      _descartadas.addAll(recuperado.descartadas);
+    }
 
     final serieNueva = ValoresSerie(
       repeticiones: ajustes.repeticionesPorDefecto,
@@ -256,7 +264,8 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
 
   // ── Borrador ───────────────────────────────────────────────────────────────
 
-  Borrador get _borrador => Borrador(series: _series, nota: _nota.text);
+  Borrador get _borrador =>
+      Borrador(series: _series, nota: _nota.text, descartadas: _descartadas);
 
   /// Programa la escritura del borrador. Solo en sesión viva.
   void _apuntarBorrador() {
@@ -297,36 +306,46 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
     _descanso?.arrancar(_descansoDe(ejercicio, ajustes));
   }
 
-  /// Cambia el descanso propio de un ejercicio, o lo devuelve al global.
-  Future<void> _elegirDescanso(
-    EjercicioConFicha ejercicio,
-    Ajustes ajustes,
-  ) async {
-    final elegido = await ui.elegirEnHoja<int?>(
+  /// Abre las opciones propias del ejercicio: descanso y progresión.
+  Future<void> _opciones(EjercicioConFicha ejercicio) async {
+    final cambiado = await abrirOpcionesEjercicio(
       context,
-      titulo: 'Descanso de «${ejercicio.nombre}»',
-      mensaje:
-          'Los descansos de una sentadilla y de un curl no son iguales; aquí '
-          'se separa uno del otro.',
-      actual: ejercicio.ejercicio.descansoSeg,
-      opciones: [
-        (null, 'Como el global (${formato.descanso(ajustes.descansoSeg)})'),
-        for (final segundos in descansos)
-          (segundos, formato.descanso(segundos)),
-      ],
+      widget.idRutina,
+      ejercicio.id,
     );
-    if (elegido == null) return;
+    if (!cambiado || !mounted) return;
 
-    final bd = ref.read(bdProvider);
-    await bd.fijarDescansoEjercicio(ejercicio.id, elegido.$1);
     // La lista local se relee, o la tarjeta seguiría enseñando el valor viejo
     // hasta salir y volver a entrar. Es una consulta de una rutina; no compensa
     // reconstruir la fila a mano solo para ahorrársela.
-    final refrescados = await bd.ejerciciosDeRutina(widget.idRutina);
+    final refrescados = await ref
+        .read(bdProvider)
+        .ejerciciosDeRutina(widget.idRutina);
     if (!mounted) return;
-
-    invalidarRutina(ref, widget.idRutina);
     setState(() => _ejercicios = refrescados);
+  }
+
+  // ── Sugerencia de progresión ───────────────────────────────────────────────
+
+  /// Reescribe las series precargadas con las que propone la sugerencia.
+  ///
+  /// **No guarda nada**: solo cambia los valores del formulario, que el usuario
+  /// sigue pudiendo tocar uno a uno. Las series ya marcadas no se tocan; en
+  /// sesión viva la línea desaparece en cuanto se marca la primera, así que en
+  /// la práctica no hay ninguna.
+  void _aplicarSugerencia(int idEjercicio, progresion.Sugerencia sugerencia) {
+    setState(() {
+      _series[idEjercicio] = [
+        for (final v in sugerencia.series) (valores: v, hecha: false),
+      ];
+      _descartadas.add(idEjercicio);
+    });
+    _apuntarBorrador();
+  }
+
+  void _descartarSugerencia(int idEjercicio) {
+    setState(() => _descartadas.add(idEjercicio));
+    _apuntarBorrador();
   }
 
   // ── Fecha ──────────────────────────────────────────────────────────────────
@@ -505,6 +524,35 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
     );
   }
 
+  /// La sugerencia de un ejercicio, o `null` si aquí no toca enseñarla.
+  ///
+  /// Cuatro motivos para no pedirla, y el orden importa: **con la progresión
+  /// apagada el provider ni se toca**, que es lo que garantiza que no se calcula
+  /// nada. Editar una sesión guardada tampoco es sitio: lo que se está anotando
+  /// ya pasó. Descartada no vuelve. Y en sesión viva desaparece al marcar la
+  /// primera serie, que es la pantalla más densa de la app y la que menos admite
+  /// un elemento de más.
+  progresion.Sugerencia? _sugerenciaDe(
+    EjercicioConFicha ejercicio,
+    Ajustes ajustes,
+  ) {
+    if (!ajustes.progresionActiva) return null;
+    if (_editando) return null;
+    if (_descartadas.contains(ejercicio.id)) return null;
+    if (_vivo && (_series[ejercicio.id] ?? const []).any((s) => s.hecha)) {
+      return null;
+    }
+
+    return ref
+        .watch(
+          sugerenciaProvider((
+            idRutina: widget.idRutina,
+            idEjercicio: ejercicio.id,
+          )),
+        )
+        .value;
+  }
+
   Widget _lista(
     BuildContext context,
     List<EjercicioConFicha> ejercicios,
@@ -524,10 +572,13 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
             vivo: _vivo,
             descansoSeg: _descansoDe(ejercicio, ajustes),
             descansoPropio: ejercicio.ejercicio.descansoSeg != null,
+            sugerencia: _sugerenciaDe(ejercicio, ajustes),
+            onAplicarSugerencia: (s) => _aplicarSugerencia(ejercicio.id, s),
+            onDescartarSugerencia: () => _descartarSugerencia(ejercicio.id),
             onSeries: (valor) => _cambiarSeries(ejercicio.id, valor),
             onMarcar: (indice, hecha) => _marcar(ejercicio, indice, hecha),
             onDescanso: () => _empezarDescanso(ejercicio),
-            onCambiarDescanso: () => _elegirDescanso(ejercicio, ajustes),
+            onCambiarDescanso: () => _opciones(ejercicio),
           ),
         ),
       ui.Grupo(
@@ -643,6 +694,9 @@ class TarjetaEjercicio extends StatelessWidget {
     this.vivo = false,
     this.descansoSeg = 90,
     this.descansoPropio = false,
+    this.sugerencia,
+    this.onAplicarSugerencia,
+    this.onDescartarSugerencia,
     this.onMarcar,
     this.onDescanso,
     this.onCambiarDescanso,
@@ -666,6 +720,13 @@ class TarjetaEjercicio extends StatelessWidget {
 
   /// True si el valor de arriba es propio del ejercicio y no el global.
   final bool descansoPropio;
+
+  /// Qué propone la app para hoy. `null` es lo normal las dos primeras veces
+  /// que se hace un ejercicio, y entonces no se pinta nada.
+  final progresion.Sugerencia? sugerencia;
+
+  final void Function(progresion.Sugerencia sugerencia)? onAplicarSugerencia;
+  final VoidCallback? onDescartarSugerencia;
 
   final void Function(int indice, bool hecha)? onMarcar;
   final VoidCallback? onDescanso;
@@ -805,6 +866,17 @@ class TarjetaEjercicio extends StatelessWidget {
           ),
         ),
         Container(height: 0.5, color: context.separador),
+        if (sugerencia case final propuesta?) ...[
+          LineaSugerencia(
+            sugerencia: propuesta,
+            ajustes: ajustes,
+            onAplicar: onAplicarSugerencia == null
+                ? null
+                : () => onAplicarSugerencia!(propuesta),
+            onDescartar: onDescartarSugerencia,
+          ),
+          Container(height: 0.5, color: context.separador),
+        ],
         if (series.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: t.m),

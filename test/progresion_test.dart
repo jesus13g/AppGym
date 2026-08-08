@@ -326,6 +326,50 @@ void main() {
       expect(sube.tipo, TipoSugerencia.subirPeso);
     });
 
+    test('el esfuerzo activo y sin registrar marca la sugerencia', () {
+      // Con tres sesiones el historial ya da, así que lo que la marca es que se
+      // pida el esfuerzo y no esté anotado.
+      final historial = [
+        for (var i = 0; i < 3; i++)
+          _sesion(
+            id: i + 1,
+            fecha: DateTime(2026, 3, 1 + i * 7),
+            pesoMaximo: 60,
+            repeticiones: 40 + i,
+          ),
+      ];
+
+      expect(
+        sugerir(
+          historial,
+          _series(4, repeticiones: 10, peso: 60),
+          const ConfiguracionProgresion(esfuerzoActivo: true),
+        )!.fiable,
+        isFalse,
+      );
+
+      // Y no usar el RPE en absoluto no resta: el modelo va sin él.
+      expect(
+        sugerir(
+          historial,
+          _series(4, repeticiones: 10, peso: 60),
+          const ConfiguracionProgresion(),
+        )!.fiable,
+        isTrue,
+      );
+    });
+
+    test('con dos sesiones la sugerencia se da, pero marcada', () {
+      expect(
+        sugerir(
+          _dosSesiones(),
+          _series(4, repeticiones: 10, peso: 60),
+          const ConfiguracionProgresion(),
+        )!.fiable,
+        isFalse,
+      );
+    });
+
     test('la sugerencia no arrastra el RPE de la sesión anterior', () {
       final sugerencia = sugerir(
         _dosSesiones(),

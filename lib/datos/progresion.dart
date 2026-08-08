@@ -285,8 +285,13 @@ Sugerencia? sugerir(
       ? efectivas.map((s) => s.rpe!).reduce((a, b) => a + b) / efectivas.length
       : null;
 
-  // Historial corto o sin esfuerzo: se enseña igual, pero marcada.
-  final fiable = historial.length >= 3 && conEsfuerzo;
+  // Historial corto, o esfuerzo activado pero sin registrar en la última
+  // sesión: se enseña igual, pero marcada. Que el usuario **no** use el RPE no
+  // resta fiabilidad — el modelo funciona sin él y está apagado de fábrica, así
+  // que marcarlo siempre vaciaría de significado la marca.
+  final fiable =
+      historial.length >= sesionesParaEstancarse &&
+      (!config.esfuerzoActivo || conEsfuerzo);
 
   // ── Estancamiento y descarga ──
   if (!descargaYaSugerida &&

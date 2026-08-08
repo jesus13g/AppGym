@@ -14,6 +14,7 @@ import 'catalogo.dart';
 import 'entrenar.dart';
 import 'ficha.dart';
 import 'historial.dart';
+import 'opciones_ejercicio.dart';
 
 Future<void> abrirRutina(BuildContext context, int idRutina) =>
     Navigator.of(context).push(
@@ -355,25 +356,40 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
                             mensaje:
                                 'Se eliminarán también las series '
                                 'registradas de este ejercicio en esta rutina.',
-                            child: CupertinoListTile(
-                              backgroundColor: context.tarjeta,
-                              leading: ui.Miniatura(formato.imagenEjercicio(e)),
-                              leadingSize: 48,
-                              title: Text(e.nombre, style: ui.estilo(context)),
-                              subtitle: Text(
-                                formato.subtituloEjercicio(e),
-                                style: ui.estilo(
-                                  context,
-                                  size: t.footnote,
-                                  color: context.textoSec,
-                                ),
+                            // Mantener pulsado abre las opciones propias del
+                            // ejercicio —descanso y progresión—, que es donde
+                            // se configuran sin estar entrenando.
+                            child: GestureDetector(
+                              onLongPress: () => abrirOpcionesEjercicio(
+                                context,
+                                idRutina,
+                                e.id,
                               ),
-                              trailing: e.ficha == null
-                                  ? null
-                                  : const CupertinoListTileChevron(),
-                              onTap: e.ficha == null
-                                  ? null
-                                  : () => abrirFicha(context, e.ficha!.id),
+                              child: CupertinoListTile(
+                                backgroundColor: context.tarjeta,
+                                leading: ui.Miniatura(
+                                  formato.imagenEjercicio(e),
+                                ),
+                                leadingSize: 48,
+                                title: Text(
+                                  e.nombre,
+                                  style: ui.estilo(context),
+                                ),
+                                subtitle: Text(
+                                  formato.subtituloEjercicio(e),
+                                  style: ui.estilo(
+                                    context,
+                                    size: t.footnote,
+                                    color: context.textoSec,
+                                  ),
+                                ),
+                                trailing: e.ficha == null
+                                    ? null
+                                    : const CupertinoListTileChevron(),
+                                onTap: e.ficha == null
+                                    ? null
+                                    : () => abrirFicha(context, e.ficha!.id),
+                              ),
                             ),
                           ),
                       ],

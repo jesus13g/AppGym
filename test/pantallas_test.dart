@@ -69,10 +69,14 @@ Widget _app(
   Widget pantalla, {
   Brightness? brillo,
   MapaCuerpo<Region>? modelo,
+  // `Override` no lo exporta `flutter_riverpod`, así que no se puede nombrar
+  // aquí; el `cast` lo resuelve la lista de destino, que sí está tipada.
+  Iterable<Object> overrides = const [],
 }) => ProviderScope(
   overrides: [
     bdProvider.overrideWithValue(bd),
     if (modelo != null) modeloCuerpoProvider.overrideWith((ref) => modelo),
+    ...overrides.cast(),
   ],
   child: CupertinoApp(
     locale: const Locale('es'),
@@ -892,6 +896,270 @@ void main() {
       await tester.tap(find.byType(ui.CheckSerie).first);
       await _asentar(tester);
       expect(find.text('0:45'), findsOneWidget);
+    });
+  });
+
+  // ── J3: la sugerencia de progresión ────────────────────────────────────────
+
+  group('sugerencia de progresión', () {
+    late int idRutina;
+    late int idEjercicio;
+
+    setUp(() async {
+      idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarEjercicio(idRutina, 'Press banca');
+      idEjercicio = (await bd.ejerciciosDeRutina(idRutina)).single.id;
+    });
+
+    /// Tres sesiones completando el rango a 60 kg: toca subir de peso.
+    ///
+    /// Con dos bastaría para que hubiera sugerencia, pero se enseñaría marcada;
+    /// con tres el historial ya da y el texto sale limpio.
+    Future<void> historialAlTope() async {
+      for (final fecha in [
+        DateTime(2026, 3, 1),
+        DateTime(2026, 3, 8),
+        DateTime(2026, 3, 15),
+      ]) {
+        await bd.insertarEntrenamiento(idRutina, fecha, {
+          idEjercicio: const [
+            ValoresSerie(repeticiones: 12, peso: 60),
+            ValoresSerie(repeticiones: 12, peso: 60),
+            ValoresSerie(repeticiones: 12, peso: 60),
+            ValoresSerie(repeticiones: 12, peso: 60),
+          ],
+        });
+      }
+    }
+
+    testWidgets('propone subir el peso, y la línea cabe en un móvil', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await historialAlTope();
+
+      await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sugerido 4×8 · 62,5 kg'), findsOneWidget);
+      expect(find.text('Completaste el rango en todas las series'), findsOne);
+      expect(find.byType(ui.Sugerencia), findsOneWidget);
+    });
+
+    testWidgets('sin dos sesiones previas no se enseña nada', (tester) async {
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1), {
+        idEjercicio: const [ValoresSerie(repeticiones: 12, peso: 60)],
+      });
+
+      await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ui.Sugerencia), findsNothing);
+    });
+
+    testWidgets('aplicar reescribe las series y no guarda nada', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await historialAlTope();
+
+      await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      // Antes de aplicar, el registro viene precargado con la última sesión.
+      expect(find.text('12'), findsNWidgets(4));
+
+      await tester.tap(find.text('Aplicar'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('8'), findsNWidgets(4));
+      expect(find.text('62,5 kg'), findsNWidgets(4));
+      // Aplicar no confirma: siguen siendo las sesiones del historial.
+      expect(await bd.contarEntrenamientosRutina(idRutina), 3);
+      // Y la línea se retira: ya se ha hecho caso.
+      expect(find.byType(ui.Sugerencia), findsNothing);
+    });
+
+    testWidgets('descartarla la quita sin tocar las series', (tester) async {
+      _comoUnMovil(tester);
+      await historialAlTope();
+
+      await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(CupertinoIcons.xmark));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ui.Sugerencia), findsNothing);
+      expect(find.text('12'), findsNWidgets(4));
+    });
+
+    testWidgets('el descarte sobrevive a recuperar la sesión viva', (
+      tester,
+    ) async {
+      _RelojFalso().instalar();
+      await historialAlTope();
+
+      await tester.pumpWidget(
+        _app(bd, PantallaEntrenar(idRutina: idRutina, modo: Modo.vivo)),
+      );
+      await _asentar(tester);
+
+      await tester.tap(find.byIcon(CupertinoIcons.xmark));
+      await _asentar(tester, veces: 12);
+      // El borrador se escribe con dos segundos de retraso.
+      await tester.pump(const Duration(seconds: 3));
+
+      final borrador = await bd.sesionActiva();
+      expect(borrador, isNotNull);
+
+      // Se recupera la sesión: la sugerencia sigue descartada, que es lo que
+      // significa «no vuelve en esta sesión».
+      await tester.pumpWidget(
+        _app(
+          bd,
+          PantallaEntrenar(
+            idRutina: idRutina,
+            modo: Modo.vivo,
+            borrador: borrador,
+          ),
+        ),
+      );
+      await _asentar(tester);
+
+      expect(find.byType(ui.Sugerencia), findsNothing);
+    });
+
+    testWidgets('marcar la primera serie retira la línea en sesión viva', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      _RelojFalso().instalar();
+      await historialAlTope();
+
+      await tester.pumpWidget(
+        _app(bd, PantallaEntrenar(idRutina: idRutina, modo: Modo.vivo)),
+      );
+      await _asentar(tester);
+      expect(find.byType(ui.Sugerencia), findsOneWidget);
+
+      await tester.tap(find.byType(ui.CheckSerie).first);
+      await _asentar(tester);
+
+      expect(find.byType(ui.Sugerencia), findsNothing);
+    });
+
+    testWidgets('con la progresión apagada ni siquiera se calcula', (
+      tester,
+    ) async {
+      await historialAlTope();
+      await bd.fijarAjuste(Claves.progresionActiva, '0');
+
+      // El provider se sobrescribe con un espía: si la pantalla lo pidiera, se
+      // notaría aquí. No basta con comprobar que no se pinta nada.
+      var pedido = false;
+      await tester.pumpWidget(
+        _app(
+          bd,
+          PantallaEntrenar(idRutina: idRutina),
+          overrides: [
+            sugerenciaProvider.overrideWith((ref, clave) {
+              pedido = true;
+              return null;
+            }),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(pedido, isFalse);
+      expect(find.byType(ui.Sugerencia), findsNothing);
+    });
+
+    testWidgets('el rango propio del ejercicio manda sobre el global', (
+      tester,
+    ) async {
+      await historialAlTope();
+      // Con 3-5, cuatro series de doce ya no son «rango incompleto» sino
+      // repeticiones muy por encima: toca subir peso igual, pero desde otro
+      // rango, así que la propuesta baja a cinco repeticiones.
+      await bd.fijarProgresionEjercicio(
+        idEjercicio,
+        repMin: const Value(3),
+        repMax: const Value(5),
+      );
+
+      await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sugerido 4×3 · 62,5 kg'), findsOneWidget);
+    });
+
+    testWidgets('la hoja de opciones escribe el rango del ejercicio', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await historialAlTope();
+
+      await tester.pumpWidget(_app(bd, PantallaRutina(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      await tester.longPress(find.text('Press banca'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Progresión'.toUpperCase()), findsOneWidget);
+      expect(find.text('Rango de repeticiones'), findsOneWidget);
+
+      await tester.tap(find.text('Rango de repeticiones'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('3 – 5').last);
+      await tester.pumpAndSettle();
+
+      final ejercicio = (await bd.ejerciciosDeRutina(idRutina)).single;
+      expect(ejercicio.ejercicio.repMin, 3);
+      expect(ejercicio.ejercicio.repMax, 5);
+    });
+
+    testWidgets('un ejercicio estancado se anuncia en el resumen', (
+      tester,
+    ) async {
+      // Cuatro sesiones idénticas: ni peso, ni repeticiones, ni volumen.
+      for (var i = 0; i < 4; i++) {
+        await bd.insertarEntrenamiento(idRutina, DateTime(2026, 3, 1 + i * 7), {
+          idEjercicio: const [ValoresSerie(repeticiones: 10, peso: 60)],
+        });
+      }
+
+      await tester.pumpWidget(_app(bd, const PantallaProgreso()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('1 ejercicio estancado'), findsOneWidget);
+
+      await tester.tap(find.text('1 ejercicio estancado'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Press banca'), findsOneWidget);
+      expect(find.textContaining('no un consejo de entrenamiento'), findsOne);
+    });
+
+    testWidgets('en la evolución del ejercicio se enseña sin aplicar', (
+      tester,
+    ) async {
+      await historialAlTope();
+
+      await tester.pumpWidget(
+        _app(
+          bd,
+          PantallaResultadoEjercicio(
+            idRutina: idRutina,
+            idEjercicio: idEjercicio,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ui.Sugerencia), findsOneWidget);
+      expect(find.text('Aplicar'), findsNothing);
     });
   });
 
