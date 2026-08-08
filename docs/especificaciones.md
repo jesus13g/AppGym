@@ -1,6 +1,19 @@
-# AppGym — Especificaciones de nuevas funcionalidades
+# AppGym — Especificaciones, primera iteración (COMPLETADA)
 
-> Documento de especificación funcional y técnica para la siguiente iteración de AppGym.
+> ## ⚠️ Documento cerrado
+>
+> **Los cuatro bloques de este documento están implementados y entregados**, y no se
+> añade nada más aquí. Se conserva como historia: es el porqué de buena parte de lo que
+> hay hoy en el código, y sus apartados de «Desviaciones» explican dónde la
+> implementación se apartó de lo escrito y con qué motivo.
+>
+> **El trabajo previsto vive ahora en [`especificaciones-2.md`](especificaciones-2.md)**,
+> que recoge los tres puntos que este documento dejó fuera de alcance a propósito
+> (sección [G](#g-fuera-de-alcance)): sincronización en la nube con cuentas y
+> multidispositivo, recomendación automática de progresiones e internacionalización de la
+> interfaz.
+
+> Documento de especificación funcional y técnica de la primera iteración de AppGym.
 > Escrito sobre el código de entonces: **Flutter 3.44.8 / Dart 3.12.2**, `drift` sobre
 > SQLite, `Riverpod` para el estado, interfaz **solo Cupertino** y catálogo de 1.324
 > ejercicios. Ver `CLAUDE.md` para la arquitectura vigente.
@@ -1725,14 +1738,24 @@ del lienzo, ninguna tapada al toque por otra—, que es lo que caza los errores 
 
 Se deja fuera de esta iteración, de forma consciente:
 
-- **Sincronización en la nube y multidispositivo.** Cambia la naturaleza del proyecto (backend,
+> **Tres de estos puntos ya no están fuera de alcance.** Se abordan en
+> [`especificaciones-2.md`](especificaciones-2.md), que empieza cada bloque recordando el
+> motivo por el que se aplazaron aquí y explicando qué ha cambiado para que deje de valer.
+> Se marcan abajo con ↳.
+
+- ↳ **Sincronización en la nube y multidispositivo.** Cambia la naturaleza del proyecto (backend,
   cuentas, conflictos); B10 cubre la necesidad real de no perder los datos.
-- **Cuentas de usuario.** La app es de un solo usuario local.
+  *(Ahora: bloque [K](especificaciones-2.md#k-sincronización-en-la-nube-cuentas-y-multidispositivo).)*
+- ↳ **Cuentas de usuario.** La app es de un solo usuario local.
+  *(Ahora: [K3](especificaciones-2.md#k3-cuentas-e-identidad).)*
 - **Integración con relojes o wearables** (Health Connect, HealthKit).
-- **Recomendaciones automáticas de progresión de carga.** Interesante, pero requiere los datos que
+- ↳ **Recomendaciones automáticas de progresión de carga.** Interesante, pero requiere los datos que
   esta iteración justamente empieza a recoger (RPE, volumen por serie). Reconsiderar después.
-- **Internacionalización de la interfaz.** Los textos siguen incrustados en las pantallas;
+  *(Ahora: bloque [J](especificaciones-2.md#j-recomendación-automática-de-progresiones); la
+  condición se cumplió con A1, A5 y C16.)*
+- ↳ **Internacionalización de la interfaz.** Los textos siguen incrustados en las pantallas;
   `flutter_localizations` solo cubre hoy los del framework.
+  *(Ahora: bloque [I](especificaciones-2.md#i-internacionalización-de-la-interfaz).)*
 - **Publicación en tiendas.** El APK se sigue instalando a mano desde las releases del repositorio,
   sin firmar con una clave propia.
 - **Vídeos o media adicional.** Se mantiene la relación actual con el dataset de Gym visual y sus

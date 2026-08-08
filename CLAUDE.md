@@ -73,7 +73,7 @@ drift_schemas/         un JSON por versión del esquema, para los tests de migra
 tool/                  musculatura.py, que genera el modelo anatómico
 test/                  datos · pantallas · migraciones · copia · ajustes · plantillas · metricas
                        musculos · geometria · esquemas/ (generado)
-docs/                  especificaciones.md, el trabajo previsto
+docs/                  especificaciones.md (hecho) · especificaciones-2.md (previsto)
 ```
 
 Tres ficheros de `pantallas/` no son pantallas, sino piezas que comparten varias:
@@ -86,15 +86,30 @@ Dos pantallas sirven doble destino: `catalogo.dart` es a la vez la pestaña Ejer
 añadir a una rutina (`abrirAnadirEjercicio`), y `entrenar.dart` es, según su `Modo`, la sesión viva
 o el formulario de siempre.
 
-**`docs/especificaciones.md`** recoge lo que está previsto construir. Sus **bloques A
-(limitaciones del modelo de datos), B (uso diario) y C (progreso y análisis) ya están
+**Hay dos documentos de especificación y no dicen lo mismo.**
+
+**`docs/especificaciones.md` está cerrado: es lo ya construido.** Sus bloques A (limitaciones del
+modelo de datos), B (uso diario), C (progreso y análisis) y D (mapa muscular) están **enteros
 implementados**: series independientes, editar y borrar entrenamientos, elegir la fecha, orden,
 notas y RPE, varias rutinas el mismo día, temporizador de descanso, sesión viva, la pantalla de
 Ajustes completa, copia de seguridad, plantillas, favoritos, medidas del cuerpo, 1RM estimado con
-sus récords, resumen semanal con racha y días de calendario pulsables. **También el bloque D**
-(mapa muscular), que era el último. **El documento está entero implementado.** Antes de proponer una
-funcionalidad nueva, mira si ya está ahí especificada — incluye el esquema de datos final, el orden
-de las migraciones y las desviaciones de lo que se implementó, que en D son largas y razonadas.
+sus récords, resumen semanal con racha, días de calendario pulsables y el mapa muscular. Se
+consulta como el **porqué** de lo que hay: incluye el esquema de datos hasta la v6, el orden de las
+migraciones y las desviaciones de lo que se implementó, que en D son largas y razonadas.
+
+**`docs/especificaciones-2.md` es el trabajo previsto, y nada de él está hecho.** Recoge los tres
+puntos que el anterior dejó fuera de alcance a propósito, en su orden de entrega:
+
+- **I — internacionalización de la interfaz** (ARB + `flutter gen-l10n`, español e inglés, el
+  catálogo con índice de búsqueda multilingüe). Va primero porque es un barrido por las quince
+  pantallas: si J y K entran antes, el barrido se hace dos veces.
+- **J — recomendación automática de progresiones** (`datos/progresion.dart`, doble progresión,
+  esquema v7). Módulo puro con la forma de `metricas.dart`.
+- **K — sincronización en la nube, cuentas y multidispositivo** (`uuid` + `actualizado` +
+  lápidas, esquema v8, último en escribir gana). El bloque grande, y el único con un servicio
+  externo detrás.
+
+Antes de proponer una funcionalidad nueva, mira si ya está especificada en uno de los dos.
 
 ### Navegación: pestañas con pila propia
 
