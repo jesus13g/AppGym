@@ -81,3 +81,7 @@ flutter:
     # Rutinas predefinidas. Referencian el catálogo por id; hay un test que
     # comprueba que todos esos ids siguen existiendo.
     - assets/plantillas.json
+
+    # El modelo anatómico del mapa muscular: trazados vectoriales, no imágenes,
+    # así que son 32 KB. Dibujo original de este repositorio (ver README).
+    - assets/musculatura.json

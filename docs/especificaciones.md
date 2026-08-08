@@ -5,9 +5,10 @@
 > SQLite, `Riverpod` para el estado, interfaz **solo Cupertino** y catálogo de 1.324
 > ejercicios. Ver `CLAUDE.md` para la arquitectura vigente.
 >
-> **Estado: los bloques A y B están implementados.** Queda C (progreso y análisis) y D
-> (mapa muscular). Cada bloque conserva su especificación como el porqué de las
-> decisiones; donde la implementación se desvió, se dice en la sección
+> **Estado: los cuatro bloques están implementados.** A y B (modelo de datos y uso
+> diario), C (progreso y análisis) y D (mapa muscular). Cada bloque conserva su
+> especificación como el porqué de las decisiones; donde la implementación se desvió, se
+> dice en su propio apartado de «Desviaciones» y, para el esquema, en la sección
 > [E](#e-modelo-de-datos-consolidado).
 
 ## Índice
@@ -1224,6 +1225,16 @@ día se entrenó, pero no **qué** se hizo. Es el gesto que cualquiera intenta a
 
 ## D. Mapa muscular interactivo
 
+> **Bloque implementado.** El mapa está en el código desde la iteración de agosto de 2026, sin
+> ningún cambio de esquema: `schemaVersion` sigue en 6. Lo que sigue se conserva como el porqué de
+> cada decisión; **las desviaciones respecto a lo especificado van marcadas en su punto**, y las dos
+> gordas —el eje del color y el origen del dibujo— tienen su apartado al final.
+>
+> Tres módulos nuevos: `lib/datos/musculos.dart` (el vocabulario de regiones y la atribución, puro,
+> con la forma de `metricas.dart`), `lib/datos/geometria.dart` (los trazados y la resolución del
+> toque, que solo importa `dart:ui`) y `lib/pantallas/musculatura.dart` (la vista). Más el recurso
+> gráfico, `assets/musculatura.json`.
+>
 > Especificación de una vista nueva: un modelo anatómico del cuerpo, coloreado según el trabajo real
 > de cada músculo, en el que al tocar un músculo se ven sus ejercicios y los entrenamientos que lo
 > han trabajado. La imagen de referencia aportada (lámina anatómica con vista frontal y dorsal,
@@ -1504,20 +1515,76 @@ un entrenamiento nuevo cambia el mapa.
 
 ### D.9 Criterios de aceptación
 
-- [ ] El modelo se dibuja en frente y espalda, y el conmutador alterna sin recargar la pantalla.
-- [ ] Cada una de las 21 regiones es identificable visualmente y responde al toque en su área.
-- [ ] Tocar el pectoral abre la hoja con el resumen, las últimas sesiones de pecho y ejercicios de
+- [x] El modelo se dibuja en frente y espalda, y el conmutador alterna sin recargar la pantalla.
+- [x] Cada una de las 21 regiones es identificable visualmente y responde al toque en su área.
+- [x] Tocar el pectoral abre la hoja con el resumen, las últimas sesiones de pecho y ejercicios de
       pecho del catálogo.
-- [ ] Sin ningún entrenamiento registrado, el modelo se ve en gris con un `ui.EstadoVacio`
+- [x] Sin ningún entrenamiento registrado, el modelo se ve en gris con un `ui.EstadoVacio`
       explicativo, y el catálogo por músculo sigue siendo navegable (la vista ya es útil sin
       histórico).
-- [ ] Con datos, un músculo entrenado esta semana y otro sin tocar en 90 días se distinguen a simple
+- [x] Con datos, un músculo entrenado esta semana y otro sin tocar en 90 días se distinguen a simple
       vista.
-- [ ] Cambiar el periodo de 7 a 90 días recolorea y no vuelve a consultar el catálogo.
-- [ ] Test que recorre los 1.324 ejercicios y confirma que todo `target` tiene región.
-- [ ] Test de `geometria.dart` con al menos 20 puntos de prueba que acierten su región.
-- [ ] El mapa se pinta correctamente en tema claro y oscuro (test de widget en ambos).
-- [ ] `README.md` documenta el origen y la licencia del dibujo anatómico.
+- [x] Cambiar el periodo de 7 a 90 días recolorea y no vuelve a consultar el catálogo.
+- [x] Test que recorre los 1.324 ejercicios y confirma que todo `target` tiene región. Va más allá:
+      cubre también los 29 valores de `muscleGroup` y los 40 de `secondaryMuscles`, y comprueba que
+      las 21 regiones son alcanzables desde el dataset —sin eso, un término mal escrito en la tabla
+      pasaría la cobertura y dejaría la región muerta—.
+- [x] Test de `geometria.dart` con al menos 20 puntos de prueba que acierten su región: hay 22 con
+      coordenadas escritas a mano, más un recorrido por las 21 regiones de las dos caras.
+- [x] El mapa se pinta correctamente en tema claro y oscuro (test de widget en ambos).
+- [x] `README.md` documenta el origen y la licencia del dibujo anatómico.
+
+**Desviaciones de lo implementado.**
+
+1. **El color sale de las series ponderadas, no del volumen en kilos** (ver D.5). Es la desviación
+   de fondo y tiene apartado propio más abajo.
+2. **Los ejercicios de cardio sí reparten** por su `muscleGroup` y sus `secondaryMuscles`. Lo que no
+   tiene región es el término `cardiovascular system`; el ejercicio sigue contando. Los 29 traen
+   músculos reales —25 con `quadriceps` de grupo—, y decir que un burpee no trabaja las piernas
+   sería peor dato que no decir nada. Se cuentan aparte y se avisa al pie.
+3. **`bodyPart` no se consulta nunca**, aunque D.3 lo listaba para el cuello. Sus diez valores se
+   solapan con los de los otros tres vocabularios (`back` son 203 ejercicios, `chest` 163) y
+   atribuirían en bloque y mal; los dos ejercicios de `bodyPart = neck` ya entran por su `target`.
+4. **El desempate entre regiones solapadas usa el área real, no `path.getBounds()`** como decía
+   D.7. Casi todas las regiones son bilaterales: el rectángulo que envuelve las dos mitades del
+   pectoral abarca el torso entero, así que desempatar con él elegiría siempre la región
+   equivocada. Hay un test que fija justo eso.
+5. **El toque se prueba trazado a trazado, no sobre el `Path` combinado.** Reflejar invierte el
+   sentido de giro, y con el relleno `nonZero` dos subtrazados opuestos que se solaparan se
+   anularían. El combinado se construye además con `Path.combine(union)`, o el borde de la línea
+   media se pintaría como una raya vertical por mitad del cuerpo.
+6. **La hoja del músculo va en un contenedor propio, no en un `CupertinoActionSheet`.** Un resumen,
+   cinco sesiones y ocho fichas con miniatura, favorito y botón de añadir no son «acciones», y una
+   hoja de acciones ni scrollea bien ni admite ese contenido.
+7. **El periodo se elige con píldoras, no con un segundo control segmentado.** Apilar dos barras
+   iguales debajo de la de Progreso serían tres filas de cromo antes de ver el cuerpo.
+8. **Las cuatro funciones de D.8 no son consultas.** Solo `trabajoPorMusculo` va a la base; el
+   reparto, las sesiones por región y los niveles son funciones puras de `musculos.dart` sobre la
+   lista ya cargada. Es lo que hace de verdad que cambiar de 7 a 90 días no vuelva a consultar, y lo
+   que permite probar todo el reparto con fechas clavadas. La fase 5 ya lo pedía así.
+9. **El catálogo filtrado casa contra los tres vocabularios**, no solo contra `target`: cuatro
+   regiones —deltoides posterior, oblicuos, flexores de cadera y tibial— no tienen ningún `target`
+   propio y el enlace «Ver los N ejercicios» habría mentido. Un test comprueba, para las 21
+   regiones, que el recuento del SQL y el de la atribución en Dart coinciden: si alguien toca uno de
+   los dos, cae.
+
+**Sobre el eje del color (D.5).** La especificación razona bien —comparar en absoluto pintaría
+siempre el mapa igual— pero la solución que propone tiene la misma enfermedad. La ratio entre el
+volumen en kilos del cuádriceps y el del abdomen es una propiedad de los ejercicios, no del
+entrenamiento: con `pesoEfectivo = max(peso, 1)`, treinta abdominales valen 30 y una serie de 5×100
+kg vale 500. Normalizar contra el máximo del periodo dejaría piernas y glúteos siempre en nivel 4 y
+abdomen, gemelos y antebrazos siempre en 1, que es exactamente el mapa inútil que D.5 quería evitar.
+Colorea por tanto la **suma de series efectivas ponderadas**, que sí es comparable entre músculos:
+cuatro series de curl y cuatro de sentadilla son cuatro y cuatro. El volumen en kilos se sigue
+calculando y se enseña en la hoja del músculo, donde se compara consigo mismo en el tiempo y ahí sí
+significa algo. `pesoEfectivo` se mantiene tal cual lo pide D.4, pero ya no decide el color.
+
+**Sobre el dibujo (D.7 y H3).** Es original, hecho para este repositorio: una silueta humana
+estilizada con las 21 regiones como formas curvas cerradas y trazados de luz y sombra derivados de
+cada región, que es lo que le da el volumen pseudo-3D. No se calcó ni se derivó de la lámina
+aportada. El formato es el JSON de puntos que recomendaba H4 —punto inicial más segmentos cúbicos,
+sin parser de SVG— y los músculos bilaterales se definen una vez y se reflejan al cargar, así que la
+simetría es exacta por construcción. Son 32 KB. El origen y la licencia están en `README.md`.
 
 ### D.10 Riesgos
 
@@ -1640,11 +1707,17 @@ Lo que sí trajo es `lib/datos/metricas.dart`, el primer módulo de la app que e
 importa Flutter ni escribe en la base, y `test/metricas_test.dart` lo prueba con datos y fechas a
 mano. Cuando llegue el bloque D, el `musculos.dart` que pide debería vivir con esa misma forma.
 
-### Fase 5 — Mapa muscular
+### Fase 5 — Mapa muscular ✅
 
-**D**, en dos tiempos: primero el recurso gráfico y `musculos.dart` con sus tests (que no requieren
-interfaz), y después la vista. Va al final porque se apoya en A1 para el volumen por serie y en B12
-para «añadir a rutina» desde la hoja del músculo.
+Hecha, y en los dos tiempos previstos: primero `musculos.dart` con su cobertura del catálogo, el
+recurso gráfico y `geometria.dart` con sus tests —nada de eso necesita interfaz—, y después la
+vista. Sin cambio de esquema: `schemaVersion` se queda en 6 y las migraciones no se tocaron.
+
+El dibujo era el bloqueo real, como avisaba D.10, y no era trabajo de programación. Se resolvió
+antes que el código, dibujando las 21 regiones sobre una silueta original y mirando el resultado:
+el JSON se rasteriza a imagen y se revisa. Es lo único de este bloque que ningún test puede validar,
+así que lo que sí se automatizó son los invariantes —toda región dentro del cuerpo, ninguna fuera
+del lienzo, ninguna tapada al toque por otra—, que es lo que caza los errores que importan.
 
 ---
 
@@ -1675,14 +1748,17 @@ Cuestiones que conviene cerrar antes o durante la implementación:
 
 1. ~~**¿Cuatro pestañas o tres?**~~ **Cerrada:** tres. B13 entró como un tercer elemento
    «Cuerpo» del `CupertinoSlidingSegmentedControl` de Progreso, sin tocar el
-   `CupertinoTabScaffold`. Con cuatro el texto empezaría a apretarse en un móvil estrecho, así
-   que **D tendrá que compartir sitio ahí dentro o buscarse otro**.
+   `CupertinoTabScaffold`. Con cuatro el texto empezaría a apretarse en un móvil estrecho, y D
+   acabó compartiendo sitio ahí dentro: el mapa se pinta encima de las medidas, en la misma
+   sección «Cuerpo», y el segmentado sigue teniendo tres opciones.
 2. ~~**¿Adelantar B10 (copia de seguridad) a la fase 1?**~~ **Cerrada:** no se adelantó; la
    migración destructiva la cubrió el respaldo del fichero.
-3. **Origen del dibujo anatómico** (D.7). Es un bloqueo real de la fase 5 y no se resuelve
-   programando. Decidir entre dibujo original o fuente en dominio público.
-4. **¿Parser de SVG o JSON de puntos?** (D.7). Se recomienda el JSON de puntos, para no mantener un
-   parser de un formato ajeno.
+3. ~~**Origen del dibujo anatómico** (D.7)~~ **Cerrada:** dibujo **original**, hecho para este
+   repositorio y documentado en `README.md`. La lámina aportada sirvió de referencia de aspecto y
+   de nivel de detalle, no de material de partida.
+4. ~~**¿Parser de SVG o JSON de puntos?** (D.7)~~ **Cerrada:** JSON de puntos, como se recomendaba.
+   Cada trazado es un punto inicial y una lista de segmentos cúbicos; no hay parser que mantener.
+   Los músculos bilaterales se definen una vez y se reflejan al cargar.
 5. ~~**Fórmula de 1RM por defecto** (C16)~~ **Cerrada:** Epley por defecto y **elegible en
    Ajustes**, en el grupo «Objetivos». Costó lo previsto: una clave más, una fila de dos segmentos y
    la expresión SQL compuesta según la fórmula en las dos consultas que estiman.

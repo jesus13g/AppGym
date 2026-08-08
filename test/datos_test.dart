@@ -8,6 +8,7 @@ import 'package:appgym/datos/ajustes.dart';
 import 'package:appgym/datos/bd.dart';
 import 'package:appgym/datos/formato.dart';
 import 'package:appgym/datos/i18n.dart';
+import 'package:appgym/datos/musculos.dart';
 import 'package:appgym/datos/semilla.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -41,6 +42,9 @@ final _catalogoFalso = [
 ];
 
 void main() {
+  // El test que compara el mapa con el catálogo carga el asset de verdad.
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   late AppBD bd;
 
   setUp(() => bd = AppBD(NativeDatabase.memory()));
@@ -1344,6 +1348,176 @@ void main() {
       expect((await bd.ajustes()).unidad, Unidad.kg);
       // El catálogo es regenerable pero no hay motivo para tirarlo.
       expect(await bd.contarCatalogo(), 2);
+    });
+  });
+
+  // ── D: el mapa muscular ────────────────────────────────────────────────────
+
+  group('trabajo por músculo', () {
+    late int idRutina;
+    late int idPress;
+
+    setUp(() async {
+      await sembrarCatalogo(bd, datos: _catalogoFalso);
+      idRutina = (await bd.insertarRutina('Empuje'))!;
+      await bd.insertarEjercicio(idRutina, 'Press banca', idCatalogo: '0001');
+      idPress = (await bd.ejerciciosDeRutina(idRutina)).first.id;
+    });
+
+    test(
+      'agrupa por sesión y ejercicio, y trae la ficha del catálogo',
+      () async {
+        await bd.insertarEntrenamiento(idRutina, DateTime(2026, 8, 1), {
+          idPress: const [
+            ValoresSerie(repeticiones: 10, peso: 60),
+            ValoresSerie(repeticiones: 8, peso: 70),
+          ],
+        });
+
+        final filas = await bd.trabajoPorMusculo(desde: DateTime(2026, 7, 1));
+        expect(filas, hasLength(1));
+        expect(filas.single.nSeries, 2);
+        expect(filas.single.volumen, 10 * 60 + 8 * 70);
+        expect(filas.single.target, 'pectorals');
+        expect(filas.single.muscleGroup, 'chest');
+        expect(filas.single.secondaryMuscles, contains('triceps'));
+        expect(filas.single.idCatalogo, '0001');
+        expect(filas.single.ejercicio, 'Press banca');
+      },
+    );
+
+    test('el calentamiento no cuenta', () async {
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 8, 1), {
+        idPress: const [
+          ValoresSerie(repeticiones: 10, peso: 20, calentamiento: true),
+          ValoresSerie(repeticiones: 8, peso: 70),
+        ],
+      });
+
+      final filas = await bd.trabajoPorMusculo(desde: DateTime(2026, 7, 1));
+      expect(filas.single.nSeries, 1);
+      expect(filas.single.volumen, 8 * 70);
+    });
+
+    test('el peso corporal cuenta como 1 y no como 0', () async {
+      // Sin esto las dominadas darían volumen nulo y desaparecerían del mapa.
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 8, 1), {
+        idPress: const [
+          ValoresSerie(repeticiones: 10, peso: 0),
+          ValoresSerie(repeticiones: 5, peso: 0),
+        ],
+      });
+
+      final filas = await bd.trabajoPorMusculo(desde: DateTime(2026, 7, 1));
+      expect(filas.single.volumen, 15);
+    });
+
+    test('un ejercicio personalizado llega sin ficha, pero llega', () async {
+      await bd.insertarEjercicio(idRutina, 'Remo con goma');
+      final idGoma = (await bd.ejerciciosDeRutina(
+        idRutina,
+      )).firstWhere((e) => e.nombre == 'Remo con goma').id;
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 8, 1), {
+        idGoma: const [ValoresSerie(repeticiones: 12, peso: 10)],
+      });
+
+      final filas = await bd.trabajoPorMusculo(desde: DateTime(2026, 7, 1));
+      expect(filas.single.idCatalogo, isNull);
+      expect(filas.single.target, '');
+      expect(filas.single.secondaryMuscles, '');
+    });
+
+    test('el corte por fecha incluye el propio día', () async {
+      await bd.insertarEntrenamiento(idRutina, DateTime(2026, 8, 1), {
+        idPress: const [ValoresSerie(repeticiones: 10, peso: 60)],
+      });
+
+      expect(
+        await bd.trabajoPorMusculo(desde: DateTime(2026, 8, 1)),
+        hasLength(1),
+      );
+      expect(await bd.trabajoPorMusculo(desde: DateTime(2026, 8, 2)), isEmpty);
+    });
+
+    test('las rutinas del usuario traen su ficha', () async {
+      final enRutinas = await bd.catalogoEnRutinas();
+      expect(enRutinas, hasLength(1));
+      expect(enRutinas.single.rutina, 'Empuje');
+      expect(enRutinas.single.ficha.id, '0001');
+
+      // Un ejercicio personalizado no tiene ficha y no aparece aquí.
+      await bd.insertarEjercicio(idRutina, 'Remo con goma');
+      expect(await bd.catalogoEnRutinas(), hasLength(1));
+    });
+  });
+
+  group('el catálogo filtrado por músculo', () {
+    // Contra el catálogo de verdad: es lo único que prueba que el filtro sirve
+    // para las regiones que no tienen ningún `target` propio.
+    setUp(() async => sembrarCatalogo(bd));
+
+    test('encuentra por objetivo, por grupo y por secundarios', () async {
+      // `rear deltoids` solo existe como músculo secundario: si el filtro
+      // mirase solo `target`, el deltoides posterior saldría vacío.
+      expect(
+        await bd.contarCatalogoPorMusculos({'rear deltoids'}),
+        greaterThan(0),
+      );
+      // `hip flexors` solo está como grupo y como secundario.
+      expect(
+        await bd.contarCatalogoPorMusculos({'hip flexors'}),
+        greaterThan(0),
+      );
+      expect(await bd.contarCatalogoPorMusculos({'pectorals'}), greaterThan(0));
+      expect(await bd.contarCatalogoPorMusculos(const {}), 0);
+    });
+
+    test('los secundarios se buscan entrecomillados y no por trozos', () async {
+      // Sin las comillas, «back» casaría dentro de «upper back» y «traps»
+      // dentro de «trapezius», y los recuentos se dispararían.
+      final soloBack = await bd.contarCatalogoPorMusculos({'back'});
+      final conUpper = await bd.contarCatalogoPorMusculos({
+        'back',
+        'upper back',
+      });
+      expect(conUpper, greaterThan(soloBack));
+    });
+
+    test('el filtro se combina con los demás', () async {
+      final todos = await bd.buscarCatalogo(
+        musculos: {'pectorals'},
+        limite: 1000,
+      );
+      final conMancuerna = await bd.buscarCatalogo(
+        musculos: {'pectorals'},
+        equipment: 'dumbbell',
+        limite: 1000,
+      );
+      expect(conMancuerna.length, lessThan(todos.length));
+      expect(conMancuerna, everyElement(isA<FichaCatalogo>()));
+    });
+
+    test('el mapa y el catálogo cuentan lo mismo en las 21 regiones', () async {
+      // El test que ata las dos vías: el SQL del filtro y la tabla de términos
+      // de `musculos.dart` tienen que decir siempre lo mismo del mismo músculo.
+      // Si alguien toca una sola de las dos, esto cae.
+      final catalogo = await cargarCatalogo();
+      for (final region in Region.values) {
+        final porDart = catalogo
+            .where(
+              (e) => regionesDeTerminos(
+                target: e.target,
+                muscleGroup: e.muscleGroup,
+                secundarios: e.secondaryMuscles,
+              ).containsKey(region),
+            )
+            .length;
+        expect(
+          await bd.contarCatalogoPorMusculos(terminosDe(region)),
+          porDart,
+          reason: 'la región ${regiones[region]!.nombre} no cuadra',
+        );
+      }
     });
   });
 }

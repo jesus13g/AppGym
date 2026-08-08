@@ -18,6 +18,7 @@ import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
 import 'entrenar.dart';
 import 'medidas.dart';
+import 'musculatura.dart';
 import 'resultado_rutina.dart';
 import 'sesion.dart';
 
@@ -432,7 +433,12 @@ class _UltimosDias extends StatelessWidget {
 
 // ── Cuerpo ───────────────────────────────────────────────────────────────────
 
-/// Las medidas del cuerpo, con el peso corporal delante.
+/// El mapa muscular y las medidas del cuerpo.
+///
+/// Las dos cosas comparten sección en vez de pedir una cuarta pestaña: con
+/// cuatro, el texto del segmentado se aprieta en un móvil estrecho. El mapa va
+/// delante porque es lo que ancla la sección; las medidas quedan debajo, tal y
+/// como estaban.
 ///
 /// Si hace más de una semana que no se registra el peso, lo ofrece de un toque:
 /// una serie de peso corporal con huecos de un mes no dice gran cosa.
@@ -449,6 +455,7 @@ class _Cuerpo extends ConsumerWidget {
 
     return Column(
       children: [
+        const MapaMuscular(),
         if (dias == null || dias >= diasAvisoPeso)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: t.l, vertical: t.s),

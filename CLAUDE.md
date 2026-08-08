@@ -12,7 +12,8 @@ flutter pub get
 dart run build_runner build     # genera bd.g.dart; obligatorio tras clonar
 flutter run                     # app en un dispositivo o emulador
 flutter analyze                 # objetivo permanente: 0 issues
-flutter test                    # 226 tests: datos, pantallas, migraciones, copia, ajustes y métricas
+flutter test                    # 291 tests: datos, pantallas, migraciones, copia, ajustes,
+                                #            métricas, músculos y geometría
 dart format lib test
 flutter build apk --release     # APK local (necesita SDK de Android y Java 17)
 ```
@@ -60,22 +61,26 @@ lib/
 │   ├── media.dart     descarga y resolución de imágenes y GIFs
 │   ├── i18n.dart      vocabulario del catálogo en español
 │   ├── metricas.dart  1RM, récords, semana y racha: solo funciones puras
+│   ├── musculos.dart  las 21 regiones del mapa y el reparto del trabajo (puro)
+│   ├── geometria.dart trazados del modelo anatómico y resolución del toque
 │   ├── reloj.dart     la hora, en un punto que los tests pueden adelantar
 │   └── formato.dart   fechas, pesos, duraciones y textos
 ├── estado/            providers.dart · descanso.dart (el temporizador)
 ├── tema/              tokens.dart · ui.dart
-└── pantallas/         quince pantallas + dos piezas compartidas
-assets/                ejercicios.es.json (el catálogo) · plantillas.json
+└── pantallas/         quince pantallas + tres piezas compartidas
+assets/                ejercicios.es.json (el catálogo) · plantillas.json · musculatura.json
 drift_schemas/         un JSON por versión del esquema, para los tests de migración
+tool/                  musculatura.py, que genera el modelo anatómico
 test/                  datos · pantallas · migraciones · copia · ajustes · plantillas · metricas
-                       esquemas/ (generado)
+                       musculos · geometria · esquemas/ (generado)
 docs/                  especificaciones.md, el trabajo previsto
 ```
 
-Dos ficheros de `pantallas/` no son pantallas, sino piezas que comparten varias:
+Tres ficheros de `pantallas/` no son pantallas, sino piezas que comparten varias:
 `anadir_a_rutina.dart` (el `anadirARutina` que usan la lista del catálogo y la ficha, más el
-`BotonFavorito`) y `copia_seguridad.dart` (el grupo «Datos» de Ajustes, aparte porque es lo único
-de esa pantalla que escribe ficheros y restaura la base entera).
+`BotonFavorito`), `copia_seguridad.dart` (el grupo «Datos» de Ajustes, aparte porque es lo único
+de esa pantalla que escribe ficheros y restaura la base entera) y `musculatura.dart` (el mapa
+muscular, que se incrusta en la sección «Cuerpo» de Progreso y no monta scaffold propio).
 
 Dos pantallas sirven doble destino: `catalogo.dart` es a la vez la pestaña Ejercicios y el modal de
 añadir a una rutina (`abrirAnadirEjercicio`), y `entrenar.dart` es, según su `Modo`, la sesión viva
@@ -86,9 +91,10 @@ o el formulario de siempre.
 implementados**: series independientes, editar y borrar entrenamientos, elegir la fecha, orden,
 notas y RPE, varias rutinas el mismo día, temporizador de descanso, sesión viva, la pantalla de
 Ajustes completa, copia de seguridad, plantillas, favoritos, medidas del cuerpo, 1RM estimado con
-sus récords, resumen semanal con racha y días de calendario pulsables. Queda **D** (mapa muscular).
-Antes de proponer una funcionalidad nueva, mira si ya está ahí especificada — incluye el esquema de
-datos final, el orden de las migraciones y las desviaciones de lo que se implementó.
+sus récords, resumen semanal con racha y días de calendario pulsables. **También el bloque D**
+(mapa muscular), que era el último. **El documento está entero implementado.** Antes de proponer una
+funcionalidad nueva, mira si ya está ahí especificada — incluye el esquema de datos final, el orden
+de las migraciones y las desviaciones de lo que se implementó, que en D son largas y razonadas.
 
 ### Navegación: pestañas con pila propia
 
@@ -105,9 +111,9 @@ gratis el botón atrás, las transiciones de empuje y el gesto de volver desliza
   pestañas.
 
 Dentro de **Progreso** hay un `CupertinoSlidingSegmentedControl` de tres: Resumen · Calendario ·
-Cuerpo. **Con cuatro el texto empieza a apretarse en un móvil estrecho**, así que el mapa muscular
-(bloque D) tendrá que compartir sitio ahí dentro o buscarse otro; la decisión H1 de la
-especificación cerró que no habrá una cuarta pestaña.
+Cuerpo. **Con cuatro el texto empieza a apretarse en un móvil estrecho**, y la decisión H1 de la
+especificación cerró que no habrá una cuarta. Por eso el mapa muscular comparte la sección
+«Cuerpo» con las medidas: se pinta encima de ellas, dentro del mismo scroll.
 
 ### Estado: invalidar, no reconstruir
 
@@ -256,6 +262,54 @@ números, así que `test/metricas_test.dart` lo cubre con datos y fechas escrito
 - **La racha no cuenta la semana en curso.** Si contara, el lunes por la mañana toda racha valdría
   cero. Y tiene suelo en la primera semana registrada, o seguiría contando semanas vacías hacia
   atrás para siempre.
+
+### Mapa muscular: el vocabulario, el color y el dibujo
+
+`datos/musculos.dart` es el segundo módulo puro, con la misma forma que `metricas.dart`: traduce los
+cuatro vocabularios desiguales del dataset (`bodyPart` 10 valores, `target` 19, `muscleGroup` 29,
+`secondaryMuscles` 40) a **21 regiones propias**, y reparte entre ellas el trabajo de cada serie.
+
+- **`bodyPart` no se consulta nunca.** Sus valores se solapan con los de los otros tres (`back` son
+  203 ejercicios, `chest` 163) y atribuirían en bloque y mal.
+- **Los pesos son 1,0 / 0,5 / 0,3** (objetivo, grupo, secundarios) y, si una región recibe por
+  varias vías, **se toma el mayor y no la suma**: si no, los ejercicios bien etiquetados pesarían
+  más solo por estarlo.
+- **El color sale de las series ponderadas, no del volumen en kilos.** En kilos, una serie de
+  sentadilla vale diez veces una de abdominales, que es una propiedad del ejercicio y no del
+  entrenamiento: el mapa saldría siempre con las piernas encendidas y el abdomen apagado. El volumen
+  sí se calcula y se enseña en la hoja del músculo, donde se compara consigo mismo.
+- **`pesoEfectivo = max(peso, 1)`** para que las dominadas no sumen cero. Es exclusivo del mapa: el
+  1RM y el resumen semanal (C16, C17) no lo aplican.
+- **Un test recorre los 1.324 ejercicios** y exige que todo término caiga en una región o en la
+  lista de excluidos, **y que las 21 regiones sean alcanzables**. Sin lo segundo, un término mal
+  escrito pasaría la cobertura y dejaría una región muerta. Si tocas la tabla, mira ese test.
+- **`cardiovascular system` no tiene región, pero sus 29 ejercicios sí reparten** por grupo y
+  secundarios. Un burpee trabaja las piernas.
+
+`datos/geometria.dart` solo importa `dart:ui` y `dart:math`, así que **no conoce `Region`**: va
+parametrizado por la clave. Tres cosas que ya han costado un fallo cada una:
+
+- **El desempate entre regiones solapadas es por área real, no por `getBounds()`.** Casi todas son
+  bilaterales, y el rectángulo que envuelve las dos mitades del pectoral abarca el torso entero.
+- **El toque se prueba trazado a trazado**, no contra el `Path` combinado: reflejar invierte el
+  sentido de giro y el relleno `nonZero` anularía los solapes.
+- **La tolerancia del dedo va en unidades del lienzo, no de pantalla.** Son unas cinco veces más;
+  pasar los 12 px tal cual la deja en nada. Para eso está `Encaje.aLienzoDistancia`.
+
+**El dibujo** (`assets/musculatura.json`, 32 KB) es original de este repositorio y así está
+documentado en `README.md` — es requisito, no formalidad. Son trazados escritos como punto inicial
+más segmentos cúbicos; **no hay parser de SVG** y no conviene añadirlo. Los músculos bilaterales se
+declaran una vez con `"espejo": true` y se reflejan al cargar.
+
+**El JSON no se edita a mano**: se genera con `python3 tool/musculatura.py`, donde cada región es
+una lista de anclas que una spline cerrada convierte en curvas. El script escribe también una previa
+en SVG, que es la única forma de ver si el dibujo sigue pareciendo un cuerpo. Al combinar los trazados de una
+figura se usa `Path.combine(union)`: acumularlos sin más deja el borde de la línea media dentro del
+contorno y se pinta una raya vertical por mitad del cuerpo.
+
+Lo que ningún test puede validar es si el dibujo **parece** un cuerpo. Lo que sí está automatizado
+son los invariantes: toda región dentro de la silueta, ninguna fuera del lienzo, ninguna tapada al
+toque por otra, y la cara declarada igual a la dibujada. Si retocas las formas, eso es lo que avisa.
 
 ### Catálogo de ejercicios
 
