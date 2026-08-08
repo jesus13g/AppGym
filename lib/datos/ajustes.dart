@@ -54,6 +54,22 @@ enum Formula {
   brzycki,
 }
 
+/// Cuánto se arriesga al proponer una progresión.
+///
+/// Vive aquí por el mismo motivo que [Formula]: es el tipo de una preferencia, y
+/// si estuviera en `progresion.dart` este fichero tendría que importar un módulo
+/// que a su vez importa `bd.dart`, que importa este.
+enum Perfil {
+  /// No sube de peso hasta ver el rango completo dos sesiones seguidas.
+  conservador,
+
+  /// Sube un escalón en cuanto el rango se completa.
+  estandar,
+
+  /// Con el rango completo y el esfuerzo bajo, sube dos escalones.
+  agresivo,
+}
+
 /// Brillo de la interfaz.
 enum Tema { sistema, claro, oscuro }
 
@@ -73,6 +89,10 @@ abstract final class Claves {
   static const sesionesPorSemana = 'sesiones_por_semana';
   static const formula1RM = 'formula_1rm';
   static const tema = 'tema';
+  static const progresionActiva = 'progresion_activa';
+  static const repMin = 'rep_min';
+  static const repMax = 'rep_max';
+  static const perfilProgresion = 'perfil_progresion';
 }
 
 /// Pasos de peso que se ofrecen, en la unidad activa.
@@ -95,6 +115,10 @@ class Ajustes {
     this.sesionesPorSemana = 3,
     this.formula = Formula.epley,
     this.tema = Tema.sistema,
+    this.progresionActiva = true,
+    this.repMinGlobal = 8,
+    this.repMaxGlobal = 12,
+    this.perfilProgresion = Perfil.estandar,
   });
 
   /// Interpreta las filas de la tabla. Lo que falte o no se entienda se queda
@@ -158,6 +182,24 @@ class Ajustes {
         'oscuro' => Tema.oscuro,
         _ => Tema.sistema,
       },
+      progresionActiva: (valores[Claves.progresionActiva] ?? '1') == '1',
+      repMinGlobal: entero(
+        Claves.repMin,
+        porDefecto.repMinGlobal,
+        minimo: 1,
+        maximo: 30,
+      ),
+      repMaxGlobal: entero(
+        Claves.repMax,
+        porDefecto.repMaxGlobal,
+        minimo: 1,
+        maximo: 30,
+      ),
+      perfilProgresion: switch (valores[Claves.perfilProgresion]) {
+        'conservador' => Perfil.conservador,
+        'agresivo' => Perfil.agresivo,
+        _ => Perfil.estandar,
+      },
     );
   }
 
@@ -185,6 +227,24 @@ class Ajustes {
 
   final Tema tema;
 
+  /// Interruptor general de las sugerencias de progresión.
+  ///
+  /// Con esto apagado la app se comporta exactamente como antes del bloque J: ni
+  /// la tarjeta de entrenar ni la de resultados enseñan nada, y la sugerencia no
+  /// llega a calcularse.
+  final bool progresionActiva;
+
+  /// Suelo del rango de repeticiones por defecto.
+  ///
+  /// Se llama así, y no `repMin` a secas, porque cada ejercicio puede tener el
+  /// suyo en la columna homónima: esto es el que se usa cuando no lo tiene.
+  final int repMinGlobal;
+
+  /// Tope del rango de repeticiones por defecto.
+  final int repMaxGlobal;
+
+  final Perfil perfilProgresion;
+
   /// Cómo se escribe cada ajuste en la tabla. Es la vuelta de [desdeMapa].
   static String texto(Object valor) => switch (valor) {
     final bool v => v ? '1' : '0',
@@ -197,6 +257,9 @@ class Ajustes {
     Tema.claro => 'claro',
     Tema.oscuro => 'oscuro',
     Tema.sistema => 'sistema',
+    Perfil.conservador => 'conservador',
+    Perfil.estandar => 'estandar',
+    Perfil.agresivo => 'agresivo',
     _ => '$valor',
   };
 

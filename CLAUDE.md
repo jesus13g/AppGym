@@ -12,8 +12,8 @@ flutter pub get
 dart run build_runner build     # genera bd.g.dart; obligatorio tras clonar
 flutter run                     # app en un dispositivo o emulador
 flutter analyze                 # objetivo permanente: 0 issues
-flutter test                    # 291 tests: datos, pantallas, migraciones, copia, ajustes,
-                                #            métricas, músculos y geometría
+flutter test                    # 343 tests: datos, pantallas, migraciones, copia, ajustes,
+                                #            métricas, músculos, geometría y progresiones
 dart format lib test
 flutter build apk --release     # APK local (necesita SDK de Android y Java 17)
 ```
@@ -63,24 +63,28 @@ lib/
 │   ├── metricas.dart  1RM, récords, semana y racha: solo funciones puras
 │   ├── musculos.dart  las 21 regiones del mapa y el reparto del trabajo (puro)
 │   ├── geometria.dart trazados del modelo anatómico y resolución del toque
+│   ├── progresion.dart qué hacer hoy con un ejercicio: doble progresión (puro)
 │   ├── reloj.dart     la hora, en un punto que los tests pueden adelantar
 │   └── formato.dart   fechas, pesos, duraciones y textos
 ├── estado/            providers.dart · descanso.dart (el temporizador)
 ├── tema/              tokens.dart · ui.dart
-└── pantallas/         quince pantallas + tres piezas compartidas
+└── pantallas/         quince pantallas + cinco piezas compartidas
 assets/                ejercicios.es.json (el catálogo) · plantillas.json · musculatura.json
 drift_schemas/         un JSON por versión del esquema, para los tests de migración
 tool/                  musculatura.py, que genera el modelo anatómico
 test/                  datos · pantallas · migraciones · copia · ajustes · plantillas · metricas
-                       musculos · geometria · esquemas/ (generado)
-docs/                  especificaciones.md (hecho) · especificaciones-2.md (previsto)
+                       musculos · geometria · progresion · esquemas/ (generado)
+docs/                  especificaciones.md (hecho) · especificaciones-2.md (J hecho, I y K no)
 ```
 
-Tres ficheros de `pantallas/` no son pantallas, sino piezas que comparten varias:
+Cinco ficheros de `pantallas/` no son pantallas, sino piezas que comparten varias:
 `anadir_a_rutina.dart` (el `anadirARutina` que usan la lista del catálogo y la ficha, más el
 `BotonFavorito`), `copia_seguridad.dart` (el grupo «Datos» de Ajustes, aparte porque es lo único
-de esa pantalla que escribe ficheros y restaura la base entera) y `musculatura.dart` (el mapa
-muscular, que se incrusta en la sección «Cuerpo» de Progreso y no monta scaffold propio).
+de esa pantalla que escribe ficheros y restaura la base entera), `musculatura.dart` (el mapa
+muscular, que se incrusta en la sección «Cuerpo» de Progreso y no monta scaffold propio),
+`sugerencia.dart` (la línea de progresión que pintan la tarjeta de entrenar y la de resultados, con
+la frase de cada motivo) y `opciones_ejercicio.dart` (la hoja de descanso y progresión de un
+ejercicio, que abren la pantalla de entrenar y el detalle de la rutina).
 
 Dos pantallas sirven doble destino: `catalogo.dart` es a la vez la pestaña Ejercicios y el modal de
 añadir a una rutina (`abrirAnadirEjercicio`), y `entrenar.dart` es, según su `Modo`, la sesión viva
@@ -97,17 +101,17 @@ sus récords, resumen semanal con racha, días de calendario pulsables y el mapa
 consulta como el **porqué** de lo que hay: incluye el esquema de datos hasta la v6, el orden de las
 migraciones y las desviaciones de lo que se implementó, que en D son largas y razonadas.
 
-**`docs/especificaciones-2.md` es el trabajo previsto, y nada de él está hecho.** Recoge los tres
-puntos que el anterior dejó fuera de alcance a propósito, en su orden de entrega:
+**`docs/especificaciones-2.md` es el trabajo previsto, y de él solo está hecho J.** Recoge los tres
+puntos que el anterior dejó fuera de alcance a propósito:
 
 - **I — internacionalización de la interfaz** (ARB + `flutter gen-l10n`, español e inglés, el
-  catálogo con índice de búsqueda multilingüe). Va primero porque es un barrido por las quince
-  pantallas: si J y K entran antes, el barrido se hace dos veces.
+  catálogo con índice de búsqueda multilingüe). **Pendiente.** Iba primero porque es un barrido por
+  las quince pantallas; J se entregó antes, así que el barrido incluirá también sus dos piezas.
 - **J — recomendación automática de progresiones** (`datos/progresion.dart`, doble progresión,
-  esquema v7). Módulo puro con la forma de `metricas.dart`.
+  esquema v7). **Hecho**, con sus nueve desviaciones documentadas en J6.
 - **K — sincronización en la nube, cuentas y multidispositivo** (`uuid` + `actualizado` +
-  lápidas, esquema v8, último en escribir gana). El bloque grande, y el único con un servicio
-  externo detrás.
+  lápidas, esquema v8, último en escribir gana). **Pendiente.** El bloque grande, y el único con un
+  servicio externo detrás.
 
 Antes de proponer una funcionalidad nueva, mira si ya está especificada en uno de los dos.
 
@@ -166,7 +170,8 @@ así que —a diferencia de SQLAlchemy— una fila leída se puede pasar a la in
 
 ```
 rutinas              id, nombre (único), color
-ejercicios           id, idRutina, idCatalogo, nombre, descripcion, orden, descansoSeg
+ejercicios           id, idRutina, idCatalogo, nombre, descripcion, orden, descansoSeg,
+                     repMin, repMax, incrementoKg, estrategia (las cuatro: null = «global»)
 catalogo_ejercicios  el dataset, de solo lectura, con índices en busqueda/bodyPart/
                      equipment/target
 entrenamientos       id, idRutina, fecha, nota, duracionSeg
@@ -191,7 +196,7 @@ resueltos.**
 `PRAGMA foreign_keys = ON` se activa en `beforeOpen`. Sin él SQLite ignora los `ON DELETE CASCADE` y
 borrar una rutina dejaría sus series huérfanas.
 
-**Migraciones:** `schemaVersion` va por 6. Todo cambio de esquema exige subirlo y añadir el paso en
+**Migraciones:** `schemaVersion` va por 7. Todo cambio de esquema exige subirlo y añadir el paso en
 `MigrationStrategy`, o las bases de datos existentes se romperán. El flujo completo, tras tocar una
 tabla:
 
@@ -222,17 +227,21 @@ claves, los valores por defecto y la conversión de unidades. `bd.ajustes()` sol
 `Ajustes.desdeMapa` se traga sin quejarse un valor con basura o fuera de rango —se queda con el de
 fábrica—, porque una clave corrupta no puede impedir que la app arranque.
 
-`bd.dart` **reexporta** `Ajustes`, `EscalaEsfuerzo`, `Tema` y `Unidad`, así que las pantallas los
-tienen con el `import '../datos/bd.dart'` que ya hacían. Las **claves** (`Claves.unidad`…) y los
-valores admitidos (`pasosPeso`, `descansos`) no se reexportan: eso solo lo necesita la pantalla de
-Ajustes, y va por `import '../datos/ajustes.dart'`.
+`bd.dart` **reexporta** `Ajustes`, `EscalaEsfuerzo`, `Formula`, `Perfil`, `Tema` y `Unidad`, así que
+las pantallas los tienen con el `import '../datos/bd.dart'` que ya hacían. Las **claves**
+(`Claves.unidad`…) y los valores admitidos (`pasosPeso`, `descansos`) no se reexportan: eso solo lo
+necesitan las pantallas que los ofrecen, y va por `import '../datos/ajustes.dart'`. También sale por
+ahí `Value` de drift, que lo pide `fijarProgresionEjercicio`: es el **único** símbolo de drift que
+asoma fuera de `datos/`.
 
 **La sesión en curso se guarda como JSON**, no normalizada (`datos/borrador.dart` ↔ tabla
 `sesiones_activas`): es un dato efímero, se reescribe entero en cada cambio y nadie lo consulta por
 partes. Se escribe con *debounce* de 2 s para no tocar disco en cada toque de un selector, y al
 confirmar el entrenamiento la inserción y el borrado del borrador van en la **misma transacción**
 (`insertarEntrenamiento(descartarBorrador: true)`); si no, habría un instante en el que reabrir la
-app ofrecería continuar una sesión ya guardada.
+app ofrecería continuar una sesión ya guardada. Ahí viven también las sugerencias descartadas: son
+un dato de la sesión en curso, no una preferencia, y el formato tolera que un borrador viejo no
+traiga la clave.
 
 **Las medidas se guardan a medianoche.** `registrarMedida` normaliza la fecha antes de escribir: es
 lo que hace que la clave única `(fecha, tipo)` signifique de verdad «una por día». Y su `onConflict`
@@ -255,9 +264,10 @@ en cuanto hubiera un favorito guardado. Hay un test que lo fija.
 
 ### Métricas: la lógica fuera de la base y fuera de la pantalla
 
-`datos/metricas.dart` es el único módulo de la app que **no importa Flutter ni escribe en la base**:
-1RM estimado, volumen, mejor serie, récords, reparto por semanas y racha. Recibe listas y devuelve
-números, así que `test/metricas_test.dart` lo cubre con datos y fechas escritos a mano.
+`datos/metricas.dart` es el primero de los tres módulos que **no importan Flutter ni escriben en la
+base** —los otros son `musculos.dart` y `progresion.dart`—: 1RM estimado, volumen, mejor serie,
+récords, reparto por semanas y racha. Recibe listas y devuelve números, así que
+`test/metricas_test.dart` lo cubre con datos y fechas escritos a mano.
 
 - **Los récords se calculan, no se almacenan.** Guardarlos abriría la puerta a que quedaran
   desincronizados al editar o borrar una sesión; recorrer el histórico en memoria es instantáneo con
@@ -294,7 +304,8 @@ cuatro vocabularios desiguales del dataset (`bodyPart` 10 valores, `target` 19, 
   entrenamiento: el mapa saldría siempre con las piernas encendidas y el abdomen apagado. El volumen
   sí se calcula y se enseña en la hoja del músculo, donde se compara consigo mismo.
 - **`pesoEfectivo = max(peso, 1)`** para que las dominadas no sumen cero. Es exclusivo del mapa: el
-  1RM y el resumen semanal (C16, C17) no lo aplican.
+  1RM, el resumen semanal (C16, C17) y las progresiones (J1) no lo aplican. En una sugerencia de
+  carga significaría proponer «sube de 1 kg a 3,5 kg» en un ejercicio de peso corporal.
 - **Un test recorre los 1.324 ejercicios** y exige que todo término caiga en una región o en la
   lista de excluidos, **y que las 21 regiones sean alcanzables**. Sin lo segundo, un término mal
   escrito pasaría la cobertura y dejaría una región muerta. Si tocas la tabla, mira ese test.
@@ -325,6 +336,41 @@ contorno y se pinta una raya vertical por mitad del cuerpo.
 Lo que ningún test puede validar es si el dibujo **parece** un cuerpo. Lo que sí está automatizado
 son los invariantes: toda región dentro de la silueta, ninguna fuera del lienzo, ninguna tapada al
 toque por otra, y la cara declarada igual a la dibujada. Si retocas las formas, eso es lo que avisa.
+
+### Progresiones: proponer sin decidir
+
+`datos/progresion.dart` es el tercer módulo puro, con la misma forma que los otros dos. Implementa
+la **doble progresión**: se sube de repeticiones dentro de un rango sesión a sesión y, cuando todas
+las series efectivas llegan al tope, se sube el peso un escalón y se vuelve al suelo del rango.
+
+- **Devolver `null` es la mitad del diseño.** Sin dos sesiones previas, en cardio o con la
+  progresión desactivada no hay sugerencia y **la interfaz no enseña nada**. Una sugerencia
+  inventada el primer día vale menos que ninguna.
+- **La app propone; nunca aplica.** No hay ajuste que lo permita: la app no sabe si has dormido mal,
+  si vienes de una lesión o si la última sesión la cortaste a la mitad. «Aplicar» reescribe los
+  valores del formulario y no guarda nada.
+- **No añade consultas.** `sugerenciaProvider` compone `resumenSesionesEjercicioProvider`,
+  `ultimasSeriesProvider` y `ajustesProvider`, que las pantallas ya piden. La única consulta nueva
+  del bloque es `resumenSesionesTodos`, para los estancados del resumen semanal, y es el mismo
+  `GROUP BY` sin el filtro de ejercicio.
+- **El escalón de peso vive en dos unidades y hay que tenerlo presente.** `ajustes.pasoPeso` está en
+  la unidad activa (alimenta el selector de peso) y la columna `incrementoKg` en kilos. La
+  conversión se hace **una sola vez**, en `ConfiguracionProgresion.resolver`, y es lo que hace que
+  el peso sugerido salga redondo también en libras. Hay un test que lo fija.
+- **El esfuerzo entra solo si el usuario lo registra.** El RPE está apagado de fábrica, así que el
+  modelo funciona sin él: si dependiera del RPE, la funcionalidad no existiría para la mayoría. Por
+  lo mismo, no usarlo **no** marca la sugerencia como poco fiable; lo que la marca es tener menos de
+  tres sesiones, o pedir el esfuerzo y no haberlo anotado.
+- **El estancamiento se calcula, no se guarda**, por el mismo motivo que los récords en C16: al
+  editar o borrar una sesión quedaría desincronizado.
+- **El motivo viaja como enumerado, no como texto.** La frase se compone en
+  `pantallas/sugerencia.dart`. Es lo que permitirá traducirlo (bloque I) sin tocar la lógica: si
+  añades un motivo, la frase va ahí y el `switch` exhaustivo te avisa.
+- **La configuración se resuelve por capas**: los ajustes globales, luego las cuatro columnas del
+  ejercicio (`null` = «como el global»), y por encima lo que imponen el propio ejercicio y su
+  historial —cardio nunca sugiere, y el peso corporal degrada a solo repeticiones con el rango
+  ampliado a 5–15—. `fijarProgresionEjercicio` toma `Value<T>` y no `T?` justamente porque aquí
+  `null` significa algo y hay que distinguirlo de «no toques esa columna».
 
 ### Catálogo de ejercicios
 
@@ -375,14 +421,14 @@ literales salvo en `coloresRutina`, que identifica rutinas y debe ser estable en
 
 En `ui.dart` solo está lo que Flutter no trae. El inventario completo es `estilo`, `TituloGrande`,
 `Grupo`, `Pildora`, `PuntoColor`, `Miniatura`, `BotonPrincipal`, `SelectorEnLinea`, `EstadoVacio`,
-`Cargando`, `BarraProgreso`, `BarraDescanso`, `CheckSerie`, `DeslizarParaBorrar`, `barra`,
-`selectorFecha`, `elegirEnHoja`, `dialogoTexto`, `dialogoConfirmar` y `aviso`. Para lo demás usa el
+`Cargando`, `BarraProgreso`, `BarraDescanso`, `CheckSerie`, `DeslizarParaBorrar`, `Sugerencia`,
+`barra`, `selectorFecha`, `elegirEnHoja`, `dialogoTexto`, `dialogoConfirmar` y `aviso`. Para lo demás usa el
 widget del framework: `CupertinoListSection.insetGrouped` (envuelto en `ui.Grupo`),
 `CupertinoListTile`, `CupertinoSearchTextField`, `CupertinoSlidingSegmentedControl`.
 
 `elegirEnHoja<T>` devuelve `(T,)?`, un registro de un elemento, **no `T?`**: hace falta para
 distinguir «cancelar» (`null`) de «elegir nada» (`(null,)`), que es un valor legítimo — el descanso
-«como el global» o el filtro «todos» del catálogo.
+«como el global», el rango de progresión propio o el filtro «todos» del catálogo.
 
 **No importes `material.dart`.** Si necesitas algo que solo existe en Material (`BarraProgreso` nació
 así, sustituyendo a `LinearProgressIndicator`; `ReorderableListView` se sustituye por

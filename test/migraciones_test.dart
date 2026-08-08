@@ -28,6 +28,7 @@ import 'esquemas/schema_v2.dart' as v2;
 import 'esquemas/schema_v3.dart' as v3;
 import 'esquemas/schema_v4.dart' as v4;
 import 'esquemas/schema_v5.dart' as v5;
+import 'esquemas/schema_v6.dart' as v6;
 
 /// Segundos desde época, que es como drift guarda las fechas aquí.
 int _epoca(DateTime fecha) => fecha.millisecondsSinceEpoch ~/ 1000;
@@ -274,6 +275,43 @@ void main() {
     expect((await bd.vistosRecientes()).single.id, '0043');
     expect((await bd.ultimaMedida('peso'))!.valor, 78.4);
     expect((await bd.buscarCatalogo(target: 'glutes')), hasLength(1));
+
+    await bd.close();
+  });
+
+  test('v6 → última: la progresión por ejercicio entra vacía', () async {
+    final esquema = await verificador.schemaAt(6);
+
+    final vieja = v6.DatabaseAtV6(esquema.newConnection());
+    await vieja.customStatement(
+      "INSERT INTO rutinas (id, nombre, color) VALUES (1, 'Empuje', '#0A84FF')",
+    );
+    await vieja.customStatement(
+      'INSERT INTO ejercicios (id, id_rutina, nombre, orden, descanso_seg) '
+      "VALUES (1, 1, 'Press banca', 0, 120)",
+    );
+    await vieja.close();
+
+    final bd = AppBD(esquema.newConnection());
+    await verificador.migrateAndValidate(bd, bd.schemaVersion);
+
+    // Las cuatro columnas nuevas quedan a null, que significa «como el global»:
+    // es el comportamiento correcto para todo lo ya creado.
+    final ejercicio = (await bd.ejerciciosDeRutina(1)).single.ejercicio;
+    expect(ejercicio.descansoSeg, 120);
+    expect(ejercicio.repMin, isNull);
+    expect(ejercicio.repMax, isNull);
+    expect(ejercicio.incrementoKg, isNull);
+    expect(ejercicio.estrategia, isNull);
+
+    // Y se pueden escribir una a una sin tocar las demás.
+    await bd.fijarProgresionEjercicio(1, repMin: const Value(5));
+    await bd.fijarProgresionEjercicio(1, incrementoKg: const Value(1.25));
+
+    final configurado = (await bd.ejerciciosDeRutina(1)).single.ejercicio;
+    expect(configurado.repMin, 5);
+    expect(configurado.incrementoKg, 1.25);
+    expect(configurado.repMax, isNull);
 
     await bd.close();
   });

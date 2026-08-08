@@ -25,7 +25,15 @@ import 'respaldo.dart';
 // Los tipos de las preferencias se reexportan para que las pantallas sigan
 // pidiéndolos donde ya los pedían. Las claves y los valores admitidos viven en
 // `ajustes.dart` y solo los necesita la pantalla de Ajustes.
-export 'ajustes.dart' show Ajustes, EscalaEsfuerzo, Formula, Tema, Unidad;
+export 'ajustes.dart'
+    show Ajustes, EscalaEsfuerzo, Formula, Perfil, Tema, Unidad;
+
+/// `Value` sale por aquí para que las pantallas no tengan que importar drift.
+///
+/// Lo pide `fijarProgresionEjercicio`, donde `null` es un valor con significado
+/// —«como el global»— y hace falta distinguirlo de «esta llamada no toca esa
+/// columna». Es el único símbolo de drift que asoma fuera de `datos/`.
+export 'package:drift/drift.dart' show Value;
 
 part 'bd.g.dart';
 
@@ -249,6 +257,28 @@ class Ejercicios extends Table {
   /// Los descansos de sentadilla y de curl de bíceps no son iguales, y obligar
   /// a que lo sean deja el temporizador inservible para la mitad de la rutina.
   IntColumn get descansoSeg => integer().nullable()();
+
+  /// Suelo del rango de repeticiones. Nulo: el de los ajustes.
+  ///
+  /// 8–12 va bien en accesorios y es absurdo en un peso muerto pesado o en
+  /// gemelos, así que el rango global se puede sobrescribir aquí.
+  IntColumn get repMin => integer().nullable()();
+
+  /// Tope del rango de repeticiones. Nulo: el de los ajustes.
+  IntColumn get repMax => integer().nullable()();
+
+  /// Escalón de peso propio, **en kilogramos**. Nulo: el de los ajustes.
+  ///
+  /// Ojo con la unidad: `ajustes.pasoPeso` está en la unidad activa y esto no.
+  /// Aquí se guardan kilos porque es lo que se guarda en `serie.peso`.
+  RealColumn get incrementoKg => real().nullable()();
+
+  /// Estrategia de progresión, por el índice de `progresion.Estrategia`.
+  ///
+  /// Nulo es «la global»; 0 desactivada, 1 doble progresión, 2 solo
+  /// repeticiones. Se guarda el índice y no el nombre para que la columna sea
+  /// un entero como las demás preferencias por ejercicio.
+  IntColumn get estrategia => integer().nullable()();
 }
 
 /// Una serie registrada: una fila por serie hecha.
@@ -335,6 +365,7 @@ class ResumenSesionEjercicio {
     required this.idEntrenamiento,
     required this.fecha,
     required this.nSeries,
+    required this.repeticiones,
     required this.volumen,
     required this.pesoMaximo,
     required this.mejor1RM,
@@ -344,6 +375,13 @@ class ResumenSesionEjercicio {
   final int idEntrenamiento;
   final DateTime fecha;
   final int nSeries;
+
+  /// Suma de las repeticiones de todas las series efectivas.
+  ///
+  /// No es una cifra que se pinte: la usa `progresion.dart` para saber si la
+  /// sesión completó el rango y si el ejercicio lleva tres sin mejorar. Sale del
+  /// mismo `GROUP BY` que las demás, así que no cuesta una consulta.
+  final int repeticiones;
 
   /// Suma de peso × repeticiones de todas las series efectivas.
   final double volumen;
@@ -364,6 +402,27 @@ class ResumenSesionEjercicio {
 
   /// Si el [mejor1RM] de la sesión sale de una serie de las de fiar.
   bool get fiable => mejor1RMFiable != null && mejor1RMFiable == mejor1RM;
+}
+
+/// El historial por sesión de **un** ejercicio, con su nombre y su rutina.
+///
+/// Existe para poder traer el de todos los ejercicios en una sola consulta
+/// ([AppBD.resumenSesionesTodos]) sin perder de vista a quién pertenece cada
+/// lista.
+class SesionesDeEjercicio {
+  const SesionesDeEjercicio({
+    required this.idRutina,
+    required this.idEjercicio,
+    required this.nombre,
+    required this.sesiones,
+  });
+
+  final int idRutina;
+  final int idEjercicio;
+  final String nombre;
+
+  /// De la más antigua a la más reciente, como las devuelve la consulta.
+  final List<ResumenSesionEjercicio> sesiones;
 }
 
 /// Una sesión vista desde el calendario.
@@ -687,7 +746,7 @@ class AppBD extends _$AppBD {
       );
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -701,6 +760,7 @@ class AppBD extends _$AppBD {
       from3To4: _de3A4,
       from4To5: _de4A5,
       from5To6: _de5A6,
+      from6To7: _de6A7,
     ),
     beforeOpen: (details) async {
       // Sin esto SQLite ignora las claves foráneas y los ON DELETE CASCADE
@@ -772,6 +832,18 @@ class AppBD extends _$AppBD {
     await m.createTable(esquema.vistos);
     await m.createTable(esquema.medidas);
     await m.createIndex(esquema.idxCatalogoTarget);
+  }
+
+  /// v6 → v7: la configuración de progresión por ejercicio.
+  ///
+  /// La migración más inocua del proyecto: cuatro columnas anulables y nada
+  /// que transformar. Las filas existentes quedan a `null`, que significa «como
+  /// el global» y es el comportamiento correcto para todo lo ya creado.
+  Future<void> _de6A7(Migrator m, Schema7 esquema) async {
+    await m.addColumn(esquema.ejercicios, esquema.ejercicios.repMin);
+    await m.addColumn(esquema.ejercicios, esquema.ejercicios.repMax);
+    await m.addColumn(esquema.ejercicios, esquema.ejercicios.incrementoKg);
+    await m.addColumn(esquema.ejercicios, esquema.ejercicios.estrategia);
   }
 
   /// v2 → v3: los ejercicios ganan su posición dentro de la rutina.
@@ -852,13 +924,22 @@ class AppBD extends _$AppBD {
     );
     if (copia == null) return null;
 
-    // El descanso propio de cada ejercicio viaja con él: forma parte de cómo se
-    // entrena esa rutina tanto como el orden.
+    // El descanso propio de cada ejercicio y su progresión viajan con él: forman
+    // parte de cómo se entrena esa rutina tanto como el orden.
     final destino = await ejerciciosDeRutina(copia);
     for (final (indice, e) in destino.indexed) {
       if (indice >= fuente.length) break;
-      final descanso = fuente[indice].ejercicio.descansoSeg;
-      if (descanso != null) await fijarDescansoEjercicio(e.id, descanso);
+      final original = fuente[indice].ejercicio;
+      if (original.descansoSeg != null) {
+        await fijarDescansoEjercicio(e.id, original.descansoSeg);
+      }
+      await fijarProgresionEjercicio(
+        e.id,
+        repMin: Value(original.repMin),
+        repMax: Value(original.repMax),
+        incrementoKg: Value(original.incrementoKg),
+        estrategia: Value(original.estrategia),
+      );
     }
     return copia;
   }
@@ -1589,6 +1670,7 @@ class AppBD extends _$AppBD {
       SELECT e.id            AS id,
              e.fecha         AS fecha,
              COUNT(*)        AS n_series,
+             SUM(s.repeticiones)          AS repeticiones,
              SUM(s.peso * s.repeticiones) AS volumen,
              MAX(s.peso)                  AS maximo,
              MAX($estimado)               AS mejor_1rm,
@@ -1610,12 +1692,75 @@ class AppBD extends _$AppBD {
           idEntrenamiento: f.read<int>('id'),
           fecha: f.read<DateTime>('fecha'),
           nSeries: f.read<int>('n_series'),
+          repeticiones: f.read<int>('repeticiones'),
           volumen: f.read<double>('volumen'),
           pesoMaximo: f.read<double>('maximo'),
           mejor1RM: f.read<double>('mejor_1rm'),
           mejor1RMFiable: f.read<double?>('mejor_1rm_fiable'),
         ),
     ];
+  }
+
+  /// El mismo agregado por sesión, pero de **todos** los ejercicios a la vez.
+  ///
+  /// Es lo que alimenta la línea de ejercicios estancados del resumen semanal.
+  /// Va en una sola consulta y no en una por ejercicio: la detección la hace
+  /// `progresion.estancados` sobre lo que esto devuelve, igual que los récords
+  /// se calculan sobre el historial que la pantalla ya tiene.
+  Future<List<SesionesDeEjercicio>> resumenSesionesTodos({
+    Formula formula = Formula.epley,
+  }) async {
+    final estimado = _expresion1RM(formula, 's');
+    final filas = await customSelect(
+      '''
+      SELECT j.id            AS id_ejercicio,
+             j.id_rutina     AS id_rutina,
+             j.nombre        AS nombre,
+             e.id            AS id,
+             e.fecha         AS fecha,
+             COUNT(*)        AS n_series,
+             SUM(s.repeticiones)          AS repeticiones,
+             SUM(s.peso * s.repeticiones) AS volumen,
+             MAX(s.peso)                  AS maximo,
+             MAX($estimado)               AS mejor_1rm,
+             MAX(CASE WHEN s.repeticiones <= $maxRepeticionesFiables
+                      THEN $estimado END) AS mejor_1rm_fiable
+      FROM serie s
+      JOIN entrenamientos e ON e.id = s.id_entrenamiento
+      JOIN ejercicios j     ON j.id = s.id_ejercicio
+      WHERE s.calentamiento = 0
+      GROUP BY j.id, e.id
+      ORDER BY j.id, e.fecha, e.id
+      ''',
+      readsFrom: {seriesTabla, entrenamientos, ejercicios},
+    ).get();
+
+    final porEjercicio = <int, SesionesDeEjercicio>{};
+    for (final f in filas) {
+      final idEjercicio = f.read<int>('id_ejercicio');
+      final grupo = porEjercicio.putIfAbsent(
+        idEjercicio,
+        () => SesionesDeEjercicio(
+          idRutina: f.read<int>('id_rutina'),
+          idEjercicio: idEjercicio,
+          nombre: f.read<String>('nombre'),
+          sesiones: [],
+        ),
+      );
+      grupo.sesiones.add(
+        ResumenSesionEjercicio(
+          idEntrenamiento: f.read<int>('id'),
+          fecha: f.read<DateTime>('fecha'),
+          nSeries: f.read<int>('n_series'),
+          repeticiones: f.read<int>('repeticiones'),
+          volumen: f.read<double>('volumen'),
+          pesoMaximo: f.read<double>('maximo'),
+          mejor1RM: f.read<double>('mejor_1rm'),
+          mejor1RMFiable: f.read<double?>('mejor_1rm_fiable'),
+        ),
+      );
+    }
+    return porEjercicio.values.toList();
   }
 
   /// Series de la **última sesión** de un ejercicio, para precargar el registro.
@@ -1940,13 +2085,35 @@ class AppBD extends _$AppBD {
 
   Future<void> descartarSesionActiva() => delete(sesionesActivas).go();
 
-  // ── Descanso por ejercicio ─────────────────────────────────────────────────
+  // ── Descanso y progresión por ejercicio ────────────────────────────────────
 
   /// Fija el descanso propio de un ejercicio. `null` vuelve al valor global.
   Future<void> fijarDescansoEjercicio(int idEjercicio, int? segundos) =>
       (update(ejercicios)..where((e) => e.id.equals(idEjercicio))).write(
         EjerciciosCompanion(descansoSeg: Value(segundos)),
       );
+
+  /// Fija la configuración de progresión propia de un ejercicio.
+  ///
+  /// Los parámetros son `Value<T>` y no `T?` a propósito: aquí `null` es un
+  /// valor con significado —«como el global»— y hace falta poder distinguirlo de
+  /// «esta llamada no toca esa columna». `Value.absent()` es lo segundo, que es
+  /// además el valor por defecto, así que cada fila de la hoja de opciones
+  /// escribe solo la suya.
+  Future<void> fijarProgresionEjercicio(
+    int idEjercicio, {
+    Value<int?> repMin = const Value.absent(),
+    Value<int?> repMax = const Value.absent(),
+    Value<double?> incrementoKg = const Value.absent(),
+    Value<int?> estrategia = const Value.absent(),
+  }) => (update(ejercicios)..where((e) => e.id.equals(idEjercicio))).write(
+    EjerciciosCompanion(
+      repMin: repMin,
+      repMax: repMax,
+      incrementoKg: incrementoKg,
+      estrategia: estrategia,
+    ),
+  );
 
   /// Sesiones de cada día dentro del rango pedido, en orden.
   ///
@@ -2185,6 +2352,10 @@ class AppBD extends _$AppBD {
     String? idCatalogo,
     String? descripcion,
     int? descansoSeg,
+    int? repMin,
+    int? repMax,
+    double? incrementoKg,
+    int? estrategia,
   }) => into(ejercicios).insert(
     EjerciciosCompanion.insert(
       idRutina: idRutina,
@@ -2193,6 +2364,10 @@ class AppBD extends _$AppBD {
       idCatalogo: Value(idCatalogo),
       descripcion: Value(descripcion),
       descansoSeg: Value(descansoSeg),
+      repMin: Value(repMin),
+      repMax: Value(repMax),
+      incrementoKg: Value(incrementoKg),
+      estrategia: Value(estrategia),
     ),
   );
 

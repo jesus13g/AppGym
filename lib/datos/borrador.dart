@@ -22,12 +22,23 @@ typedef SerieEnCurso = ({ValoresSerie valores, bool hecha});
 
 /// Lo que hay que recordar de un entrenamiento a medias.
 class Borrador {
-  const Borrador({required this.series, this.nota = ''});
+  const Borrador({
+    required this.series,
+    this.nota = '',
+    this.descartadas = const {},
+  });
 
   /// Id de ejercicio -> sus series, en orden.
   final Map<int, List<SerieEnCurso>> series;
 
   final String nota;
+
+  /// Ejercicios cuya sugerencia de progresión se ha descartado hoy.
+  ///
+  /// Vive aquí y no en una tabla a propósito: es un dato efímero de la sesión en
+  /// curso, que es exactamente lo que esta tabla existe para guardar. Descartada
+  /// no vuelve en esta sesión, y vuelve a aparecer en la siguiente.
+  final Set<int> descartadas;
 
   /// Series ya marcadas y series totales.
   (int, int) get progreso {
@@ -42,6 +53,7 @@ class Borrador {
 
   String aJson() => jsonEncode({
     'nota': nota,
+    'descartadas': descartadas.toList(),
     'ejercicios': {
       for (final entrada in series.entries)
         '${entrada.key}': [
@@ -77,6 +89,12 @@ class Borrador {
 
     return Borrador(
       nota: cargado['nota'] as String? ?? '',
+      // Un borrador escrito antes de que existieran las sugerencias no trae esta
+      // clave, y sale vacía: no hay nada que versionar.
+      descartadas: {
+        for (final id in (cargado['descartadas'] as List<dynamic>? ?? const []))
+          ?int.tryParse('$id'),
+      },
       series: {
         for (final entrada in ejercicios.entries)
           ?int.tryParse('${entrada.key}'): [

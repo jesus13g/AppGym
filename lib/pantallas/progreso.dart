@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../datos/bd.dart';
 import '../datos/formato.dart' as formato;
 import '../datos/metricas.dart' as metricas;
+import '../datos/progresion.dart' as progresion;
 import '../datos/reloj.dart' as reloj;
 import '../estado/providers.dart';
 import '../tema/tokens.dart';
@@ -19,8 +20,10 @@ import '../tema/ui.dart' as ui;
 import 'entrenar.dart';
 import 'medidas.dart';
 import 'musculatura.dart';
+import 'resultado_ejercicio.dart';
 import 'resultado_rutina.dart';
 import 'sesion.dart';
+import 'sugerencia.dart';
 
 class PantallaProgreso extends ConsumerStatefulWidget {
   const PantallaProgreso({super.key});
@@ -125,6 +128,7 @@ class _Resumen extends ConsumerWidget {
         return Column(
           children: [
             const _Semana(),
+            const _Estancados(),
             ui.Grupo(
               cabecera: 'Rutinas entrenadas',
               pie:
@@ -155,6 +159,96 @@ class _Resumen extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+}
+
+// ── J4: los ejercicios estancados ────────────────────────────────────────────
+
+/// Una línea cuando hay ejercicios que llevan tres sesiones sin mejorar.
+///
+/// Es información agregada que hasta ahora nadie veía y que sale de datos que ya
+/// están: el estancamiento no se guarda, se recorre. Sin ninguno, la línea no
+/// aparece — nadie necesita que le digan que va bien.
+class _Estancados extends ConsumerWidget {
+  const _Estancados();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lista = ref.watch(estancadosProvider).value ?? const [];
+    if (lista.isEmpty) return const SizedBox.shrink();
+
+    return ui.Grupo(
+      filas: [
+        CupertinoListTile(
+          backgroundColor: context.tarjeta,
+          leading: Icon(
+            CupertinoIcons.exclamationmark_circle,
+            color: context.destructivo,
+          ),
+          title: Text(
+            lista.length == 1
+                ? '1 ejercicio estancado'
+                : '${lista.length} ejercicios estancados',
+            style: ui.estilo(context),
+          ),
+          subtitle: Text(
+            'Sin mejorar peso, repeticiones ni volumen',
+            style: ui.estilo(
+              context,
+              size: t.footnote,
+              color: context.textoSec,
+            ),
+          ),
+          trailing: const CupertinoListTileChevron(),
+          onTap: () => _hoja(context, lista),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _hoja(
+    BuildContext context,
+    List<progresion.EjercicioEstancado> lista,
+  ) async {
+    final elegido = await showCupertinoModalPopup<progresion.EjercicioEstancado>(
+      context: context,
+      builder: (hoja) => CupertinoActionSheet(
+        title: const Text('Ejercicios estancados'),
+        message: const Text(avisoDescarga),
+        actions: [
+          for (final e in lista)
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.pop(hoja, e),
+              child: Column(
+                children: [
+                  Text(e.nombre),
+                  Text(
+                    '${formato.plural(e.sesionesSinMejorar, 'sesión', 'sesiones')} '
+                    '· última ${formato.fechaCorta(e.ultimaFecha)}',
+                    style: ui.estilo(
+                      hoja,
+                      size: t.footnote,
+                      color: hoja.textoSec,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.pop(hoja),
+          child: const Text('Cerrar'),
+        ),
+      ),
+    );
+
+    if (elegido == null || !context.mounted) return;
+    await abrirResultadoEjercicio(
+      context,
+      elegido.idRutina,
+      elegido.idEjercicio,
     );
   }
 }

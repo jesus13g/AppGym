@@ -19,6 +19,7 @@ import '../datos/bd.dart';
 import '../datos/geometria.dart';
 import '../datos/media.dart';
 import '../datos/musculos.dart';
+import '../datos/progresion.dart';
 import '../datos/reloj.dart' as reloj;
 import '../datos/semilla.dart';
 
@@ -194,6 +195,59 @@ final entrenamientosPorDiaProvider =
           );
     });
 
+// ── Progresión ───────────────────────────────────────────────────────────────
+
+/// Qué hacer hoy con un ejercicio, o `null` si no hay nada que decir.
+///
+/// No añade ninguna consulta: compone los tres providers que la pantalla ya pide
+/// —el historial por sesión, las series de la última y los ajustes— y le pasa el
+/// resultado a `progresion.sugerir`, que es una función pura. Riverpod lo cachea
+/// y se invalida al guardar una sesión, que es cuando cambia.
+final sugerenciaProvider = FutureProvider.family<Sugerencia?, ClaveSeries>((
+  ref,
+  clave,
+) async {
+  final ajustes = await ref.watch(ajustesProvider.future);
+  if (!ajustes.progresionActiva) return null;
+
+  final ejercicio = await ref.watch(
+    ejercicioProvider(clave.idEjercicio).future,
+  );
+  if (ejercicio == null) return null;
+
+  final historial = await ref.watch(
+    resumenSesionesEjercicioProvider(clave).future,
+  );
+  final ultimas = await ref.watch(
+    ultimasSeriesProvider(clave.idEjercicio).future,
+  );
+
+  return sugerir(
+    historial,
+    ultimas,
+    ConfiguracionProgresion.resolver(
+      ejercicio,
+      ajustes,
+      pesoCorporal: esDePesoCorporal(historial, ultimas),
+    ),
+  );
+});
+
+/// Los ejercicios estancados, para la línea del resumen semanal.
+///
+/// Una sola consulta para toda la app; el reparto y la detección los hace
+/// `progresion.estancados`. Como los récords, el estancamiento **no se guarda**:
+/// editar o borrar una sesión lo dejaría desincronizado.
+final estancadosProvider = FutureProvider<List<EjercicioEstancado>>((
+  ref,
+) async {
+  final ajustes = await ref.watch(ajustesProvider.future);
+  if (!ajustes.progresionActiva) return const [];
+  return estancados(
+    await ref.watch(bdProvider).resumenSesionesTodos(formula: ajustes.formula),
+  );
+});
+
 // ── Sesiones ─────────────────────────────────────────────────────────────────
 
 final historialRutinaProvider = FutureProvider.family<List<ResumenSesion>, int>(
@@ -294,6 +348,11 @@ void invalidarRutina(WidgetRef ref, int idRutina) {
   ref.invalidate(estadisticasRutinaProvider(idRutina));
   ref.invalidate(idsCatalogoEnRutinaProvider(idRutina));
   ref.invalidate(rutinaProvider(idRutina));
+  // La configuración de progresión vive en `ejercicios`, así que cambiarla es
+  // cambiar la rutina: sin esto, la hoja de opciones se cerraría y la tarjeta
+  // seguiría proponiendo con el rango viejo.
+  ref.invalidate(sugerenciaProvider);
+  ref.invalidate(estancadosProvider);
   invalidarRutinas(ref);
 }
 
@@ -304,6 +363,10 @@ void invalidarEntrenamientos(WidgetRef ref, int idRutina) {
   ref.invalidate(resumenSesionesEjercicioProvider);
   ref.invalidate(sesionesRecientesProvider);
   ref.invalidate(ultimasSeriesProvider);
+  // Guardar una sesión cambia la sugerencia de la siguiente, que es el caso de
+  // uso central de todo el bloque.
+  ref.invalidate(sugerenciaProvider);
+  ref.invalidate(estancadosProvider);
   // Un entrenamiento nuevo cambia el mapa muscular.
   ref.invalidate(trabajoMuscularProvider);
   // El historial y el detalle de sesión son fáciles de olvidar aquí, y dejarlos
@@ -356,6 +419,8 @@ void invalidarTodo(WidgetRef ref) {
   ref.invalidate(sesionProvider);
   ref.invalidate(recordsSesionProvider);
   ref.invalidate(sesionActivaProvider);
+  ref.invalidate(sugerenciaProvider);
+  ref.invalidate(estancadosProvider);
   // El mapa muscular sí; el dibujo que lo pinta no, que sale de un asset y no
   // cambia nunca.
   ref.invalidate(trabajoMuscularProvider);

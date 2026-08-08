@@ -10,13 +10,15 @@
 > con el motivo por el que se aplazaron; cada bloque de aquí empieza recordando ese
 > motivo y diciendo qué ha cambiado para que deje de valer.
 >
-> Escrito sobre el código actual: **Flutter 3.44.8 / Dart 3.12.2**, `drift` sobre SQLite
-> (`schemaVersion` 6), `Riverpod` para el estado, interfaz **solo Cupertino**, catálogo de
-> 1.324 ejercicios, nueve dependencias, 291 tests y `flutter analyze` en 0 issues. Ver
-> `CLAUDE.md` para la arquitectura vigente.
+> Escrito sobre el código actual: **Flutter 3.44.8 / Dart 3.12.2**, `drift` sobre SQLite,
+> `Riverpod` para el estado, interfaz **solo Cupertino**, catálogo de 1.324 ejercicios,
+> nueve dependencias y `flutter analyze` en 0 issues. Ver `CLAUDE.md` para la arquitectura
+> vigente.
 >
-> **Estado: ninguno de los tres bloques está implementado.** Todo lo que sigue es lo
-> previsto, no lo hecho.
+> **Estado: el bloque J está implementado** ([Fase 7](#fase-7--progresiones-)), con el
+> esquema en la v7 y 343 tests. Los bloques **I** y **K** siguen siendo lo previsto, no lo
+> hecho. J se entregó antes que I, invirtiendo el orden que este documento recomienda; el
+> motivo y lo que costó están en la [Fase 7](#fase-7--progresiones-).
 
 ## Índice
 
@@ -106,6 +108,12 @@ I (idiomas)  →  J (progresiones)  →  K (nube)
 - **I va primero** porque es un barrido por todas las pantallas. Si J y K entran antes,
   ambos añaden pantallas nuevas con textos incrustados y el barrido se hace dos veces. Con
   I hecho, J y K nacen traducidos.
+
+  > **Al final J se entregó antes**, así que ese coste se ha asumido: cuando llegue I habrá
+  > que barrer también `pantallas/sugerencia.dart` y `pantallas/opciones_ejercicio.dart`.
+  > Son dos ficheros y unas veinte frases, y lo que de verdad importaba —que la lógica no
+  > tenga texto dentro— sí se respetó: `progresion.dart` devuelve el motivo como enumerado y
+  > no compone ni una cadena.
 - **J va segundo** porque es autocontenido: un módulo puro con la forma de `metricas.dart`,
   un par de columnas y un sitio donde enseñar el resultado. No depende de K y no bloquea a
   nadie. Es también el bloque con mejor relación entre lo que aporta y lo que cuesta.
@@ -1081,25 +1089,71 @@ guardar una sesión cambia la sugerencia de la siguiente, que es el caso de uso 
 
 **Criterios de aceptación.**
 
-- [ ] `lib/datos/progresion.dart` no importa Flutter ni escribe en la base. Es un módulo
-      puro, como `metricas.dart` y `musculos.dart`.
-- [ ] `test/progresion_test.dart` cubre, con historiales escritos a mano:
+- [x] `lib/datos/progresion.dart` no importa Flutter ni escribe en la base. Es un módulo
+      puro, como `metricas.dart` y `musculos.dart`. Importa solo `bd.dart`, por los tipos.
+- [x] `test/progresion_test.dart` cubre, con historiales escritos a mano:
       rango completado → sube peso; rango incompleto → sube repeticiones; repeticiones
       caídas → baja peso; RPE ≥ 9,5 → mantiene aunque tocara subir; tres sesiones sin
       mejora → descarga; menos de dos sesiones → `null`; ejercicio de peso corporal → solo
-      repeticiones; cardio → `null`.
-- [ ] El peso sugerido es **siempre** un múltiplo del escalón vigente, en kilogramos, con
-      el usuario en libras incluido. Hay un test específico.
-- [ ] Con `progresionActiva` en falso, ni la tarjeta de entrenar ni la de resultados
-      enseñan nada, y no se calcula: se comprueba que el provider no se pide.
-- [ ] La migración 6 → 7 pasa el test de migración desde cada versión anterior y el esquema
+      repeticiones; cardio → `null`. Son 39 tests: los ocho de aquí más los perfiles, la
+      descarga que no se repite, el rango observado y la resolución por capas.
+- [x] El peso sugerido es **siempre** un múltiplo del escalón vigente, en kilogramos, con
+      el usuario en libras incluido. Hay un test específico, y comprueba además que el
+      valor cae donde el selector de peso lo puede enseñar.
+- [x] Con `progresionActiva` en falso, ni la tarjeta de entrenar ni la de resultados
+      enseñan nada, y no se calcula: se comprueba que el provider no se pide, con un espía
+      que lo sobrescribe.
+- [x] La migración 6 → 7 pasa el test de migración desde cada versión anterior y el esquema
       resultante coincide con el volcado.
-- [ ] Una copia de seguridad de la versión 2 se importa sin errores y deja las cuatro
+- [x] Una copia de seguridad de la versión 2 se importa sin errores y deja las cuatro
       columnas nuevas en `null`.
-- [ ] La línea de sugerencia no desborda a 375 px. Test con `_comoUnMovil`.
-- [ ] Aplicar una sugerencia **no** guarda nada: solo cambia los valores del formulario.
-- [ ] Descartar una sugerencia la mantiene descartada al navegar a la ficha y volver (vive
+- [x] La línea de sugerencia no desborda a 375 px. Test con `_comoUnMovil` — que además
+      cazó un desbordamiento real en la hoja de opciones antes de verse en un móvil.
+- [x] Aplicar una sugerencia **no** guarda nada: solo cambia los valores del formulario.
+- [x] Descartar una sugerencia la mantiene descartada al navegar a la ficha y volver (vive
       en el borrador), y vuelve a aparecer en la sesión siguiente.
+
+**Desviaciones de lo implementado.**
+
+1. **`ResumenSesionEjercicio` no traía las repeticiones totales.** Tenía `nSeries`,
+   `volumen`, `pesoMaximo` y las dos estimaciones de 1RM, pero no la suma de repeticiones,
+   que es lo que necesitan tanto el estancamiento ([J4](#j4-estancamiento-y-descarga)) como
+   saber si una sesión completó el rango. Se añadió `SUM(s.repeticiones)` a la consulta y el
+   campo a la clase: un agregado más en un `GROUP BY` que ya existía, no una consulta nueva.
+2. **La regla del esfuerzo no necesitó ninguna consulta.** Ninguna vista devuelve el RPE
+   junto a la fecha de sesión, y parecía el hueco del bloque; pero el RPE solo se mira en
+   **la última** sesión, y `ultimasSeriesEjercicio` ya devuelve `ValoresSerie` con el suyo.
+3. **No existía «la hoja de opciones del ejercicio dentro de una rutina»** que
+   [J2](#j2-configuración-por-ejercicio) daba por hecha: el descanso propio se elegía con
+   una pulsación larga sobre el temporizador de la tarjeta, y era un selector suelto. Se
+   creó esa hoja (`pantallas/opciones_ejercicio.dart`), el descanso pasó a ser su primera
+   fila —que es literalmente el boceto de J2— y se abre desde el mismo gesto de siempre y
+   desde el detalle de la rutina, manteniendo pulsado el ejercicio.
+4. **La descarga vuelve al último peso donde se completó el rango**, con el −10 % de
+   respaldo (decisión [O5](#o-decisiones-pendientes)). Como el historial viene agregado, «se
+   completó el rango» se deduce de `repeticiones >= nSeries * repMax`. Es exacto salvo que
+   alguien pase del tope en unas series y no llegue en otras, que es un caso que la
+   sugerencia de aquella sesión ya corrigió.
+5. **`ajustes.pasoPeso` está en la unidad activa, no en kilos**, cosa que J2 no decía: es lo
+   que alimenta el selector de peso. La columna `incrementoKg` sí es kilos, como pedía. La
+   conversión se hace en un solo sitio, al resolver la configuración, y es lo que hace que
+   el peso sugerido salga redondo también con el usuario en libras.
+6. **«No fiable» no incluye «el usuario no registra el esfuerzo».** J1 lo listaba, pero con
+   el RPE apagado de fábrica eso marcaría **todas** las sugerencias y vaciaría la marca de
+   significado. Marca lo que de verdad es dudoso: menos de tres sesiones de historial, o el
+   esfuerzo activado y sin anotar en la última sesión.
+7. **La sugerencia también aparece en la sesión viva** (decisión
+   [O8](#o-decisiones-pendientes)), pero solo antes de marcar la primera serie del
+   ejercicio: al marcarla desaparece. Y no aparece nunca al **editar** una sesión guardada,
+   que J3 no contemplaba — lo que se está anotando ahí ya pasó.
+8. **El estancamiento sale de una consulta nueva**, `resumenSesionesTodos`: el mismo
+   `GROUP BY` sin el filtro de ejercicio. La línea del resumen semanal necesita todos los
+   ejercicios a la vez, y pedirlos de uno en uno habría sido una consulta por ejercicio de
+   la app. El reparto y la detección siguen en el módulo puro.
+9. **`bd.dart` reexporta `Value` de drift.** Lo pide `fijarProgresionEjercicio`, cuyos
+   parámetros son `Value<T>` y no `T?` porque aquí `null` es un valor con significado —«como
+   el global»— y hay que poder distinguirlo de «esta llamada no toca esa columna». Es el
+   único símbolo de drift que asoma fuera de `datos/`.
 
 **Riesgos.**
 
@@ -1715,14 +1769,15 @@ medidas              id, fecha, tipo, valor, **uuid, actualizado, borrado**
 | Versión | Contenido | Destructiva | Estado |
 |---|---|---|---|
 | 1–6 | Todo el documento anterior | Solo la 2 | **Hechas** |
-| 7 | **J2** — `repMin`, `repMax`, `incrementoKg`, `estrategia` en `ejercicios` | No | Prevista |
+| 7 | **J2** — `repMin`, `repMax`, `incrementoKg`, `estrategia` en `ejercicios` | No | **Hecha** |
 | 8 | **K4** — `uuid`, `actualizado`, `borrado` en las tablas sincronizables, y la tabla `sincro_estado` | No, pero toca todas las filas | Prevista |
 
 El bloque I **no cambia el esquema**: el idioma es una clave más en la tabla de clave/valor,
 y `busqueda` ya existe. Lo que sí necesita es una resiembra del catálogo, disparada por la
 clave `version_indice` ([I4](#i4-el-catálogo-y-el-índice-de-búsqueda)).
 
-**Formato de la copia de seguridad.** `versionCopia` (`copia.dart:34`) pasa de **2 a 3**:
+**Formato de la copia de seguridad.** `versionCopia` (`copia.dart:34`) pasa de **2 a 3**
+—el primero de los dos cambios, el de J2, ya está hecho—:
 
 | Cambio | Bloque |
 |---|---|
@@ -1765,17 +1820,23 @@ Bloque **I** completo, en este orden:
 Publicable al final, y también al final del paso 3 si hiciera falta cortar: con la app
 todavía solo en español, pero con el texto ya separado del código.
 
-### Fase 7 — Progresiones
+### Fase 7 — Progresiones ✅
 
-Bloque **J** completo, en dos tiempos, como se hizo en la fase 5:
+Hecha, y en los dos tiempos previstos: primero `progresion.dart` con sus tests —donde
+estaba la dificultad real y nada necesitaba pantalla— y después el esquema, la vista y la
+copia. Se entregó **antes que la fase 6**, que sigue pendiente: J no depende de I, así que
+los textos de este bloque están escritos en español en el código como el resto de la app, y
+el motivo de cada sugerencia viaja **como dato** hasta la pantalla —que es donde se compone
+la frase— precisamente para que la internacionalización no tenga que tocar la lógica.
 
-1. **Primero la lógica, sin interfaz.** `lib/datos/progresion.dart` con
-   `test/progresion_test.dart` cubriendo los ocho escenarios de [J6](#j6-criterios-de-aceptación-y-riesgos).
-   Nada de esto necesita pantalla, y es donde está la dificultad real.
-2. **Después la vista y el esquema.** Migración 6 → 7, la configuración por ejercicio (J2),
-   `ui.Sugerencia` con su test a 375 px, la línea en la tarjeta de entrenar y la tarjeta en
-   resultados (J3), el estancamiento en el resumen semanal (J4), y la subida de
-   `versionCopia` a 3.
+`schemaVersion` pasa a 7 con la migración más inocua del proyecto: cuatro columnas
+anulables donde `null` significa «como el global». `versionCopia` pasa a 3.
+
+Lo que no estaba previsto y apareció al implementar está en las nueve desviaciones de
+[J6](#j6-criterios-de-aceptación-y-riesgos). La de fondo es la primera: el historial por
+sesión no traía las repeticiones totales, y sin ellas ni el estancamiento ni «esta sesión
+completó el rango» se pueden calcular. La más visible, la tercera: la hoja de opciones del
+ejercicio que J2 daba por existente había que construirla.
 
 Es la fase más barata de las tres y la que más se nota al usar la app.
 
@@ -1896,16 +1957,18 @@ las demás se pueden cerrar durante.
    concreto, la elección cambia y el mecanismo no.
 
 4. **¿El rango de repeticiones por defecto es 8–12?** ([J1](#j1-el-modelo-de-progresión))
-   Es lo más común en hipertrofia y el peor sitio posible para un usuario de fuerza pura.
-   **Recomendación:** 8–12 de fábrica y, la primera vez que un ejercicio tenga tres sesiones
-   con un rango claramente distinto, proponer ajustarlo en vez de sugerir contra él.
+   **Cerrada: sí, y con la propuesta.** 8–12 de fábrica, y `progresion.rangoObservado` mira
+   las tres últimas sesiones y aproxima el rango real al estándar más cercano de siete
+   (3–5 … 15–25). Si difiere del configurado, la hoja del ejercicio lo ofrece **el primero**
+   y anotado, y el pie de la sección lo explica. No cambia nada solo: quien decide es el
+   usuario, que es la regla de todo el bloque.
 
 5. **¿La descarga baja un 10 % o vuelve al último peso donde se completó el rango?**
    ([J4](#j4-estancamiento-y-descarga))
-   El 10 % es simple y explicable; volver al último peso completado usa datos reales del
-   usuario y suele ser más ajustado.
-   **Recomendación:** el último peso completado si existe en el historial, y el 10 % como
-   respaldo. Se decide con los tests delante, que para eso el módulo es puro.
+   **Cerrada: el último peso completado, con el 10 % de respaldo.** Se recorre el historial
+   hacia atrás buscando una sesión que completara el rango con menos peso que el actual; si
+   no la hay, se baja un 10 % redondeado al escalón hacia abajo. Los dos caminos tienen su
+   test, que es lo que permitió decidirlo con los números delante.
 
 6. **¿`flutter_secure_storage` para el token, o una tabla excluida de la exportación?**
    ([K3](#k3-cuentas-e-identidad))
@@ -1921,7 +1984,8 @@ las demás se pueden cerrar durante.
 
 8. **¿La sugerencia de progresión aparece también en la sesión viva (B8), o solo en el
    registro clásico?** ([J3](#j3-dónde-aparece-la-sugerencia))
-   La sesión viva es la pantalla más densa de la app y la que menos admite un elemento más.
-   **Recomendación:** en las dos, pero en la sesión viva solo antes de marcar la primera
-   serie del ejercicio, y desapareciendo en cuanto se marca. Se decide viendo la pantalla,
-   que es de las pocas cosas de este documento que no se puede decidir sobre el papel.
+   **Cerrada: en las dos, y en la viva solo hasta marcar la primera serie.** La línea ocupa
+   dos renglones sobre la lista de series y desaparece en cuanto se marca una: a partir de
+   ahí ya no hay nada que proponer, porque el entrenamiento está en marcha. Se añadió un
+   tercer caso que no estaba en la pregunta: al **editar** una sesión guardada tampoco
+   aparece, porque ahí no se decide nada, se corrige lo que ya pasó.

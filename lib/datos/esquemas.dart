@@ -1183,12 +1183,253 @@ i1.GeneratedColumn<double> _column_37(String aliasedName) =>
       type: i1.DriftSqlType.double,
       $customConstraints: 'NOT NULL',
     );
+
+final class Schema7 extends i0.VersionedSchema {
+  Schema7({required super.database}) : super(version: 7);
+  @override
+  late final List<i1.DatabaseSchemaEntity> entities = [
+    rutinas,
+    entrenamientos,
+    catalogoEjercicios,
+    ejercicios,
+    serie,
+    ajustes,
+    sesionesActivas,
+    favoritos,
+    vistos,
+    medidas,
+    idxCatalogoBusqueda,
+    idxCatalogoBodyPart,
+    idxCatalogoEquipment,
+    idxCatalogoTarget,
+  ];
+  late final Shape0 rutinas = Shape0(
+    source: i0.VersionedTable(
+      entityName: 'rutinas',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [_column_0, _column_1, _column_2],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape9 entrenamientos = Shape9(
+    source: i0.VersionedTable(
+      entityName: 'entrenamientos',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [_column_0, _column_3, _column_4, _column_25, _column_29],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape2 catalogoEjercicios = Shape2(
+    source: i0.VersionedTable(
+      entityName: 'catalogo_ejercicios',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [
+        _column_5,
+        _column_6,
+        _column_7,
+        _column_8,
+        _column_9,
+        _column_10,
+        _column_11,
+        _column_12,
+        _column_13,
+        _column_14,
+        _column_15,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape15 ejercicios = Shape15(
+    source: i0.VersionedTable(
+      entityName: 'ejercicios',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [
+        _column_0,
+        _column_3,
+        _column_16,
+        _column_6,
+        _column_17,
+        _column_24,
+        _column_30,
+        _column_38,
+        _column_39,
+        _column_40,
+        _column_41,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape7 serie = Shape7(
+    source: i0.VersionedTable(
+      entityName: 'serie',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [
+        _column_0,
+        _column_18,
+        _column_19,
+        _column_20,
+        _column_21,
+        _column_22,
+        _column_23,
+        _column_26,
+        _column_25,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape8 ajustes = Shape8(
+    source: i0.VersionedTable(
+      entityName: 'ajustes',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(clave)'],
+      columns: [_column_27, _column_28],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape11 sesionesActivas = Shape11(
+    source: i0.VersionedTable(
+      entityName: 'sesiones_activas',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [_column_0, _column_3, _column_31, _column_32, _column_33],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape12 favoritos = Shape12(
+    source: i0.VersionedTable(
+      entityName: 'favoritos',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id_catalogo)'],
+      columns: [_column_34, _column_35],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape13 vistos = Shape13(
+    source: i0.VersionedTable(
+      entityName: 'vistos',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id_catalogo)'],
+      columns: [_column_34, _column_4],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape14 medidas = Shape14(
+    source: i0.VersionedTable(
+      entityName: 'medidas',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['UNIQUE(fecha, tipo)'],
+      columns: [_column_0, _column_4, _column_36, _column_37],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  final i1.Index idxCatalogoBusqueda = i1.Index(
+    'idx_catalogo_busqueda',
+    'CREATE INDEX idx_catalogo_busqueda ON catalogo_ejercicios (busqueda)',
+  );
+  final i1.Index idxCatalogoBodyPart = i1.Index(
+    'idx_catalogo_body_part',
+    'CREATE INDEX idx_catalogo_body_part ON catalogo_ejercicios (body_part)',
+  );
+  final i1.Index idxCatalogoEquipment = i1.Index(
+    'idx_catalogo_equipment',
+    'CREATE INDEX idx_catalogo_equipment ON catalogo_ejercicios (equipment)',
+  );
+  final i1.Index idxCatalogoTarget = i1.Index(
+    'idx_catalogo_target',
+    'CREATE INDEX idx_catalogo_target ON catalogo_ejercicios (target)',
+  );
+}
+
+class Shape15 extends i0.VersionedTable {
+  Shape15({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<int> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get idRutina =>
+      columnsByName['id_rutina']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<String> get idCatalogo =>
+      columnsByName['id_catalogo']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get nombre =>
+      columnsByName['nombre']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get descripcion =>
+      columnsByName['descripcion']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<int> get orden =>
+      columnsByName['orden']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get descansoSeg =>
+      columnsByName['descanso_seg']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get repMin =>
+      columnsByName['rep_min']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get repMax =>
+      columnsByName['rep_max']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<double> get incrementoKg =>
+      columnsByName['incremento_kg']! as i1.GeneratedColumn<double>;
+  i1.GeneratedColumn<int> get estrategia =>
+      columnsByName['estrategia']! as i1.GeneratedColumn<int>;
+}
+
+i1.GeneratedColumn<int> _column_38(String aliasedName) =>
+    i1.GeneratedColumn<int>(
+      'rep_min',
+      aliasedName,
+      true,
+      type: i1.DriftSqlType.int,
+      $customConstraints: 'NULL',
+    );
+i1.GeneratedColumn<int> _column_39(String aliasedName) =>
+    i1.GeneratedColumn<int>(
+      'rep_max',
+      aliasedName,
+      true,
+      type: i1.DriftSqlType.int,
+      $customConstraints: 'NULL',
+    );
+i1.GeneratedColumn<double> _column_40(String aliasedName) =>
+    i1.GeneratedColumn<double>(
+      'incremento_kg',
+      aliasedName,
+      true,
+      type: i1.DriftSqlType.double,
+      $customConstraints: 'NULL',
+    );
+i1.GeneratedColumn<int> _column_41(String aliasedName) =>
+    i1.GeneratedColumn<int>(
+      'estrategia',
+      aliasedName,
+      true,
+      type: i1.DriftSqlType.int,
+      $customConstraints: 'NULL',
+    );
 i0.MigrationStepWithVersion migrationSteps({
   required Future<void> Function(i1.Migrator m, Schema2 schema) from1To2,
   required Future<void> Function(i1.Migrator m, Schema3 schema) from2To3,
   required Future<void> Function(i1.Migrator m, Schema4 schema) from3To4,
   required Future<void> Function(i1.Migrator m, Schema5 schema) from4To5,
   required Future<void> Function(i1.Migrator m, Schema6 schema) from5To6,
+  required Future<void> Function(i1.Migrator m, Schema7 schema) from6To7,
 }) {
   return (currentVersion, database) async {
     switch (currentVersion) {
@@ -1217,6 +1458,11 @@ i0.MigrationStepWithVersion migrationSteps({
         final migrator = i1.Migrator(database, schema);
         await from5To6(migrator, schema);
         return 6;
+      case 6:
+        final schema = Schema7(database: database);
+        final migrator = i1.Migrator(database, schema);
+        await from6To7(migrator, schema);
+        return 7;
       default:
         throw ArgumentError.value('Unknown migration from $currentVersion');
     }
@@ -1229,6 +1475,7 @@ i1.OnUpgrade stepByStep({
   required Future<void> Function(i1.Migrator m, Schema4 schema) from3To4,
   required Future<void> Function(i1.Migrator m, Schema5 schema) from4To5,
   required Future<void> Function(i1.Migrator m, Schema6 schema) from5To6,
+  required Future<void> Function(i1.Migrator m, Schema7 schema) from6To7,
 }) => i0.VersionedSchema.stepByStepHelper(
   step: migrationSteps(
     from1To2: from1To2,
@@ -1236,5 +1483,6 @@ i1.OnUpgrade stepByStep({
     from3To4: from3To4,
     from4To5: from4To5,
     from5To6: from5To6,
+    from6To7: from6To7,
   ),
 );

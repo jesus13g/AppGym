@@ -16,6 +16,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../datos/ajustes.dart';
 import '../datos/formato.dart' as formato;
 import '../datos/media.dart' as media;
+import '../datos/progresion.dart' show rangosRepeticiones;
 import '../estado/providers.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
@@ -257,8 +258,60 @@ class PantallaAjustes extends ConsumerWidget {
         opciones: const {Formula.epley: 'Epley', Formula.brzycki: 'Brzycki'},
         onValor: (valor) => _fijar(ref, Claves.formula1RM, valor),
       ),
+      _interruptor(
+        context,
+        titulo: 'Sugerir progresiones',
+        valor: ajustes.progresionActiva,
+        onValor: (valor) => _fijar(ref, Claves.progresionActiva, valor),
+      ),
+      // Las dos filas siguientes no se esconden al apagar el interruptor: una
+      // lista que cambia de alto bajo el dedo desorienta más de lo que ahorra.
+      _fila(
+        context,
+        titulo: 'Rango de repeticiones',
+        valor: '${ajustes.repMinGlobal} – ${ajustes.repMaxGlobal}',
+        onTap: () => _elegirRango(context, ref, ajustes),
+      ),
+      _segmentos<Perfil>(
+        context,
+        etiqueta: 'Perfil',
+        valor: ajustes.perfilProgresion,
+        opciones: const {
+          Perfil.conservador: 'Conservador',
+          Perfil.estandar: 'Estándar',
+          Perfil.agresivo: 'Agresivo',
+        },
+        onValor: (valor) => _fijar(ref, Claves.perfilProgresion, valor),
+      ),
     ],
   );
+
+  /// El rango son dos claves, así que no cabe en `_elegir`.
+  Future<void> _elegirRango(
+    BuildContext context,
+    WidgetRef ref,
+    Ajustes ajustes,
+  ) async {
+    final elegido = await ui.elegirEnHoja<(int, int)>(
+      context,
+      titulo: 'Rango de repeticiones',
+      mensaje:
+          'Dentro de este rango se sube de repeticiones; al completarlo, de '
+          'peso. Cada ejercicio puede llevar el suyo.',
+      actual: (ajustes.repMinGlobal, ajustes.repMaxGlobal),
+      opciones: [
+        for (final rango in rangosRepeticiones)
+          (rango, '${rango.$1} – ${rango.$2}'),
+      ],
+    );
+    if (elegido == null) return;
+
+    await ref.read(bdProvider).fijarAjustes({
+      Claves.repMin: Ajustes.texto(elegido.$1.$1),
+      Claves.repMax: Ajustes.texto(elegido.$1.$2),
+    });
+    invalidarAjustes(ref);
+  }
 
   // ── Apariencia ─────────────────────────────────────────────────────────────
 

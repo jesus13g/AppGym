@@ -46,6 +46,13 @@ Future<void> _poblar(AppBD bd) async {
 
   final ejercicios = await bd.ejerciciosDeRutina(idRutina);
   await bd.fijarDescansoEjercicio(ejercicios.first.id, 180);
+  await bd.fijarProgresionEjercicio(
+    ejercicios.first.id,
+    repMin: const Value(3),
+    repMax: const Value(5),
+    incrementoKg: const Value(1.25),
+    estrategia: const Value(1),
+  );
 
   await bd.insertarEntrenamiento(
     idRutina,
@@ -212,7 +219,68 @@ void main() {
         _sinFechaDeExportacion(await exportar(vacia)),
         _sinFechaDeExportacion(datos),
       );
+
+      // Incluida la configuración de progresión, que es lo que estrena la v3.
+      final restaurado = (await vacia.ejerciciosDeRutina(
+        (await vacia.todasLasRutinas()).single.id,
+      )).first.ejercicio;
+      expect(restaurado.repMin, 3);
+      expect(restaurado.repMax, 5);
+      expect(restaurado.incrementoKg, 1.25);
+      expect(restaurado.estrategia, 1);
     });
+
+    test(
+      'una copia de la versión 2 se importa y deja la progresión vacía',
+      () async {
+        // La v2 no conocía las cuatro columnas. Lo que falta entra como null,
+        // que en ellas significa «como el global», así que una copia vieja
+        // restaura un ejercicio que se comporta exactamente como antes.
+        final datos = {
+          'formato': formatoCopia,
+          'version': 2,
+          'exportado': '2026-08-01T12:00:00.000',
+          'ajustes': <String, String>{},
+          'rutinas': [
+            {
+              'nombre': 'Empuje',
+              'color': null,
+              'ejercicios': [
+                {
+                  'nombre': 'barbell bench press',
+                  'idCatalogo': '0001',
+                  'descripcion': null,
+                  'orden': 0,
+                  'descansoSeg': 120,
+                },
+              ],
+              'entrenamientos': <Map<String, dynamic>>[],
+            },
+          ],
+          'medidas': <Map<String, dynamic>>[],
+        };
+
+        expect(validar(datos), isEmpty);
+
+        await sembrarCatalogo(bd, datos: _catalogoFalso);
+        final informe = await importar(
+          bd,
+          datos,
+          modo: ModoImportacion.reemplazar,
+        );
+        expect(informe.avisos, isEmpty);
+        expect(informe.ejercicios, 1);
+
+        final ejercicio = (await bd.ejerciciosDeRutina(
+          (await bd.todasLasRutinas()).single.id,
+        )).single.ejercicio;
+        expect(ejercicio.descansoSeg, 120);
+        expect(ejercicio.repMin, isNull);
+        expect(ejercicio.repMax, isNull);
+        expect(ejercicio.incrementoKg, isNull);
+        expect(ejercicio.estrategia, isNull);
+      },
+    );
 
     test('conserva el vínculo con el catálogo y la ficha', () async {
       await _poblar(bd);
