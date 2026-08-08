@@ -19,10 +19,12 @@ ResumenSesionEjercicio _sesion({
   required double mejor1RM,
   double? mejor1RMFiable,
   int nSeries = 3,
+  int repeticiones = 30,
 }) => ResumenSesionEjercicio(
   idEntrenamiento: id,
   fecha: fecha,
   nSeries: nSeries,
+  repeticiones: repeticiones,
   volumen: volumen,
   pesoMaximo: pesoMaximo,
   mejor1RM: mejor1RM,
