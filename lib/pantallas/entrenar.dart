@@ -22,7 +22,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
 import '../datos/borrador.dart';
-import '../datos/formato.dart' as formato;
+import '../datos/formato.dart';
 import '../datos/progresion.dart' as progresion;
 import '../datos/reloj.dart' as reloj;
 import '../estado/descanso.dart';
@@ -461,7 +461,7 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
   @override
   Widget build(BuildContext context) {
     final rutina = ref.watch(rutinaProvider(widget.idRutina)).value;
-    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
+    final f = formatoDe(context, ref);
     final descanso = ref.watch(descansoProvider);
     final ejercicios = _ejercicios;
 
@@ -507,7 +507,7 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
                 Expanded(
                   child: SafeArea(
                     bottom: false,
-                    child: _lista(context, ejercicios, rutina, ajustes),
+                    child: _lista(context, ejercicios, rutina, f),
                   ),
                 ),
                 if (descanso != null)
@@ -557,7 +557,7 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
     BuildContext context,
     List<EjercicioConFicha> ejercicios,
     Rutina? rutina,
-    Ajustes ajustes,
+    Formato f,
   ) => ListView(
     children: [
       _cabecera(context, rutina),
@@ -568,11 +568,11 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
             ejercicio: ejercicio,
             ultimas: _ultimas[ejercicio.id] ?? const [],
             series: _series[ejercicio.id] ?? const [],
-            ajustes: ajustes,
+            formato: f,
             vivo: _vivo,
-            descansoSeg: _descansoDe(ejercicio, ajustes),
+            descansoSeg: _descansoDe(ejercicio, f.ajustes),
             descansoPropio: ejercicio.ejercicio.descansoSeg != null,
-            sugerencia: _sugerenciaDe(ejercicio, ajustes),
+            sugerencia: _sugerenciaDe(ejercicio, f.ajustes),
             onAplicarSugerencia: (s) => _aplicarSugerencia(ejercicio.id, s),
             onDescartarSugerencia: () => _descartarSugerencia(ejercicio.id),
             onSeries: (valor) => _cambiarSeries(ejercicio.id, valor),
@@ -634,7 +634,7 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
           if (_vivo)
             Text(
               '$hechas / $total series · '
-              '${formato.duracion(_transcurrido.inSeconds)}',
+              '${formatoDe(context, ref).duracion(_transcurrido.inSeconds)}',
               style: ui.estilo(
                 context,
                 size: t.subhead,
@@ -650,7 +650,7 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    formato.fechaLarga(_fecha),
+                    formatoDe(context, ref).fechaLarga(_fecha),
                     style: ui.estilo(
                       context,
                       size: t.subhead,
@@ -690,7 +690,7 @@ class TarjetaEjercicio extends StatelessWidget {
     required this.ultimas,
     required this.series,
     required this.onSeries,
-    this.ajustes = const Ajustes(),
+    required this.formato,
     this.vivo = false,
     this.descansoSeg = 90,
     this.descansoPropio = false,
@@ -710,8 +710,9 @@ class TarjetaEjercicio extends StatelessWidget {
   final List<SerieEnCurso> series;
   final ValueChanged<List<SerieEnCurso>> onSeries;
 
-  /// De aquí salen la unidad, el paso del peso y si se pide el esfuerzo.
-  final Ajustes ajustes;
+  /// De aquí salen el idioma, la unidad, el paso del peso y si se pide el
+  /// esfuerzo.
+  final Formato formato;
 
   /// En sesión viva cada fila lleva su check y la tarjeta, su descanso.
   final bool vivo;
@@ -741,7 +742,10 @@ class TarjetaEjercicio extends StatelessWidget {
   /// Añadir copia la última serie, que es el gesto más frecuente.
   void _anadir() {
     final ultima = series.isEmpty
-        ? ValoresSerie(repeticiones: ajustes.repeticionesPorDefecto, peso: 20)
+        ? ValoresSerie(
+            repeticiones: formato.ajustes.repeticionesPorDefecto,
+            peso: 20,
+          )
         : series.last.valores;
     onSeries(List.of(series)..add((valores: ultima, hecha: false)));
   }
@@ -815,8 +819,8 @@ class TarjetaEjercicio extends StatelessWidget {
     final volumen = ultimas
         .where((s) => !s.calentamiento)
         .fold<double>(0, (suma, s) => suma + s.peso * s.repeticiones);
-    return 'Último: ${formato.plural(ultimas.length, 'serie', 'series')} · '
-        '${formato.peso(volumen, ajustes)}';
+    return 'Último: ${formato.textos.comunSeries(ultimas.length)} · '
+        '${formato.peso(volumen)}';
   }
 
   @override
@@ -833,7 +837,7 @@ class TarjetaEjercicio extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: t.l, vertical: t.m),
           child: Row(
             children: [
-              ui.Miniatura(formato.imagenEjercicio(ejercicio), tamano: 40),
+              ui.Miniatura(imagenEjercicio(ejercicio), tamano: 40),
               const SizedBox(width: t.m),
               Expanded(
                 child: Column(
@@ -869,7 +873,7 @@ class TarjetaEjercicio extends StatelessWidget {
         if (sugerencia case final propuesta?) ...[
           LineaSugerencia(
             sugerencia: propuesta,
-            ajustes: ajustes,
+            formato: formato,
             onAplicar: onAplicarSugerencia == null
                 ? null
                 : () => onAplicarSugerencia!(propuesta),
@@ -902,7 +906,7 @@ class TarjetaEjercicio extends StatelessWidget {
                   numero: indice + 1,
                   serie: serie.valores,
                   hecha: serie.hecha,
-                  ajustes: ajustes,
+                  formato: formato,
                   vivo: vivo,
                   onSerie: (valores) => _cambiar(indice, valores),
                   onMenu: () => _menu(context, indice),
@@ -972,7 +976,7 @@ class _FilaSerie extends StatelessWidget {
     required this.numero,
     required this.serie,
     required this.hecha,
-    required this.ajustes,
+    required this.formato,
     required this.vivo,
     required this.onSerie,
     required this.onMenu,
@@ -982,7 +986,7 @@ class _FilaSerie extends StatelessWidget {
   final int numero;
   final ValoresSerie serie;
   final bool hecha;
-  final Ajustes ajustes;
+  final Formato formato;
   final bool vivo;
   final ValueChanged<ValoresSerie> onSerie;
   final VoidCallback onMenu;
@@ -998,10 +1002,10 @@ class _FilaSerie extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _principal(context),
-          if (ajustes.esfuerzoActivo)
+          if (formato.ajustes.esfuerzoActivo)
             _Esfuerzo(
               valor: serie.rpe,
-              escala: ajustes.escala,
+              formato: formato,
               onValor: (valor) => onSerie(
                 valor == null
                     ? serie.copiar(sinRpe: true)
@@ -1062,13 +1066,14 @@ class _FilaSerie extends StatelessWidget {
           semantica: 'Peso',
           // El selector trabaja en la unidad activa y devuelve kilos: es lo
           // único que sabe de libras en toda la pantalla.
-          valor: ajustes.paraSelector(serie.peso),
+          valor: formato.ajustes.paraSelector(serie.peso),
           minimo: 0,
-          maximo: ajustes.pesoMaximo,
-          paso: ajustes.pasoPeso,
-          unidad: ajustes.unidad.sufijo,
-          decimales: ajustes.decimalesPaso,
-          onChanged: (v) => onSerie(serie.copiar(peso: ajustes.aKilos(v))),
+          maximo: formato.ajustes.pesoMaximo,
+          paso: formato.ajustes.pasoPeso,
+          unidad: formato.ajustes.unidad.sufijo,
+          decimales: formato.ajustes.decimalesPaso,
+          onChanged: (v) =>
+              onSerie(serie.copiar(peso: formato.ajustes.aKilos(v))),
         ),
       ),
       CupertinoButton(
@@ -1089,15 +1094,17 @@ class _FilaSerie extends StatelessWidget {
 class _Esfuerzo extends StatelessWidget {
   const _Esfuerzo({
     required this.valor,
-    required this.escala,
+    required this.formato,
     required this.onValor,
   });
 
   /// Siempre en escala RPE, aunque se muestre como RIR.
   final double? valor;
 
-  final EscalaEsfuerzo escala;
+  final Formato formato;
   final ValueChanged<double?> onValor;
+
+  EscalaEsfuerzo get escala => formato.ajustes.escala;
 
   static const _valores = [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0];
 

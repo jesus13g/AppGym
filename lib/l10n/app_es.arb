@@ -16,5 +16,85 @@
   "comunListo": "Listo",
   "@comunListo": {
     "description": "Botón que cierra el selector de fecha aceptando el valor"
+  },
+  "comunSinEntrenar": "Sin entrenar",
+  "@comunSinEntrenar": {
+    "description": "Una rutina o un músculo que no se ha trabajado nunca"
+  },
+  "comunEjercicioPersonalizado": "Ejercicio personalizado",
+  "@comunEjercicioPersonalizado": {
+    "description": "Subtítulo de un ejercicio que el usuario creó a mano, sin ficha del catálogo"
+  },
+
+  "comunSeries": "{n, plural, =1{1 serie} other{{n} series}}",
+  "@comunSeries": {
+    "description": "Un recuento de series",
+    "placeholders": { "n": { "type": "int" } }
+  },
+  "comunRepeticiones": "{n, plural, =1{1 repetición} other{{n} repeticiones}}",
+  "@comunRepeticiones": {
+    "description": "Un recuento de repeticiones",
+    "placeholders": { "n": { "type": "int" } }
+  },
+  "comunEjercicios": "{n, plural, =1{1 ejercicio} other{{n} ejercicios}}",
+  "@comunEjercicios": {
+    "description": "Un recuento de ejercicios",
+    "placeholders": { "n": { "type": "int" } }
+  },
+  "comunEjerciciosPersonalizados": "{n, plural, =1{1 ejercicio personalizado} other{{n} ejercicios personalizados}}",
+  "@comunEjerciciosPersonalizados": {
+    "description": "Un recuento de ejercicios creados a mano por el usuario",
+    "placeholders": { "n": { "type": "int" } }
+  },
+  "comunSesiones": "{n, plural, =1{1 sesión} other{{n} sesiones}}",
+  "@comunSesiones": {
+    "description": "Un recuento de entrenamientos hechos",
+    "placeholders": { "n": { "type": "int" } }
+  },
+  "comunSemanas": "{n, plural, =1{1 semana} other{{n} semanas}}",
+  "@comunSemanas": {
+    "description": "Un recuento de semanas, por ejemplo la racha",
+    "placeholders": { "n": { "type": "int" } }
+  },
+  "comunDias": "{n, plural, =1{1 día} other{{n} días}}",
+  "@comunDias": {
+    "description": "Un recuento de días",
+    "placeholders": { "n": { "type": "int" } }
+  },
+
+  "haceDias": "{dias, plural, =0{Hoy} =1{Ayer} other{Hace {dias} días}}",
+  "@haceDias": {
+    "description": "Distancia hasta hoy, en días, al principio de una línea",
+    "placeholders": { "dias": { "type": "int" } }
+  },
+  "haceSemanas": "{semanas, plural, =1{Hace 1 semana} other{Hace {semanas} semanas}}",
+  "@haceSemanas": {
+    "description": "Distancia hasta hoy, en semanas",
+    "placeholders": { "semanas": { "type": "int" } }
+  },
+  "haceMeses": "{meses, plural, =1{Hace 1 mes} other{Hace {meses} meses}}",
+  "@haceMeses": {
+    "description": "Distancia hasta hoy, en meses",
+    "placeholders": { "meses": { "type": "int" } }
+  },
+
+  "desdeMomento": "hace un momento",
+  "@desdeMomento": {
+    "description": "Cuánto hace que se empezó algo, incrustado en una frase, en minúscula"
+  },
+  "desdeMinutos": "{minutos, plural, =1{hace 1 minuto} other{hace {minutos} minutos}}",
+  "@desdeMinutos": {
+    "description": "Cuánto hace, en minutos, incrustado en una frase",
+    "placeholders": { "minutos": { "type": "int" } }
+  },
+  "desdeHoras": "{horas, plural, =1{hace 1 hora} other{hace {horas} horas}}",
+  "@desdeHoras": {
+    "description": "Cuánto hace, en horas, incrustado en una frase",
+    "placeholders": { "horas": { "type": "int" } }
+  },
+  "desdeDias": "{dias, plural, =1{hace 1 día} other{hace {dias} días}}",
+  "@desdeDias": {
+    "description": "Cuánto hace, en días, incrustado en una frase",
+    "placeholders": { "dias": { "type": "int" } }
   }
 }

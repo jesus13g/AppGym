@@ -14,10 +14,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/ajustes.dart';
-import '../datos/formato.dart' as formato;
 import '../datos/media.dart' as media;
 import '../datos/progresion.dart' show rangosRepeticiones;
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -111,7 +111,9 @@ class PantallaAjustes extends ConsumerWidget {
       _fila(
         context,
         titulo: 'Paso del peso',
-        valor: '${formato.numero(ajustes.pasoPeso)} ${ajustes.unidad.sufijo}',
+        valor:
+            '${formatoDe(context, ref).numero(ajustes.pasoPeso)} '
+            '${ajustes.unidad.sufijo}',
         onTap: () => _elegir<double>(
           context,
           ref,
@@ -121,7 +123,11 @@ class PantallaAjustes extends ConsumerWidget {
           actual: ajustes.pasoPeso,
           opciones: [
             for (final paso in pasosPeso)
-              (paso, '${formato.numero(paso)} ${ajustes.unidad.sufijo}'),
+              (
+                paso,
+                '${formatoDe(context, ref).numero(paso)} '
+                    '${ajustes.unidad.sufijo}',
+              ),
           ],
         ),
       ),
@@ -141,7 +147,7 @@ class PantallaAjustes extends ConsumerWidget {
           _fila(
             context,
             titulo: 'Descanso por defecto',
-            valor: formato.descanso(ajustes.descansoSeg),
+            valor: formatoDe(context, ref).descanso(ajustes.descansoSeg),
             onTap: () => _elegir<int>(
               context,
               ref,
@@ -153,7 +159,7 @@ class PantallaAjustes extends ConsumerWidget {
               actual: ajustes.descansoSeg,
               opciones: [
                 for (final segundos in descansos)
-                  (segundos, formato.descanso(segundos)),
+                  (segundos, formatoDe(context, ref).descanso(segundos)),
               ],
             ),
           ),
@@ -174,8 +180,7 @@ class PantallaAjustes extends ConsumerWidget {
               titulo: 'Series por defecto',
               actual: ajustes.seriesPorDefecto,
               opciones: [
-                for (var n = 1; n <= 10; n++)
-                  (n, formato.plural(n, 'serie', 'series')),
+                for (var n = 1; n <= 10; n++) (n, context.t.comunSeries(n)),
               ],
             ),
           ),
@@ -191,7 +196,7 @@ class PantallaAjustes extends ConsumerWidget {
               actual: ajustes.repeticionesPorDefecto,
               opciones: [
                 for (var n = 1; n <= 30; n++)
-                  (n, formato.plural(n, 'repetición', 'repeticiones')),
+                  (n, context.t.comunRepeticiones(n)),
               ],
             ),
           ),
@@ -246,8 +251,7 @@ class PantallaAjustes extends ConsumerWidget {
           titulo: 'Sesiones por semana',
           actual: ajustes.sesionesPorSemana,
           opciones: [
-            for (var n = 1; n <= 7; n++)
-              (n, formato.plural(n, 'sesión', 'sesiones')),
+            for (var n = 1; n <= 7; n++) (n, context.t.comunSesiones(n)),
           ],
         ),
       ),

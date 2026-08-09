@@ -5,8 +5,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
-import '../datos/formato.dart' as formato;
+import '../datos/formato.dart';
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -106,7 +107,7 @@ class _Fila extends ConsumerWidget {
           )),
         )
         .value;
-    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
+    final f = formatoDe(context, ref);
 
     final String subtitulo;
     final VoidCallback? alTocar;
@@ -123,15 +124,15 @@ class _Fila extends ConsumerWidget {
           .map((r) => r.pesoMaximo)
           .reduce((a, b) => a > b ? a : b);
       subtitulo =
-          '${formato.plural(registros.length, 'sesión', 'sesiones')} · '
-          'último ${formato.peso(ultimo.pesoMaximo, ajustes)} · '
-          'máx ${formato.peso(maximo, ajustes)}';
+          '${context.t.comunSesiones(registros.length)} · '
+          'último ${f.peso(ultimo.pesoMaximo)} · '
+          'máx ${f.peso(maximo)}';
       alTocar = () => abrirResultadoEjercicio(context, idRutina, ejercicio.id);
     }
 
     return CupertinoListTile(
       backgroundColor: context.tarjeta,
-      leading: ui.Miniatura(formato.imagenEjercicio(ejercicio)),
+      leading: ui.Miniatura(imagenEjercicio(ejercicio)),
       leadingSize: 48,
       title: Text(ejercicio.nombre, style: ui.estilo(context)),
       subtitle: Text(

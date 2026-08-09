@@ -10,7 +10,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
-import '../datos/formato.dart' as formato;
+import '../datos/formato.dart';
 import '../estado/providers.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
@@ -45,7 +45,7 @@ class _PantallaMedidasState extends ConsumerState<PantallaMedidas> {
   @override
   Widget build(BuildContext context) {
     final serie = ref.watch(serieMedidaProvider(_tipo)).value ?? const [];
-    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
+    final f = formatoDe(context, ref);
     final (etiqueta, _) = etiquetaMedida(_tipo);
 
     return CupertinoPageScaffold(
@@ -119,7 +119,7 @@ class _PantallaMedidasState extends ConsumerState<PantallaMedidas> {
                   color: context.tarjeta,
                   borderRadius: BorderRadius.circular(t.radioL),
                 ),
-                child: _Grafico(serie: serie, tipo: _tipo, ajustes: ajustes),
+                child: _Grafico(serie: serie, tipo: _tipo, formato: f),
               ),
               if (_tipo == 'peso')
                 Padding(
@@ -150,11 +150,11 @@ class _PantallaMedidasState extends ConsumerState<PantallaMedidas> {
                       child: CupertinoListTile(
                         backgroundColor: context.tarjeta,
                         title: Text(
-                          formato.fechaLarga(medida.fecha),
+                          f.fechaLarga(medida.fecha),
                           style: ui.estilo(context),
                         ),
                         additionalInfo: Text(
-                          valorMedida(medida.valor, _tipo, ajustes),
+                          valorMedida(medida.valor, _tipo, f),
                           style: ui.estilo(context, weight: t.semibold),
                         ),
                         onTap: () => registrarMedida(
@@ -187,10 +187,10 @@ class _PantallaMedidasState extends ConsumerState<PantallaMedidas> {
 /// El peso corporal es lo único que va en kilos y, por tanto, lo único que se
 /// convierte a libras. Los perímetros son centímetros y la grasa, por ciento:
 /// esos no dependen de la unidad de las cargas.
-String valorMedida(double valor, String tipo, Ajustes ajustes) {
-  if (tipo == 'peso') return formato.peso(valor, ajustes);
+String valorMedida(double valor, String tipo, Formato f) {
+  if (tipo == 'peso') return f.peso(valor);
   final (_, unidad) = etiquetaMedida(tipo);
-  return '${formato.numero((valor * 10).round() / 10)} $unidad';
+  return '${f.numero((valor * 10).round() / 10)} $unidad';
 }
 
 /// Pide un valor y lo guarda. Repetir el mismo día sustituye al anterior.
@@ -201,7 +201,8 @@ Future<void> registrarMedida(
   DateTime? fecha,
   double? valor,
 }) async {
-  final ajustes = ref.read(ajustesProvider).value ?? const Ajustes();
+  final f = leerFormato(context, ref);
+  final ajustes = f.ajustes;
   final (etiqueta, unidad) = etiquetaMedida(tipo);
   // Se pide en la unidad que el usuario ve; se guarda siempre en kilos.
   final enPantalla = valor == null
@@ -212,9 +213,7 @@ Future<void> registrarMedida(
     context,
     titulo: etiqueta,
     marcador: tipo == 'peso' ? ajustes.unidad.sufijo : unidad,
-    valor: enPantalla == null
-        ? ''
-        : formato.numero((enPantalla * 10).round() / 10),
+    valor: enPantalla == null ? '' : f.numero((enPantalla * 10).round() / 10),
     mensaje: 'Un valor por día: si ya anotaste hoy, este lo sustituye.',
   );
   if (texto == null || !context.mounted) return;
@@ -261,17 +260,17 @@ class _Grafico extends StatelessWidget {
   const _Grafico({
     required this.serie,
     required this.tipo,
-    required this.ajustes,
+    required this.formato,
   });
 
   final List<Medida> serie;
   final String tipo;
-  final Ajustes ajustes;
+  final Formato formato;
 
   /// Los valores en la unidad que se está mostrando.
   List<double> get _valores => [
     for (final m in serie)
-      tipo == 'peso' ? ajustes.desdeKilos(m.valor) : m.valor,
+      tipo == 'peso' ? formato.ajustes.desdeKilos(m.valor) : m.valor,
   ];
 
   @override

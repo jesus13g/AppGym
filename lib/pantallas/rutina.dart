@@ -5,7 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
-import '../datos/formato.dart' as formato;
+import '../datos/formato.dart';
 import '../estado/providers.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
@@ -210,6 +210,7 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
     final rutina = ref.watch(rutinaProvider(idRutina));
     final ejercicios = ref.watch(ejerciciosRutinaProvider(idRutina));
     final estadisticas = ref.watch(estadisticasRutinaProvider(idRutina));
+    final f = formatoDe(context, ref);
 
     final nombre = rutina.value?.nombre ?? 'Rutina';
 
@@ -286,6 +287,7 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
           SliverToBoxAdapter(
             child: _Estadisticas(
               datos: estadisticas.value,
+              formato: f,
               nEjercicios: lista.length,
               onSesiones: () => abrirHistorial(context, idRutina),
             ),
@@ -367,16 +369,14 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
                               ),
                               child: CupertinoListTile(
                                 backgroundColor: context.tarjeta,
-                                leading: ui.Miniatura(
-                                  formato.imagenEjercicio(e),
-                                ),
+                                leading: ui.Miniatura(imagenEjercicio(e)),
                                 leadingSize: 48,
                                 title: Text(
                                   e.nombre,
                                   style: ui.estilo(context),
                                 ),
                                 subtitle: Text(
-                                  formato.subtituloEjercicio(e),
+                                  f.subtituloEjercicio(e),
                                   style: ui.estilo(
                                     context,
                                     size: t.footnote,
@@ -470,7 +470,7 @@ class _FilaOrden extends StatelessWidget {
               ),
             ),
           ),
-          ui.Miniatura(formato.imagenEjercicio(ejercicio), tamano: 36),
+          ui.Miniatura(imagenEjercicio(ejercicio), tamano: 36),
           const SizedBox(width: t.m),
           Expanded(
             child: Text(
@@ -499,11 +499,13 @@ class _FilaOrden extends StatelessWidget {
 class _Estadisticas extends StatelessWidget {
   const _Estadisticas({
     required this.datos,
+    required this.formato,
     required this.nEjercicios,
     required this.onSesiones,
   });
 
   final EstadisticasRutina? datos;
+  final Formato formato;
   final int nEjercicios;
 
   /// «Sesiones» lleva al historial, que es desde donde se corrigen y borran.

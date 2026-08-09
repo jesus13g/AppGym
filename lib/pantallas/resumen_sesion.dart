@@ -10,8 +10,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
-import '../datos/formato.dart' as formato;
+import '../datos/formato.dart';
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -33,7 +34,7 @@ class PantallaResumenSesion extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final sesion = ref.watch(sesionProvider(idEntrenamiento));
     final records = ref.watch(recordsSesionProvider(idEntrenamiento));
-    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
+    final f = formatoDe(context, ref);
 
     return CupertinoPageScaffold(
       backgroundColor: context.fondo,
@@ -60,7 +61,7 @@ class PantallaResumenSesion extends ConsumerWidget {
           final datos => _Contenido(
             sesion: datos,
             records: records.value ?? const [],
-            ajustes: ajustes,
+            formato: f,
           ),
         },
       ),
@@ -72,12 +73,12 @@ class _Contenido extends StatelessWidget {
   const _Contenido({
     required this.sesion,
     required this.records,
-    required this.ajustes,
+    required this.formato,
   });
 
   final SesionCompleta sesion;
   final List<RecordSesion> records;
-  final Ajustes ajustes;
+  final Formato formato;
 
   @override
   Widget build(BuildContext context) {
@@ -125,9 +126,7 @@ class _Contenido extends StatelessWidget {
           child: Row(
             children: [
               Expanded(child: _Dato('$nSeries', 'Series')),
-              Expanded(
-                child: _Dato(formato.peso(sesion.volumen, ajustes), 'Volumen'),
-              ),
+              Expanded(child: _Dato(formato.peso(sesion.volumen), 'Volumen')),
               Expanded(
                 child: _Dato(
                   duracion == null ? '—' : formato.duracion(duracion),
@@ -156,7 +155,7 @@ class _Contenido extends StatelessWidget {
                   leadingSize: 24,
                   title: Text(r.nombre, style: ui.estilo(context)),
                   subtitle: Text(
-                    _detalle(r, ajustes),
+                    _detalle(r, formato),
                     style: ui.estilo(
                       context,
                       size: t.footnote,
@@ -164,7 +163,7 @@ class _Contenido extends StatelessWidget {
                     ),
                   ),
                   additionalInfo: Text(
-                    _cifra(r, ajustes),
+                    _cifra(r, formato),
                     style: ui.estilo(context, weight: t.semibold),
                   ),
                 ),
@@ -176,15 +175,12 @@ class _Contenido extends StatelessWidget {
             for (final e in sesion.ejercicios)
               CupertinoListTile(
                 backgroundColor: context.tarjeta,
-                leading: ui.Miniatura(
-                  formato.imagenEjercicio(e.ejercicio),
-                  tamano: 40,
-                ),
+                leading: ui.Miniatura(imagenEjercicio(e.ejercicio), tamano: 40),
                 leadingSize: 40,
                 title: Text(e.ejercicio.nombre, style: ui.estilo(context)),
                 subtitle: Text(
-                  '${formato.plural(e.series.length, 'serie', 'series')} · '
-                  '${formato.peso(e.volumen, ajustes)}',
+                  '${context.t.comunSeries(e.series.length)} · '
+                  '${formato.peso(e.volumen)}',
                   style: ui.estilo(
                     context,
                     size: t.footnote,
@@ -205,10 +201,9 @@ class _Contenido extends StatelessWidget {
 /// Se baten los tres a la vez con más frecuencia de la que parece —subir el
 /// peso suele subir también el 1RM y el volumen—, así que se enumeran en vez de
 /// quedarse solo con el primero.
-String _detalle(RecordSesion record, Ajustes ajustes) {
-  String contra(double? anterior) => anterior == null
-      ? 'primera vez'
-      : 'antes ${formato.peso(anterior, ajustes)}';
+String _detalle(RecordSesion record, Formato formato) {
+  String contra(double? anterior) =>
+      anterior == null ? 'primera vez' : 'antes ${formato.peso(anterior)}';
 
   final partes = [
     for (final tipo in record.batidos)
@@ -223,15 +218,15 @@ String _detalle(RecordSesion record, Ajustes ajustes) {
 
 /// La cifra que se enseña a la derecha: la del récord más significativo de los
 /// batidos, en el orden peso → 1RM → volumen.
-String _cifra(RecordSesion record, Ajustes ajustes) {
+String _cifra(RecordSesion record, Formato formato) {
   final batidos = record.batidos;
   if (batidos.contains(TipoRecord.peso)) {
-    return formato.peso(record.pesoMaximo, ajustes);
+    return formato.peso(record.pesoMaximo);
   }
   if (batidos.contains(TipoRecord.unoRm) && record.mejor1RM != null) {
-    return formato.peso(record.mejor1RM!, ajustes);
+    return formato.peso(record.mejor1RM!);
   }
-  return formato.peso(record.volumen, ajustes);
+  return formato.peso(record.volumen);
 }
 
 class _Dato extends StatelessWidget {

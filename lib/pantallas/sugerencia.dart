@@ -12,8 +12,7 @@ library;
 
 import 'package:flutter/cupertino.dart';
 
-import '../datos/bd.dart';
-import '../datos/formato.dart' as formato;
+import '../datos/formato.dart';
 import '../datos/progresion.dart' as progresion;
 import '../tema/tokens.dart';
 import '../tema/ui.dart' as ui;
@@ -22,7 +21,7 @@ import '../tema/ui.dart' as ui;
 ///
 /// En peso corporal el peso se omite: «3×10» ya lo dice todo, y «3×10 · 0 kg»
 /// es ruido.
-String textoSugerencia(progresion.Sugerencia sugerencia, Ajustes ajustes) {
+String textoSugerencia(progresion.Sugerencia sugerencia, Formato f) {
   final series = sugerencia.series;
   if (series.isEmpty) return '';
 
@@ -32,7 +31,7 @@ String textoSugerencia(progresion.Sugerencia sugerencia, Ajustes ajustes) {
       : series.map((s) => s.repeticiones).join('/');
 
   if (series.every((s) => s.peso == 0)) return cuenta;
-  return '$cuenta · ${formato.peso(sugerencia.peso, ajustes)}';
+  return '$cuenta · ${f.peso(sugerencia.peso)}';
 }
 
 /// Por qué se propone, en una frase.
@@ -89,20 +88,20 @@ class LineaSugerencia extends StatelessWidget {
   const LineaSugerencia({
     super.key,
     required this.sugerencia,
-    this.ajustes = const Ajustes(),
+    required this.formato,
     this.onAplicar,
     this.onDescartar,
   });
 
   final progresion.Sugerencia sugerencia;
-  final Ajustes ajustes;
+  final Formato formato;
   final VoidCallback? onAplicar;
   final VoidCallback? onDescartar;
 
   @override
   Widget build(BuildContext context) => ui.Sugerencia(
     icono: _icono(sugerencia.tipo),
-    titulo: 'Sugerido ${textoSugerencia(sugerencia, ajustes)}',
+    titulo: 'Sugerido ${textoSugerencia(sugerencia, formato)}',
     motivo: motivoSugerencia(sugerencia),
     color: _color(context, sugerencia.tipo),
     fiable: sugerencia.fiable,

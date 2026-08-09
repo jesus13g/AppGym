@@ -9,8 +9,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
-import '../datos/formato.dart' as formato;
+import '../datos/formato.dart';
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -37,7 +38,7 @@ class PantallaHistorial extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final rutina = ref.watch(rutinaProvider(idRutina));
     final historial = ref.watch(historialRutinaProvider(idRutina));
-    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
+    final f = formatoDe(context, ref);
 
     return CupertinoPageScaffold(
       backgroundColor: context.fondo,
@@ -65,11 +66,7 @@ class PantallaHistorial extends ConsumerWidget {
               : ListView(
                   children: [
                     ui.Grupo(
-                      cabecera: formato.plural(
-                        sesiones.length,
-                        'sesión',
-                        'sesiones',
-                      ),
+                      cabecera: context.t.comunSesiones(sesiones.length),
                       pie: 'Desliza una sesión para eliminarla.',
                       filas: [
                         for (final sesion in sesiones)
@@ -84,11 +81,11 @@ class PantallaHistorial extends ConsumerWidget {
                             child: CupertinoListTile(
                               backgroundColor: context.tarjeta,
                               title: Text(
-                                formato.fechaLarga(sesion.fecha),
+                                f.fechaLarga(sesion.fecha),
                                 style: ui.estilo(context),
                               ),
                               subtitle: Text(
-                                _resumen(sesion, ajustes),
+                                _resumen(context, f, sesion),
                                 style: ui.estilo(
                                   context,
                                   size: t.footnote,
@@ -125,8 +122,8 @@ class PantallaHistorial extends ConsumerWidget {
     );
   }
 
-  String _resumen(ResumenSesion sesion, Ajustes ajustes) =>
-      '${formato.plural(sesion.nEjercicios, 'ejercicio', 'ejercicios')} · '
-      '${formato.plural(sesion.nSeries, 'serie', 'series')} · '
-      '${formato.peso(sesion.volumen, ajustes)}';
+  String _resumen(BuildContext context, Formato f, ResumenSesion sesion) =>
+      '${context.t.comunEjercicios(sesion.nEjercicios)} · '
+      '${context.t.comunSeries(sesion.nSeries)} · '
+      '${f.peso(sesion.volumen)}';
 }

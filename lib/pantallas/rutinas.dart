@@ -5,9 +5,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
-import '../datos/formato.dart' as formato;
+import '../datos/formato.dart';
 import '../datos/plantillas.dart';
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -48,7 +49,7 @@ class PantallaRutinas extends ConsumerWidget {
                   const SizedBox(height: 2),
                   Text(
                     '${p.resumen} · '
-                    '${formato.plural(p.nEjercicios, 'ejercicio', 'ejercicios')}',
+                    '${hoja.t.comunEjercicios(p.nEjercicios)}',
                     textAlign: TextAlign.center,
                     style: ui.estilo(
                       hoja,
@@ -94,7 +95,7 @@ class PantallaRutinas extends ConsumerWidget {
               for (final r in plantilla.rutinas)
                 Text(
                   '${r.nombre} · '
-                  '${formato.plural(r.ejercicios.length, 'ejercicio', 'ejercicios')}',
+                  '${dialogo.t.comunEjercicios(r.ejercicios.length)}',
                   textAlign: TextAlign.center,
                   style: ui.estilo(dialogo, size: t.footnote),
                 ),
@@ -213,6 +214,7 @@ class PantallaRutinas extends ConsumerWidget {
                     )
                   : _Lista(
                       rutinas: rutinas,
+                      formato: formatoDe(context, ref),
                       onBorrar: (id) => _borrar(ref, id),
                     ),
             ),
@@ -224,9 +226,14 @@ class PantallaRutinas extends ConsumerWidget {
 }
 
 class _Lista extends StatelessWidget {
-  const _Lista({required this.rutinas, required this.onBorrar});
+  const _Lista({
+    required this.rutinas,
+    required this.formato,
+    required this.onBorrar,
+  });
 
   final List<ResumenRutina> rutinas;
+  final Formato formato;
   final void Function(int idRutina) onBorrar;
 
   @override
@@ -254,7 +261,7 @@ class _Lista extends StatelessWidget {
                 title: Text(r.nombre, style: ui.estilo(context)),
                 subtitle: Text(
                   [
-                    formato.plural(r.nEjercicios, 'ejercicio', 'ejercicios'),
+                    context.t.comunEjercicios(r.nEjercicios),
                     formato.hace(r.ultimaFecha),
                   ].join(' · '),
                   style: ui.estilo(

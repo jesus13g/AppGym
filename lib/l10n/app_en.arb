@@ -4,5 +4,24 @@
   "comunGuardar": "Save",
   "comunCancelar": "Cancel",
   "comunEliminar": "Delete",
-  "comunListo": "Done"
+  "comunListo": "Done",
+  "comunSinEntrenar": "Not trained yet",
+  "comunEjercicioPersonalizado": "Custom exercise",
+
+  "comunSeries": "{n, plural, =1{1 set} other{{n} sets}}",
+  "comunRepeticiones": "{n, plural, =1{1 rep} other{{n} reps}}",
+  "comunEjercicios": "{n, plural, =1{1 exercise} other{{n} exercises}}",
+  "comunEjerciciosPersonalizados": "{n, plural, =1{1 custom exercise} other{{n} custom exercises}}",
+  "comunSesiones": "{n, plural, =1{1 session} other{{n} sessions}}",
+  "comunSemanas": "{n, plural, =1{1 week} other{{n} weeks}}",
+  "comunDias": "{n, plural, =1{1 day} other{{n} days}}",
+
+  "haceDias": "{dias, plural, =0{Today} =1{Yesterday} other{{dias} days ago}}",
+  "haceSemanas": "{semanas, plural, =1{1 week ago} other{{semanas} weeks ago}}",
+  "haceMeses": "{meses, plural, =1{1 month ago} other{{meses} months ago}}",
+
+  "desdeMomento": "a moment ago",
+  "desdeMinutos": "{minutos, plural, =1{1 minute ago} other{{minutos} minutes ago}}",
+  "desdeHoras": "{horas, plural, =1{1 hour ago} other{{horas} hours ago}}",
+  "desdeDias": "{dias, plural, =1{1 day ago} other{{dias} days ago}}"
 }

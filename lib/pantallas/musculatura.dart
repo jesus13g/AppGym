@@ -15,12 +15,13 @@ import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
-import '../datos/formato.dart' as formato;
+import '../datos/formato.dart';
 import '../datos/geometria.dart';
 import '../datos/media.dart' as media;
 import '../datos/musculos.dart';
 import '../datos/reloj.dart' as reloj;
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -174,9 +175,10 @@ class _MapaMuscularState extends ConsumerState<MapaMuscular> {
   String _avisoDeFuera(SinRepresentar fuera) {
     final partes = <String>[
       if (fuera.personalizados > 0)
-        '${formato.plural(fuera.personalizados, 'ejercicio personalizado', 'ejercicios personalizados')} sin músculo asignado',
+        '${context.t.comunEjerciciosPersonalizados(fuera.personalizados)} '
+            'sin músculo asignado',
       if (fuera.cardio > 0)
-        '${formato.plural(fuera.cardio, 'ejercicio', 'ejercicios')} de cardio',
+        '${context.t.comunEjercicios(fuera.cardio)} de cardio',
     ];
     return '${partes.join(' y ')}: no se reparten por el modelo.';
   }
@@ -452,9 +454,7 @@ class _MenosTrabajados extends StatelessWidget {
             style: ui.estilo(context),
           ),
           additionalInfo: Text(
-            dias == null
-                ? 'nunca'
-                : 'hace ${formato.plural(dias, 'día', 'días')}',
+            dias == null ? 'nunca' : context.t.desdeDias(dias),
             style: ui.estilo(
               context,
               size: t.footnote,
@@ -495,7 +495,7 @@ class _HojaRegion extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final datos = regiones[region]!;
     final trabajos = ref.watch(trabajoMuscularProvider).value ?? const [];
-    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
+    final f = formatoDe(context, ref);
     final desde = reloj.ahora().subtract(Duration(days: dias));
     final trabajo = trabajoPorRegion(trabajos, desde: desde)[region];
     final sesiones = sesionesDeRegion(trabajos, region);
@@ -545,8 +545,8 @@ class _HojaRegion extends ConsumerWidget {
             Expanded(
               child: ListView(
                 children: [
-                  _resumen(context, trabajo, enRutinas, ajustes),
-                  _sesiones(context, sesiones),
+                  _resumen(context, trabajo, enRutinas, f),
+                  _sesiones(context, ref, sesiones),
                   _Ejercicios(region: region),
                   const SizedBox(height: t.xxl),
                 ],
@@ -562,7 +562,7 @@ class _HojaRegion extends ConsumerWidget {
     BuildContext context,
     TrabajoRegion? trabajo,
     List<String> enRutinas,
-    Ajustes ajustes,
+    Formato f,
   ) => ui.Grupo(
     cabecera: 'Últimos $dias días',
     pie:
@@ -573,7 +573,7 @@ class _HojaRegion extends ConsumerWidget {
       _fila(
         context,
         'Volumen',
-        trabajo == null ? '—' : formato.peso(trabajo.volumen, ajustes),
+        trabajo == null ? '—' : f.peso(trabajo.volumen),
       ),
       _fila(
         context,
@@ -583,9 +583,7 @@ class _HojaRegion extends ConsumerWidget {
       _fila(
         context,
         'Última vez',
-        trabajo?.ultima == null
-            ? 'Sin registros'
-            : formato.hace(trabajo!.ultima!),
+        trabajo?.ultima == null ? 'Sin registros' : f.hace(trabajo!.ultima!),
       ),
       if (enRutinas.isNotEmpty)
         _fila(context, 'En tus rutinas', enRutinas.join(', ')),
@@ -607,7 +605,11 @@ class _HojaRegion extends ConsumerWidget {
         ),
       );
 
-  Widget _sesiones(BuildContext context, List<SesionDeRegion> sesiones) {
+  Widget _sesiones(
+    BuildContext context,
+    WidgetRef ref,
+    List<SesionDeRegion> sesiones,
+  ) {
     if (sesiones.isEmpty) return const SizedBox.shrink();
     return ui.Grupo(
       cabecera: 'Tus entrenamientos',
@@ -622,7 +624,8 @@ class _HojaRegion extends ConsumerWidget {
               style: ui.estilo(context),
             ),
             subtitle: Text(
-              '${formato.fechaCorta(s.fecha)} · ${formato.plural(s.nSeries, 'serie', 'series')}',
+              '${formatoDe(context, ref).fechaCorta(s.fecha)} · '
+              '${context.t.comunSeries(s.nSeries)}',
               style: ui.estilo(
                 context,
                 size: t.footnote,
@@ -682,7 +685,7 @@ class _Ejercicios extends ConsumerWidget {
             subtitle: Text(
               mios.contains(ficha.id)
                   ? 'Ya está en tus rutinas'
-                  : formato.subtituloCatalogo(ficha),
+                  : formatoDe(context, ref).subtituloCatalogo(ficha),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: ui.estilo(

@@ -10,11 +10,11 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
-import '../datos/formato.dart' as formato;
 import '../datos/i18n.dart' as i18n;
 import '../datos/musculos.dart';
 import '../datos/media.dart' as media;
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -358,7 +358,7 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
   String get _contador {
     if (_resultados.isEmpty) return '';
     if (_hayMas) return '${_resultados.length}+ ejercicios';
-    return formato.plural(_resultados.length, 'ejercicio', 'ejercicios');
+    return context.t.comunEjercicios(_resultados.length);
   }
 
   Widget _lista() {
@@ -408,7 +408,7 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
       leadingSize: 48,
       title: Text(ficha.nombre, style: ui.estilo(context)),
       subtitle: Text(
-        formato.subtituloCatalogo(ficha),
+        formatoDe(context, ref).subtituloCatalogo(ficha),
         style: ui.estilo(context, size: t.footnote, color: context.textoSec),
       ),
       trailing: Row(
@@ -544,7 +544,7 @@ class _Destacados extends ConsumerWidget {
           leadingSize: 40,
           title: Text(ficha.nombre, style: ui.estilo(context)),
           subtitle: Text(
-            formato.subtituloCatalogo(ficha),
+            formatoDe(context, ref).subtituloCatalogo(ficha),
             style: ui.estilo(
               context,
               size: t.footnote,

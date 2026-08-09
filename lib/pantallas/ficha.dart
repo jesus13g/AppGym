@@ -5,7 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
-import '../datos/formato.dart' as formato;
+import '../datos/formato.dart';
 import '../datos/i18n.dart' as i18n;
 import '../datos/media.dart' as media;
 import '../estado/providers.dart';
@@ -80,10 +80,8 @@ class _Contenido extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final secundarios = i18n.musculos(
-      formato.listaJson(ficha.secondaryMuscles),
-    );
-    final pasos = formato.listaJson(ficha.instrucciones);
+    final secundarios = i18n.musculos(listaJson(ficha.secondaryMuscles));
+    final pasos = listaJson(ficha.instrucciones);
     final animacion = media.resolver(ficha.gif);
 
     return SafeArea(

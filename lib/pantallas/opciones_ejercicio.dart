@@ -16,7 +16,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/ajustes.dart' show descansos, pasosPeso;
 import '../datos/bd.dart';
-import '../datos/formato.dart' as formato;
+import '../datos/formato.dart';
 import '../datos/progresion.dart' as progresion;
 import '../estado/providers.dart';
 import '../tema/tokens.dart';
@@ -60,7 +60,7 @@ class _HojaOpcionesState extends ConsumerState<_HojaOpciones> {
   @override
   Widget build(BuildContext context) {
     final ejercicio = ref.watch(ejercicioProvider(widget.idEjercicio)).value;
-    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
+    final f = formatoDe(context, ref);
     final historial = ref
         .watch(
           resumenSesionesEjercicioProvider((
@@ -81,7 +81,7 @@ class _HojaOpcionesState extends ConsumerState<_HojaOpciones> {
     final fila = ejercicio.ejercicio;
     final config = progresion.ConfiguracionProgresion.resolver(
       ejercicio,
-      ajustes,
+      f.ajustes,
     );
     final observado = historial == null
         ? null
@@ -118,11 +118,11 @@ class _HojaOpcionesState extends ConsumerState<_HojaOpciones> {
                     filas: [
                       _fila(
                         titulo: 'Descanso',
-                        valor: formato.descanso(
-                          fila.descansoSeg ?? ajustes.descansoSeg,
+                        valor: f.descanso(
+                          fila.descansoSeg ?? f.ajustes.descansoSeg,
                         ),
                         propio: fila.descansoSeg != null,
-                        onTap: () => _elegirDescanso(fila, ajustes),
+                        onTap: () => _elegirDescanso(fila, f),
                       ),
                     ],
                   ),
@@ -144,9 +144,9 @@ class _HojaOpcionesState extends ConsumerState<_HojaOpciones> {
                       ),
                       _fila(
                         titulo: 'Escalón de peso',
-                        valor: formato.peso(config.incrementoKg, ajustes),
+                        valor: f.peso(config.incrementoKg),
                         propio: fila.incrementoKg != null,
-                        onTap: () => _elegirEscalon(fila, ajustes),
+                        onTap: () => _elegirEscalon(fila, f),
                       ),
                     ],
                   ),
@@ -223,7 +223,7 @@ class _HojaOpcionesState extends ConsumerState<_HojaOpciones> {
         progresion.Estrategia.soloRepeticiones => 'Solo repeticiones',
       };
 
-  Future<void> _elegirDescanso(Ejercicio fila, Ajustes ajustes) async {
+  Future<void> _elegirDescanso(Ejercicio fila, Formato f) async {
     final elegido = await ui.elegirEnHoja<int?>(
       context,
       titulo: 'Descanso',
@@ -232,9 +232,8 @@ class _HojaOpcionesState extends ConsumerState<_HojaOpciones> {
           'se separa uno del otro.',
       actual: fila.descansoSeg,
       opciones: [
-        (null, 'Como el global (${formato.descanso(ajustes.descansoSeg)})'),
-        for (final segundos in descansos)
-          (segundos, formato.descanso(segundos)),
+        (null, 'Como el global (${f.descanso(f.ajustes.descansoSeg)})'),
+        for (final segundos in descansos) (segundos, f.descanso(segundos)),
       ],
     );
     if (elegido == null) return;
@@ -294,7 +293,7 @@ class _HojaOpcionesState extends ConsumerState<_HojaOpciones> {
     );
   }
 
-  Future<void> _elegirEscalon(Ejercicio fila, Ajustes ajustes) async {
+  Future<void> _elegirEscalon(Ejercicio fila, Formato f) async {
     // Los pasos están en la unidad activa y la columna en kilos, así que se
     // ofrecen los mismos que el selector de peso y se guardan convertidos.
     final elegido = await ui.elegirEnHoja<double?>(
@@ -304,10 +303,10 @@ class _HojaOpcionesState extends ConsumerState<_HojaOpciones> {
       opciones: [
         (
           null,
-          'Como el global (${formato.peso(ajustes.aKilos(ajustes.pasoPeso), ajustes)})',
+          'Como el global (${f.peso(f.ajustes.aKilos(f.ajustes.pasoPeso))})',
         ),
         for (final paso in pasosPeso)
-          (ajustes.aKilos(paso), formato.peso(ajustes.aKilos(paso), ajustes)),
+          (f.ajustes.aKilos(paso), f.peso(f.ajustes.aKilos(paso))),
       ],
     );
     if (elegido == null) return;

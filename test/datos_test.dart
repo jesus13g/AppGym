@@ -6,12 +6,13 @@ library;
 
 import 'package:appgym/datos/ajustes.dart';
 import 'package:appgym/datos/bd.dart';
-import 'package:appgym/datos/formato.dart';
 import 'package:appgym/datos/i18n.dart';
 import 'package:appgym/datos/musculos.dart';
 import 'package:appgym/datos/semilla.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'ayuda.dart';
 
 /// Un par de fichas sintéticas, para no depender del asset de 1 MB.
 final _catalogoFalso = [
@@ -160,9 +161,12 @@ void main() {
         final lista = await bd.ejerciciosDeRutina(id);
         expect(lista.length, 2);
         expect(lista[0].ficha!.target, 'biceps');
-        expect(subtituloEjercicio(lista[0]), 'Bíceps · Mancuerna');
+        expect(
+          formatoDePrueba().subtituloEjercicio(lista[0]),
+          'Bíceps · Mancuerna',
+        );
         expect(lista[1].ficha, isNull);
-        expect(subtituloEjercicio(lista[1]), 'Un minuto');
+        expect(formatoDePrueba().subtituloEjercicio(lista[1]), 'Un minuto');
       },
     );
 
@@ -277,10 +281,11 @@ void main() {
 
     test('cambiar de escala reinterpreta lo guardado, no lo migra', () async {
       // El valor vive en la base siempre como RPE; RIR = 10 − RPE.
-      expect(esfuerzo(8, EscalaEsfuerzo.rpe), 'RPE 8');
-      expect(esfuerzo(8, EscalaEsfuerzo.rir), 'RIR 2');
-      expect(esfuerzo(9.5, EscalaEsfuerzo.rpe), 'RPE 9,5');
-      expect(esfuerzo(9.5, EscalaEsfuerzo.rir), 'RIR 0,5');
+      final f = formatoDePrueba();
+      expect(f.esfuerzo(8, EscalaEsfuerzo.rpe), 'RPE 8');
+      expect(f.esfuerzo(8, EscalaEsfuerzo.rir), 'RIR 2');
+      expect(f.esfuerzo(9.5, EscalaEsfuerzo.rpe), 'RPE 9,5');
+      expect(f.esfuerzo(9.5, EscalaEsfuerzo.rir), 'RIR 0,5');
     });
   });
 

@@ -1,96 +1,184 @@
 /// Formateo de textos que comparten varias pantallas.
+///
+/// Todo lo que depende del idioma vive en [Formato], que se construye con el
+/// locale activo, las preferencias y los textos traducidos. Antes esto era un
+/// puñado de funciones globales con el español dentro —los nombres de los meses,
+/// la coma decimal, «Hace 3 días»—, y ninguna de esas cosas se arregla cambiando
+/// el literal: cambia el orden de la fecha, cambia el separador de miles y
+/// cambia el número de formas del plural.
+///
+/// [Formato] **no conoce `BuildContext`**: recibe datos y devuelve texto, así
+/// que `test/formato_test.dart` lo prueba en los dos idiomas con fechas fijas.
+/// Quien lo construye es `formatoDe(context, ref)` (ver `estado/providers.dart`),
+/// que toma el idioma del árbol de widgets para que no pueda divergir del que
+/// `CupertinoApp` resolvió.
 library;
 
 import 'dart:convert';
 
 import 'package:flutter/widgets.dart' show ImageProvider;
+import 'package:intl/intl.dart';
 
+import '../l10n/textos.dart';
 import 'bd.dart';
 import 'i18n.dart';
 import 'media.dart' as media;
 
-const meses = <String>[
-  'Enero',
-  'Febrero',
-  'Marzo',
-  'Abril',
-  'Mayo',
-  'Junio',
-  'Julio',
-  'Agosto',
-  'Septiembre',
-  'Octubre',
-  'Noviembre',
-  'Diciembre',
-];
+/// Fechas, números y unidades del idioma activo.
+class Formato {
+  const Formato({
+    required this.locale,
+    required this.textos,
+    this.ajustes = const Ajustes(),
+  });
 
-const diasSemana = <String>['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+  /// Código del idioma activo ('es', 'en'), tal y como lo resolvió Flutter.
+  final String locale;
 
-/// Nombre del mes (1-12).
-String mes(int numero) => meses[numero - 1];
+  /// Los textos traducidos. Hacen falta aquí porque los relativos («Hace 3
+  /// días») salen de una clave ICU con plural, no de un `if` por idioma.
+  final Textos textos;
 
-/// '12 mar'.
-String fechaCorta(DateTime? valor) {
-  if (valor == null) return '';
-  return '${valor.day} ${meses[valor.month - 1].substring(0, 3).toLowerCase()}';
-}
+  final Ajustes ajustes;
 
-/// '12 de marzo de 2026'.
-String fechaLarga(DateTime? valor) {
-  if (valor == null) return '';
-  return '${valor.day} de ${meses[valor.month - 1].toLowerCase()} de ${valor.year}';
-}
+  // ── Fechas ─────────────────────────────────────────────────────────────────
 
-/// '19:30'. La hora del día, en 24 h, que es como se lee en español.
-String hora(DateTime valor) =>
-    '${valor.hour}:${valor.minute.toString().padLeft(2, '0')}';
+  /// '1 mar' · 'Mar 1'.
+  String fechaCorta(DateTime? valor) =>
+      valor == null ? '' : DateFormat.MMMd(locale).format(valor);
 
-/// Distancia en lenguaje natural hasta hoy: 'Hoy', 'Ayer', 'Hace 5 días'…
-String hace(DateTime? valor) {
-  if (valor == null) return 'Sin entrenar';
-  final hoy = DateTime.now();
-  final dias = DateTime(
-    hoy.year,
-    hoy.month,
-    hoy.day,
-  ).difference(DateTime(valor.year, valor.month, valor.day)).inDays;
+  /// '1 de marzo de 2026' · 'March 1, 2026'.
+  String fechaLarga(DateTime? valor) =>
+      valor == null ? '' : DateFormat.yMMMMd(locale).format(valor);
 
-  if (dias <= 0) return 'Hoy';
-  if (dias == 1) return 'Ayer';
-  if (dias < 7) return 'Hace $dias días';
-  if (dias < 30) {
-    final semanas = dias ~/ 7;
-    return 'Hace $semanas ${semanas > 1 ? 'semanas' : 'semana'}';
+  /// 'Marzo de 2026' · 'March 2026', para la cabecera del calendario.
+  String mesYAno(DateTime valor) =>
+      _capitalizar(DateFormat.yMMMM(locale).format(valor));
+
+  /// La hora del día, en el reloj que use el idioma: '19:05' · '7:05 PM'.
+  String hora(DateTime valor) => DateFormat.jm(locale).format(valor);
+
+  /// Las iniciales de los días, **de lunes a domingo**.
+  ///
+  /// La semana empieza en lunes en todos los idiomas y eso es deliberado, no un
+  /// descuido: la racha semanal (C17) y el reparto de `metricas.porSemana` están
+  /// definidos sobre semanas de lunes a domingo, y hacer que el primer día
+  /// dependiera del idioma daría rachas distintas en dos móviles del mismo
+  /// usuario. Ver la nota de `metricas.lunesDe`.
+  List<String> get inicialesSemana {
+    // `NARROWWEEKDAYS` empieza en domingo, que es la convención de CLDR.
+    final estrechos = DateFormat(null, locale).dateSymbols.NARROWWEEKDAYS;
+    return [for (var i = 1; i <= 7; i++) estrechos[i % 7]];
   }
-  final n = dias ~/ 30;
-  return 'Hace $n ${n > 1 ? 'meses' : 'mes'}';
+
+  /// Distancia en lenguaje natural hasta hoy: 'Hoy', 'Ayer', 'Hace 5 días'…
+  String hace(DateTime? valor) {
+    if (valor == null) return textos.comunSinEntrenar;
+    final hoy = DateTime.now();
+    final dias = DateTime(
+      hoy.year,
+      hoy.month,
+      hoy.day,
+    ).difference(DateTime(valor.year, valor.month, valor.day)).inDays;
+
+    if (dias < 7) return textos.haceDias(dias < 0 ? 0 : dias);
+    if (dias < 30) return textos.haceSemanas(dias ~/ 7);
+    return textos.haceMeses(dias ~/ 30);
+  }
+
+  /// Cuánto hace, en lenguaje natural: 'hace 12 minutos', 'hace 2 horas'.
+  ///
+  /// A diferencia de [hace], que cuenta días para el calendario, esto cuenta
+  /// minutos: la sesión que se ofrece retomar se dejó hace un rato, no hace
+  /// días. Va en minúscula porque se incrusta dentro de una frase.
+  String desde(DateTime valor) {
+    final minutos = DateTime.now().difference(valor).inMinutes;
+    if (minutos < 1) return textos.desdeMomento;
+    if (minutos < 60) return textos.desdeMinutos(minutos);
+
+    final horas = minutos ~/ 60;
+    if (horas < 24) return textos.desdeHoras(horas);
+    return textos.desdeDias(horas ~/ 24);
+  }
+
+  // ── Números ────────────────────────────────────────────────────────────────
+
+  /// Un número con los separadores del idioma, sin el '.0' cuando es entero.
+  ///
+  /// '8.750' y '62,5' en español; '8,750' y '62.5' en inglés. `toString`
+  /// siempre escribe el punto y nunca agrupa, sea cual sea la localización.
+  String numero(num valor) => NumberFormat.decimalPattern(locale).format(valor);
+
+  /// Un peso guardado (siempre en kilos) escrito en la unidad activa.
+  ///
+  /// Es el único sitio por el que debe pasar un peso antes de pintarse: en
+  /// cuanto una pantalla escriba `'$valor kg'` a mano, cambiar a libras dejará
+  /// de funcionar justo ahí.
+  String peso(double kilos) {
+    final valor = ajustes.desdeKilos(kilos);
+    // Un decimal: en libras la conversión saca 132,2772 y ese resto no aporta
+    // nada, ni siquiera precisión real.
+    return '${numero((valor * 10).round() / 10)} ${ajustes.unidad.sufijo}';
+  }
+
+  /// Una duración en segundos como '1:05:12' o '34:12'.
+  ///
+  /// Las horas solo aparecen si las hay: un entrenamiento de 40 minutos escrito
+  /// como «0:40:12» se lee peor. Los dos puntos son universales, así que esto no
+  /// depende del idioma.
+  String duracion(int segundos) {
+    final horas = segundos ~/ 3600;
+    final minutos = (segundos % 3600) ~/ 60;
+    final resto = (segundos % 60).toString().padLeft(2, '0');
+    if (horas == 0) return '$minutos:$resto';
+    return '$horas:${minutos.toString().padLeft(2, '0')}:$resto';
+  }
+
+  /// Un descanso en segundos como '1 min 30 s'.
+  ///
+  /// `s` y `min` son los símbolos del SI y no se traducen, igual que `kg`.
+  String descanso(int segundos) {
+    if (segundos < 60) return '$segundos s';
+    final minutos = segundos ~/ 60;
+    final resto = segundos % 60;
+    return resto == 0 ? '$minutos min' : '$minutos min $resto s';
+  }
+
+  /// El esfuerzo guardado (siempre RPE) escrito en la escala elegida.
+  ///
+  /// `RIR = 10 − RPE`: son la misma información contada al revés, así que
+  /// cambiar de escala reinterpreta lo guardado y no hace falta migrar nada.
+  /// Las dos siglas son internacionales y no se traducen.
+  String esfuerzo(double valorRpe, EscalaEsfuerzo escala) => switch (escala) {
+    EscalaEsfuerzo.rpe => 'RPE ${numero(valorRpe)}',
+    EscalaEsfuerzo.rir => 'RIR ${numero(10 - valorRpe)}',
+  };
+
+  // ── Ejercicios ─────────────────────────────────────────────────────────────
+
+  /// 'Pectorales · Mancuerna' para una ficha del catálogo.
+  String subtituloCatalogo(FichaCatalogo? ficha) {
+    if (ficha == null) return '';
+    return [
+      musculo(ficha.target),
+      equipamiento(ficha.equipment),
+    ].where((p) => p.isNotEmpty).join(' · ');
+  }
+
+  /// Subtítulo de un ejercicio de rutina: el del catálogo, o su descripción.
+  String subtituloEjercicio(EjercicioConFicha ejercicio) {
+    if (ejercicio.ficha != null) return subtituloCatalogo(ejercicio.ficha);
+    final descripcion = ejercicio.ejercicio.descripcion?.trim();
+    return (descripcion == null || descripcion.isEmpty)
+        ? textos.comunEjercicioPersonalizado
+        : descripcion;
+  }
+
+  static String _capitalizar(String texto) =>
+      texto.isEmpty ? texto : texto[0].toUpperCase() + texto.substring(1);
 }
 
-/// Cuánto hace, en lenguaje natural: 'hace 12 minutos', 'hace 2 horas'.
-///
-/// A diferencia de [hace], que cuenta días para el calendario, esto cuenta
-/// minutos: la sesión que se ofrece retomar se dejó hace un rato, no hace días.
-String desde(DateTime valor) {
-  final minutos = DateTime.now().difference(valor).inMinutes;
-  if (minutos < 1) return 'hace un momento';
-  if (minutos < 60) return 'hace ${plural(minutos, 'minuto', 'minutos')}';
-
-  final horas = minutos ~/ 60;
-  if (horas < 24) return 'hace ${plural(horas, 'hora', 'horas')}';
-  return 'hace ${plural(horas ~/ 24, 'día', 'días')}';
-}
-
-String plural(int cantidad, String singular, String plural) =>
-    '$cantidad ${cantidad == 1 ? singular : plural}';
-
-/// Formatea un número quitando el '.0' cuando es entero, como el '%g' de Python.
-///
-/// Con coma decimal: la interfaz está en español y `toString` siempre escribe
-/// el punto, sea cual sea la localización.
-String numero(num valor) {
-  if (valor == valor.roundToDouble()) return valor.round().toString();
-  return valor.toString().replaceAll('.', ',');
-}
+// ── Lo que no depende del idioma ─────────────────────────────────────────────
 
 /// Deserializa una columna de texto que guarda una lista JSON.
 List<String> listaJson(String? valor) {
@@ -102,67 +190,6 @@ List<String> listaJson(String? valor) {
   } on FormatException {
     return const [];
   }
-}
-
-/// Un peso guardado (siempre en kilos) escrito en la unidad activa.
-///
-/// Es el único sitio por el que debe pasar un peso antes de pintarse: en cuanto
-/// una pantalla escriba `'$valor kg'` a mano, cambiar a libras dejará de
-/// funcionar justo ahí.
-String peso(double kilos, Ajustes ajustes) {
-  final valor = ajustes.desdeKilos(kilos);
-  // Un decimal: en libras la conversión saca 132,2772 y ese resto no aporta
-  // nada, ni siquiera precisión real.
-  return '${numero((valor * 10).round() / 10)} ${ajustes.unidad.sufijo}';
-}
-
-/// Una duración en segundos como '1:05:12' o '34:12'.
-///
-/// Las horas solo aparecen si las hay: un entrenamiento de 40 minutos escrito
-/// como «0:40:12» se lee peor.
-String duracion(int segundos) {
-  final horas = segundos ~/ 3600;
-  final minutos = (segundos % 3600) ~/ 60;
-  final resto = (segundos % 60).toString().padLeft(2, '0');
-  if (horas == 0) return '$minutos:$resto';
-  return '$horas:${minutos.toString().padLeft(2, '0')}:$resto';
-}
-
-/// Un descanso en segundos como '1 min 30 s'.
-String descanso(int segundos) {
-  if (segundos < 60) return '$segundos s';
-  final minutos = segundos ~/ 60;
-  final resto = segundos % 60;
-  return resto == 0 ? '$minutos min' : '$minutos min $resto s';
-}
-
-/// El esfuerzo guardado (siempre RPE) escrito en la escala elegida.
-///
-/// `RIR = 10 − RPE`: son la misma información contada al revés, así que cambiar
-/// de escala reinterpreta lo guardado y no hace falta migrar nada.
-String esfuerzo(double valorRpe, EscalaEsfuerzo escala) => switch (escala) {
-  EscalaEsfuerzo.rpe => 'RPE ${numero(valorRpe)}',
-  EscalaEsfuerzo.rir => 'RIR ${numero(10 - valorRpe)}',
-};
-
-// ── Ejercicios ───────────────────────────────────────────────────────────────
-
-/// 'Pectorales · Mancuerna' para una ficha del catálogo.
-String subtituloCatalogo(FichaCatalogo? ficha) {
-  if (ficha == null) return '';
-  return [
-    musculo(ficha.target),
-    equipamiento(ficha.equipment),
-  ].where((p) => p.isNotEmpty).join(' · ');
-}
-
-/// Subtítulo de un ejercicio de rutina: el del catálogo, o su descripción.
-String subtituloEjercicio(EjercicioConFicha ejercicio) {
-  if (ejercicio.ficha != null) return subtituloCatalogo(ejercicio.ficha);
-  final descripcion = ejercicio.ejercicio.descripcion?.trim();
-  return (descripcion == null || descripcion.isEmpty)
-      ? 'Ejercicio personalizado'
-      : descripcion;
 }
 
 /// Miniatura de un ejercicio de rutina, o null si es personalizado.

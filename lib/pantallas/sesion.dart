@@ -8,7 +8,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
-import '../datos/formato.dart' as formato;
+import '../datos/formato.dart';
 import '../estado/providers.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
@@ -49,7 +49,7 @@ class PantallaSesion extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sesion = ref.watch(sesionProvider(idEntrenamiento));
-    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
+    final f = formatoDe(context, ref);
 
     return CupertinoPageScaffold(
       backgroundColor: context.fondo,
@@ -83,7 +83,7 @@ class PantallaSesion extends ConsumerWidget {
                 )
               : _Contenido(
                   sesion: datos,
-                  ajustes: ajustes,
+                  formato: f,
                   onEliminar: () => _eliminar(context, ref, datos),
                 ),
         ),
@@ -95,14 +95,14 @@ class PantallaSesion extends ConsumerWidget {
 class _Contenido extends StatelessWidget {
   const _Contenido({
     required this.sesion,
-    required this.ajustes,
+    required this.formato,
     required this.onEliminar,
   });
 
   final SesionCompleta sesion;
 
   /// De aquí salen la unidad del peso y la escala del esfuerzo.
-  final Ajustes ajustes;
+  final Formato formato;
 
   final VoidCallback onEliminar;
 
@@ -140,9 +140,7 @@ class _Contenido extends StatelessWidget {
                 child: _Dato('${sesion.ejercicios.length}', 'Ejercicios'),
               ),
               Expanded(child: _Dato('$nSeries', 'Series')),
-              Expanded(
-                child: _Dato(formato.peso(sesion.volumen, ajustes), 'Volumen'),
-              ),
+              Expanded(child: _Dato(formato.peso(sesion.volumen), 'Volumen')),
             ],
           ),
         ),
@@ -190,7 +188,7 @@ class _Contenido extends StatelessWidget {
                     final valores => Text(
                       [
                         if (valores.$1 case final rpe?)
-                          formato.esfuerzo(rpe, ajustes.escala),
+                          formato.esfuerzo(rpe, formato.ajustes.escala),
                         ?valores.$2,
                       ].join(' · '),
                       style: ui.estilo(
@@ -201,7 +199,7 @@ class _Contenido extends StatelessWidget {
                     ),
                   },
                   additionalInfo: Text(
-                    formato.peso(serie.peso, ajustes),
+                    formato.peso(serie.peso),
                     style: ui.estilo(context, color: context.textoSec),
                   ),
                 ),

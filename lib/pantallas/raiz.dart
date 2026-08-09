@@ -9,7 +9,6 @@ library;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../datos/formato.dart' as formato;
 import '../datos/media.dart' as media;
 import '../estado/providers.dart';
 import '../tema/tokens.dart';
@@ -105,7 +104,7 @@ class _PestanasState extends ConsumerState<Pestanas> {
           padding: const EdgeInsets.only(top: t.s),
           child: Text(
             '«${rutina.nombre}», empezado '
-            '${formato.desde(borrador.inicio)}.',
+            '${leerFormato(context, ref).desde(borrador.inicio)}.',
             textAlign: TextAlign.center,
           ),
         ),

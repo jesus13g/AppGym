@@ -8,9 +8,10 @@ library;
 import 'package:appgym/datos/ajustes.dart';
 import 'package:appgym/datos/bd.dart';
 import 'package:appgym/datos/borrador.dart';
-import 'package:appgym/datos/formato.dart' as formato;
 import 'package:appgym/pantallas/medidas.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'ayuda.dart';
 
 void main() {
   group('preferencias', () {
@@ -124,7 +125,7 @@ void main() {
       const ajustes = Ajustes();
       expect(ajustes.desdeKilos(60), 60);
       expect(ajustes.aKilos(60), 60);
-      expect(formato.peso(62.5, ajustes), '62,5 kg');
+      expect(formatoDePrueba(ajustes: ajustes).peso(62.5), '62,5 kg');
     });
 
     test('en libras se convierte solo al mostrar', () {
@@ -133,7 +134,7 @@ void main() {
       expect(ajustes.desdeKilos(100), closeTo(220.462, 0.001));
       expect(ajustes.aKilos(220.462), closeTo(100, 0.001));
       // Un decimal al escribir: el resto de 132,2772 no aporta ni precisión.
-      expect(formato.peso(60, ajustes), '132,3 lb');
+      expect(formatoDePrueba(ajustes: ajustes).peso(60), '132,3 lb');
     });
 
     test('ida y vuelta devuelve el mismo peso', () {
@@ -161,43 +162,6 @@ void main() {
     test('el tope del selector sigue a la unidad', () {
       expect(const Ajustes().pesoMaximo, 400);
       expect(const Ajustes(unidad: Unidad.lb).pesoMaximo, 882);
-    });
-  });
-
-  group('formato', () {
-    test('duración con y sin horas', () {
-      expect(formato.duracion(0), '0:00');
-      expect(formato.duracion(72), '1:12');
-      expect(formato.duracion(2052), '34:12');
-      expect(formato.duracion(3912), '1:05:12');
-    });
-
-    test('descanso en lenguaje corriente', () {
-      expect(formato.descanso(45), '45 s');
-      expect(formato.descanso(60), '1 min');
-      expect(formato.descanso(90), '1 min 30 s');
-      expect(formato.descanso(300), '5 min');
-    });
-
-    test('«desde» cuenta minutos, no días', () {
-      final ahora = DateTime.now();
-      expect(formato.desde(ahora), 'hace un momento');
-      expect(
-        formato.desde(ahora.subtract(const Duration(minutes: 12))),
-        'hace 12 minutos',
-      );
-      expect(
-        formato.desde(ahora.subtract(const Duration(minutes: 1))),
-        'hace 1 minuto',
-      );
-      expect(
-        formato.desde(ahora.subtract(const Duration(hours: 3))),
-        'hace 3 horas',
-      );
-      expect(
-        formato.desde(ahora.subtract(const Duration(days: 2))),
-        'hace 2 días',
-      );
     });
   });
 

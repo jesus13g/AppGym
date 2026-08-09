@@ -6,7 +6,6 @@ library;
 
 import 'package:appgym/datos/ajustes.dart';
 import 'package:appgym/datos/bd.dart';
-import 'package:appgym/datos/formato.dart' as formato;
 import 'package:appgym/datos/geometria.dart';
 import 'package:appgym/datos/musculos.dart';
 import 'package:appgym/datos/reloj.dart' as reloj;
@@ -36,6 +35,12 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'ayuda.dart';
+
+/// Los formatos en español, para las aserciones que comparan una fecha ya
+/// escrita. Es el mismo idioma que fija `_app`.
+final _es = formatoDePrueba();
 
 final _catalogoFalso = [
   const EjercicioJson(
@@ -514,9 +519,9 @@ void main() {
       await tester.pumpAndSettle();
 
       final hoy = DateTime.now();
-      expect(find.text(formato.fechaLarga(hoy)), findsOneWidget);
+      expect(find.text(_es.fechaLarga(hoy)), findsOneWidget);
 
-      await tester.tap(find.text(formato.fechaLarga(hoy)));
+      await tester.tap(find.text(_es.fechaLarga(hoy)));
       await tester.pumpAndSettle();
 
       // Se mueve la rueda por su callback en vez de arrastrando: la física del
@@ -529,7 +534,7 @@ void main() {
       await tester.tap(find.text('Listo'));
       await tester.pumpAndSettle();
 
-      expect(find.text(formato.fechaLarga(ayer)), findsOneWidget);
+      expect(find.text(_es.fechaLarga(ayer)), findsOneWidget);
 
       await tester.tap(find.text('Guardar entrenamiento'));
       await tester.pumpAndSettle();
@@ -545,7 +550,7 @@ void main() {
       await tester.pumpWidget(_app(bd, PantallaEntrenar(idRutina: idRutina)));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(formato.fechaLarga(DateTime.now())));
+      await tester.tap(find.text(_es.fechaLarga(DateTime.now())));
       await tester.pumpAndSettle();
 
       final selector = tester.widget<CupertinoDatePicker>(
@@ -583,7 +588,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('1 de marzo de 2026'), findsOneWidget);
-      expect(find.text('1 ejercicio · 2 series · 1120 kg'), findsOneWidget);
+      expect(find.text('1 ejercicio · 2 series · 1.120 kg'), findsOneWidget);
     });
 
     testWidgets('editar una sesión desde el historial repinta la lista', (
@@ -614,7 +619,7 @@ void main() {
       // Al volver, la lista de detrás está al día sin reiniciar la app.
       await tester.pageBack();
       await tester.pumpAndSettle();
-      expect(find.text('1 ejercicio · 3 series · 1640 kg'), findsOneWidget);
+      expect(find.text('1 ejercicio · 3 series · 1.640 kg'), findsOneWidget);
     });
 
     testWidgets('eliminar una sesión la saca de la lista', (tester) async {
@@ -877,7 +882,7 @@ void main() {
       expect(find.byType(ui.CheckSerie), findsNothing);
       expect(find.text('Guardar entrenamiento'), findsOneWidget);
       // La fecha se elige, que es de lo que va el formulario.
-      expect(find.text(formato.fechaLarga(DateTime.now())), findsOneWidget);
+      expect(find.text(_es.fechaLarga(DateTime.now())), findsOneWidget);
     });
 
     testWidgets('el descanso propio de un ejercicio manda sobre el global', (
@@ -1194,7 +1199,7 @@ void main() {
 
       expect(find.text('¡Sesión guardada!'), findsOneWidget);
       expect(find.text('2'), findsOneWidget);
-      expect(find.text('1.040 kg'), findsNothing);
+      expect(find.text('1.040 kg'), findsOneWidget); // volumen de la sesión
       expect(find.text('34:12'), findsOneWidget);
       // Récord: 65 kg contra los 60 de la semana anterior. Se baten los tres,
       // porque subir el peso sube también la estimación y el volumen.
@@ -1732,7 +1737,8 @@ void main() {
       expect(find.text('Sesiones'), findsOneWidget);
 
       expect(find.text('65 kg'), findsWidgets); // peso máximo
-      expect(find.text('1.120 kg'), findsNothing); // el volumen no lleva puntos
+      // Con el idioma en español el separador de miles es el punto (I3).
+      expect(find.text('1.120 kg'), findsOneWidget); // volumen total
       expect(find.text('2'), findsOneWidget); // sesiones
       // Epley sobre 8 × 65 = 82,3, mejor que los 80 de la primera sesión.
       expect(find.text('82,3 kg'), findsOneWidget);
@@ -2049,7 +2055,7 @@ void main() {
       expect(find.text('Registrar sesión'), findsOneWidget);
       final ahora = DateTime.now();
       expect(
-        find.text(formato.fechaLarga(DateTime(ahora.year, ahora.month, 1))),
+        find.text(_es.fechaLarga(DateTime(ahora.year, ahora.month, 1))),
         findsOneWidget,
       );
     });
