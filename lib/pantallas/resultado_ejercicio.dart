@@ -21,14 +21,14 @@ import '../tema/ui.dart' as ui;
 import 'sugerencia.dart';
 
 /// Lo que se pinta en el eje Y del gráfico.
+///
+/// El `enum` no lleva su etiqueta: depende del idioma, que depende del
+/// `BuildContext`. La pone [etiquetaMetrica], y el `switch` exhaustivo avisa si
+/// se añade un valor sin traducir.
 enum Metrica {
-  peso('Peso'),
-  unoRm('1RM'),
-  volumen('Volumen');
-
-  const Metrica(this.etiqueta);
-
-  final String etiqueta;
+  peso,
+  unoRm,
+  volumen;
 
   /// El valor de esta métrica en una sesión. Las tres son kilos: el volumen es
   /// kilos × repeticiones, así que también se convierte a la unidad activa.
@@ -41,14 +41,12 @@ enum Metrica {
 
 /// Cuánto histórico se pinta. Sustituye al tope fijo de doce barras.
 enum Rango {
-  mes('1M', 30),
-  trimestre('3M', 91),
-  ano('1A', 365),
-  todo('Todo', null);
+  mes(30),
+  trimestre(91),
+  ano(365),
+  todo(null);
 
-  const Rango(this.etiqueta, this.dias);
-
-  final String etiqueta;
+  const Rango(this.dias);
 
   /// `null` es «sin límite».
   final int? dias;
@@ -89,7 +87,7 @@ class PantallaResultadoEjercicio extends ConsumerWidget {
       )),
     );
     final f = formatoDe(context, ref);
-    final nombre = ejercicio.value?.nombre ?? 'Ejercicio';
+    final nombre = ejercicio.value?.nombre ?? context.t.fichaTitulo;
 
     return CupertinoPageScaffold(
       backgroundColor: context.fondo,
@@ -98,19 +96,17 @@ class PantallaResultadoEjercicio extends ConsumerWidget {
         loading: () => const ui.Cargando(),
         error: (e, _) => ui.EstadoVacio(
           icono: CupertinoIcons.exclamationmark_triangle,
-          titulo: 'No se pudo cargar el progreso',
+          titulo: context.t.evolucionError,
           subtitulo: '$e',
         ),
         // La guarda contra la lista vacía no es cosmética: en la versión Flet,
         // abrir un ejercicio sin registros reventaba al hacer max() de una lista
         // vacía.
         data: (lista) => lista.isEmpty
-            ? const ui.EstadoVacio(
+            ? ui.EstadoVacio(
                 icono: CupertinoIcons.chart_bar,
-                titulo: 'Sin registros todavía',
-                subtitulo:
-                    'Registra un entrenamiento con este ejercicio para '
-                    'ver aquí su evolución.',
+                titulo: context.t.evolucionVacio,
+                subtitulo: context.t.evolucionVacioDetalle,
               )
             : _Contenido(
                 registros: lista,
@@ -200,7 +196,7 @@ class _ContenidoState extends State<_Contenido> {
                   for (final m in Metrica.values)
                     m: Padding(
                       padding: const EdgeInsets.symmetric(vertical: t.xs),
-                      child: Text(m.etiqueta),
+                      child: Text(etiquetaMetrica(context.t, m)),
                     ),
                 },
               ),
@@ -240,7 +236,7 @@ class _ContenidoState extends State<_Contenido> {
                   for (final r in Rango.values)
                     r: Padding(
                       padding: const EdgeInsets.symmetric(vertical: t.xs),
-                      child: Text(r.etiqueta),
+                      child: Text(etiquetaRango(context.t, r)),
                     ),
                 },
               ),
@@ -248,16 +244,18 @@ class _ContenidoState extends State<_Contenido> {
           ),
           const SizedBox(height: t.l),
           ui.Grupo(
-            cabecera: 'Histórico',
-            pie: 'El trofeo marca las sesiones que batieron algún récord.',
+            cabecera: context.t.comunHistorico,
+            pie: context.t.evolucionPieHistorico,
             filas: [
               for (final r in widget.registros.reversed)
                 CupertinoListTile(
                   backgroundColor: context.tarjeta,
                   title: Text(f.fechaLarga(r.fecha), style: ui.estilo(context)),
                   subtitle: Text(
-                    '${context.t.comunSeries(r.nSeries)} · '
-                    '${f.peso(r.volumen)} de volumen',
+                    context.t.evolucionSesionResumen(
+                      context.t.comunSeries(r.nSeries),
+                      f.peso(r.volumen),
+                    ),
                     style: ui.estilo(
                       context,
                       size: t.footnote,
@@ -362,16 +360,19 @@ class _Tarjeta extends StatelessWidget {
             children: [
               Expanded(
                 child: _Dato(
-                  '${formato.peso(records.mejor1RM ?? mejorDeTodas)}'
-                      '${fiable ? '' : ' *'}',
-                  '1RM estimado',
+                  fiable
+                      ? formato.peso(records.mejor1RM ?? mejorDeTodas)
+                      : context.t.evolucionPocoFiable(
+                          formato.peso(records.mejor1RM ?? mejorDeTodas),
+                        ),
+                  context.t.evolucion1RM,
                   atenuado: !fiable,
                 ),
               ),
               Expanded(
                 child: _Dato(
                   formato.peso(records.pesoMaximo ?? 0),
-                  'Peso máximo',
+                  context.t.evolucionPesoMaximo,
                 ),
               ),
             ],
@@ -382,19 +383,21 @@ class _Tarjeta extends StatelessWidget {
               Expanded(
                 child: _Dato(
                   formato.peso(records.volumenTotal),
-                  'Volumen total',
+                  context.t.evolucionVolumenTotal,
                 ),
               ),
-              Expanded(child: _Dato('${sesiones.length}', 'Sesiones')),
+              Expanded(
+                child: _Dato('${sesiones.length}', context.t.rutinaSesiones),
+              ),
             ],
           ),
           if (!fiable)
             Padding(
               padding: const EdgeInsets.only(top: t.s, left: t.l, right: t.l),
               child: Text(
-                '* Estimado a partir de series de más de '
-                '${metricas.maxRepeticionesFiables} repeticiones, así que es '
-                'poco fiable y no cuenta como récord.',
+                context.t.evolucionNotaFiabilidad(
+                  metricas.maxRepeticionesFiables,
+                ),
                 textAlign: TextAlign.center,
                 style: ui.estilo(
                   context,
@@ -538,3 +541,19 @@ class _Dato extends StatelessWidget {
     ],
   );
 }
+
+/// Cómo se llama cada métrica del eje Y.
+String etiquetaMetrica(Textos t, Metrica metrica) => switch (metrica) {
+  Metrica.peso => t.comunPeso,
+  // «1RM» es una sigla internacional y no se traduce, igual que kg o RPE.
+  Metrica.unoRm => '1RM',
+  Metrica.volumen => t.comunVolumen,
+};
+
+/// Cómo se llama cada rango del histórico.
+String etiquetaRango(Textos t, Rango rango) => switch (rango) {
+  Rango.mes => t.evolucionRangoMes,
+  Rango.trimestre => t.evolucionRangoTrimestre,
+  Rango.ano => t.evolucionRangoAno,
+  Rango.todo => t.evolucionRangoTodo,
+};

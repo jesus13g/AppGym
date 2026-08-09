@@ -23,16 +23,17 @@ import '../tema/ui.dart' as ui;
 /// En peso corporal el peso se omite: «3×10» ya lo dice todo, y «3×10 · 0 kg»
 /// es ruido.
 String textoSugerencia(progresion.Sugerencia sugerencia, Formato f) {
+  final t = f.textos;
   final series = sugerencia.series;
   if (series.isEmpty) return '';
 
   final repeticiones = series.map((s) => s.repeticiones).toSet();
   final cuenta = repeticiones.length == 1
-      ? '${series.length}×${series.first.repeticiones}'
+      ? t.comunSeriesPorReps(series.length, series.first.repeticiones)
       : series.map((s) => s.repeticiones).join('/');
 
   if (series.every((s) => s.peso == 0)) return cuenta;
-  return '$cuenta · ${f.peso(sugerencia.peso)}';
+  return t.comunCuentaYPeso(cuenta, f.peso(sugerencia.peso));
 }
 
 /// Por qué se propone, en una frase.

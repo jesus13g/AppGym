@@ -47,7 +47,7 @@ class _PantallaMedidasState extends ConsumerState<PantallaMedidas> {
   Widget build(BuildContext context) {
     final serie = ref.watch(serieMedidaProvider(_tipo)).value ?? const [];
     final f = formatoDe(context, ref);
-    final (etiqueta, _) = etiquetaMedida(_tipo);
+    final (etiqueta, _) = etiquetaMedida(context.t, _tipo);
 
     return CupertinoPageScaffold(
       backgroundColor: context.fondo,
@@ -77,7 +77,8 @@ class _PantallaMedidasState extends ConsumerState<PantallaMedidas> {
                   itemCount: tiposMedida.length,
                   separatorBuilder: (_, _) => const SizedBox(width: t.s),
                   itemBuilder: (context, indice) {
-                    final (clave, nombre, _) = tiposMedida[indice];
+                    final (clave, _) = tiposMedida[indice];
+                    final (nombre, _) = etiquetaMedida(context.t, clave);
                     final activo = clave == _tipo;
                     return GestureDetector(
                       onTap: () => setState(() => _tipo = clave),
@@ -188,7 +189,7 @@ class _PantallaMedidasState extends ConsumerState<PantallaMedidas> {
 /// esos no dependen de la unidad de las cargas.
 String valorMedida(double valor, String tipo, Formato f) {
   if (tipo == 'peso') return f.peso(valor);
-  final (_, unidad) = etiquetaMedida(tipo);
+  final (_, unidad) = etiquetaMedida(f.textos, tipo);
   return '${f.numero((valor * 10).round() / 10)} $unidad';
 }
 
@@ -202,7 +203,7 @@ Future<void> registrarMedida(
 }) async {
   final f = leerFormato(context, ref);
   final ajustes = f.ajustes;
-  final (etiqueta, unidad) = etiquetaMedida(tipo);
+  final (etiqueta, unidad) = etiquetaMedida(f.textos, tipo);
   // Se pide en la unidad que el usuario ve; se guarda siempre en kilos.
   final enPantalla = valor == null
       ? null

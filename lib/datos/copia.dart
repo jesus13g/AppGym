@@ -25,6 +25,7 @@ library;
 
 import 'dart:convert';
 
+import '../l10n/textos.dart';
 import 'bd.dart';
 
 /// Marca del formato, para no tragarse el JSON de otra aplicación.
@@ -71,10 +72,13 @@ class InformeImportacion {
   /// están en el catálogo.
   final List<String> avisos;
 
-  String get resumen =>
-      '$rutinas ${rutinas == 1 ? 'rutina' : 'rutinas'}, '
-      '$entrenamientos ${entrenamientos == 1 ? 'sesión' : 'sesiones'} '
-      'y $series ${series == 1 ? 'serie' : 'series'}.';
+  /// Recibe los textos en vez de componerlos: este módulo no conoce el idioma
+  /// activo, igual que no conoce el `BuildContext`.
+  String resumen(Textos t) => t.copiaResumen(
+    t.comunRutinas(rutinas),
+    t.comunSesiones(entrenamientos),
+    t.comunSeries(series),
+  );
 }
 
 // ── Exportar ─────────────────────────────────────────────────────────────────
@@ -202,11 +206,11 @@ String nombreFichero(DateTime fecha, {String extension = 'json'}) {
 ///
 /// Se comprueba **antes** de tocar nada: un fichero corrupto o de otra
 /// aplicación no debe dejar la base a medio restaurar.
-List<String> validar(Map<String, dynamic> datos) {
+List<String> validar(Textos t, Map<String, dynamic> datos) {
   final errores = <String>[];
 
   if (datos['formato'] != formatoCopia) {
-    errores.add('El archivo no es una copia de seguridad de AppGym.');
+    errores.add(t.copiaErrorFormato);
     // Sin la marca, lo demás no significa nada: no tiene sentido seguir
     // enumerando problemas de un fichero que no es este formato.
     return errores;
@@ -214,37 +218,34 @@ List<String> validar(Map<String, dynamic> datos) {
 
   final version = datos['version'];
   if (version is! int || version < 1) {
-    errores.add('El archivo no dice de qué versión es.');
+    errores.add(t.copiaErrorSinVersion);
   } else if (version > versionCopia) {
-    errores.add(
-      'La copia es de una versión más nueva de AppGym (v$version). '
-      'Actualiza la app para poder importarla.',
-    );
+    errores.add(t.copiaErrorVersionNueva(version));
   }
 
   if (datos['rutinas'] is! List) {
-    errores.add('El archivo no contiene ninguna rutina.');
+    errores.add(t.copiaErrorSinRutinas);
     return errores;
   }
 
   for (final (indice, cruda) in (datos['rutinas'] as List).indexed) {
-    final donde = 'La rutina ${indice + 1}';
+    final numero = indice + 1;
     if (cruda is! Map) {
-      errores.add('$donde está mal formada.');
+      errores.add(t.copiaErrorRutinaMalFormada(numero));
       continue;
     }
     if (cruda['nombre'] is! String || (cruda['nombre'] as String).isEmpty) {
-      errores.add('$donde no tiene nombre.');
+      errores.add(t.copiaErrorRutinaSinNombre(numero));
     }
     for (final clave in ['ejercicios', 'entrenamientos']) {
       if (cruda[clave] != null && cruda[clave] is! List) {
-        errores.add('$donde tiene un campo «$clave» que no es una lista.');
+        errores.add(t.copiaErrorCampoNoLista(numero, clave));
       }
     }
   }
 
   if (datos['medidas'] != null && datos['medidas'] is! List) {
-    errores.add('Las medidas no son una lista.');
+    errores.add(t.copiaErrorMedidas);
   }
   return errores;
 }
@@ -277,10 +278,11 @@ Map<String, dynamic>? leer(String contenido) {
 /// tenía y sin lo que importaba.
 Future<InformeImportacion> importar(
   AppBD bd,
+  Textos t,
   Map<String, dynamic> datos, {
   required ModoImportacion modo,
 }) async {
-  final errores = validar(datos);
+  final errores = validar(t, datos);
   if (errores.isNotEmpty) throw FormatException(errores.first);
 
   final crudas = (datos['rutinas'] as List).cast<Map<String, dynamic>>();
@@ -309,9 +311,9 @@ Future<InformeImportacion> importar(
 
     for (final cruda in crudas) {
       final propuesto = cruda['nombre'] as String;
-      final nombre = _nombreLibre(propuesto, ocupados);
+      final nombre = _nombreLibre(t, propuesto, ocupados);
       if (nombre != propuesto) {
-        avisos.add('«$propuesto» ya existía: se importó como «$nombre».');
+        avisos.add(t.copiaAvisoRenombrada(propuesto, nombre));
       }
       ocupados.add(nombre);
 
@@ -354,7 +356,7 @@ Future<InformeImportacion> importar(
       for (final s in _lista(cruda['entrenamientos'])) {
         final fecha = DateTime.tryParse('${s['fecha']}');
         if (fecha == null) {
-          avisos.add('Una sesión de «$nombre» tenía una fecha ilegible.');
+          avisos.add(t.copiaAvisoFechaIlegible(nombre));
           continue;
         }
 
@@ -410,8 +412,7 @@ Future<InformeImportacion> importar(
 
   if (perdidosDelCatalogo > 0) {
     avisos.add(
-      '$perdidosDelCatalogo ${perdidosDelCatalogo == 1 ? 'ejercicio' : 'ejercicios'} '
-      'ya no está en el catálogo y se importó como personalizado.',
+      t.copiaAvisoFueraDelCatalogo(t.comunEjercicios(perdidosDelCatalogo)),
     );
   }
 
@@ -429,14 +430,14 @@ Future<InformeImportacion> importar(
 ///
 /// «Empuje» → «Empuje (importada)» → «Empuje (importada 2)». Fusionar dos veces
 /// la misma copia no duplica en silencio: se ve en el nombre.
-String _nombreLibre(String propuesto, Set<String> ocupados) {
+String _nombreLibre(Textos t, String propuesto, Set<String> ocupados) {
   if (!ocupados.contains(propuesto)) return propuesto;
 
-  final conMarca = '$propuesto (importada)';
+  final conMarca = t.copiaSufijoImportada(propuesto);
   if (!ocupados.contains(conMarca)) return conMarca;
 
   for (var i = 2; i < 1000; i++) {
-    final candidato = '$propuesto (importada $i)';
+    final candidato = t.copiaSufijoImportadaN(propuesto, i);
     if (!ocupados.contains(candidato)) return candidato;
   }
   return '$propuesto (${DateTime.now().millisecondsSinceEpoch})';

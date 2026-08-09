@@ -182,8 +182,10 @@ class _Contenido extends StatelessWidget {
                 leadingSize: 40,
                 title: Text(e.ejercicio.nombre, style: ui.estilo(context)),
                 subtitle: Text(
-                  '${context.t.comunSeries(e.series.length)} · '
-                  '${formato.peso(e.volumen)}',
+                  context.t.comunCuentaYPeso(
+                    context.t.comunSeries(e.series.length),
+                    formato.peso(e.volumen),
+                  ),
                   style: ui.estilo(
                     context,
                     size: t.footnote,

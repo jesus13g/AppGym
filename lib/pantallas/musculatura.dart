@@ -92,14 +92,14 @@ class _MapaMuscularState extends ConsumerState<MapaMuscular> {
             groupValue: _cara,
             onValueChanged: (valor) =>
                 setState(() => _cara = valor ?? Vista.frente),
-            children: const {
+            children: {
               Vista.frente: Padding(
-                padding: EdgeInsets.symmetric(vertical: t.xs),
-                child: Text('Frente'),
+                padding: const EdgeInsets.symmetric(vertical: t.xs),
+                child: Text(context.t.cuerpoFrente),
               ),
               Vista.espalda: Padding(
-                padding: EdgeInsets.symmetric(vertical: t.xs),
-                child: Text('Espalda'),
+                padding: const EdgeInsets.symmetric(vertical: t.xs),
+                child: Text(context.t.cuerpoEspalda),
               ),
             },
           ),
@@ -115,7 +115,7 @@ class _MapaMuscularState extends ConsumerState<MapaMuscular> {
                 GestureDetector(
                   onTap: () => setState(() => _dias = dias),
                   child: ui.Pildora(
-                    '$dias días',
+                    context.t.cuerpoPeriodo(dias),
                     color: _dias == dias
                         ? CupertinoColors.white
                         : context.texto,
@@ -159,11 +159,8 @@ class _MapaMuscularState extends ConsumerState<MapaMuscular> {
             padding: const EdgeInsets.symmetric(vertical: t.l),
             child: ui.EstadoVacio(
               icono: CupertinoIcons.person_crop_square,
-              titulo: 'Aún no hay nada que colorear',
-              subtitulo:
-                  'Cuando registres entrenamientos, el modelo se irá tiñendo '
-                  'según lo que trabaje cada músculo. Mientras tanto, toca '
-                  'cualquier músculo para ver sus ejercicios.',
+              titulo: context.t.cuerpoVacio,
+              subtitulo: context.t.cuerpoVacioDetalle,
             ),
           )
         else
@@ -175,12 +172,16 @@ class _MapaMuscularState extends ConsumerState<MapaMuscular> {
   String _avisoDeFuera(SinRepresentar fuera) {
     final partes = <String>[
       if (fuera.personalizados > 0)
-        '${context.t.comunEjerciciosPersonalizados(fuera.personalizados)} '
-            'sin músculo asignado',
+        context.t.cuerpoFueraPersonalizados(
+          context.t.comunEjerciciosPersonalizados(fuera.personalizados),
+        ),
       if (fuera.cardio > 0)
-        '${context.t.comunEjercicios(fuera.cardio)} de cardio',
+        context.t.cuerpoFueraCardio(context.t.comunEjercicios(fuera.cardio)),
     ];
-    return '${partes.join(' y ')}: no se reparten por el modelo.';
+    final juntas = partes.length == 2
+        ? context.t.cuerpoFueraY(partes.first, partes.last)
+        : partes.single;
+    return context.t.cuerpoFueraCola(juntas);
   }
 
   Future<void> _abrir(Region region) async {
@@ -388,7 +389,7 @@ class _Leyenda extends StatelessWidget {
       children: [
         Flexible(
           child: Text(
-            'Sin trabajar',
+            context.t.cuerpoSinTrabajar,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: ui.estilo(context, size: t.caption, color: context.textoSec),
@@ -409,7 +410,7 @@ class _Leyenda extends StatelessWidget {
         const SizedBox(width: t.s),
         Flexible(
           child: Text(
-            'Muy trabajado',
+            context.t.cuerpoMuyTrabajado,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.right,
@@ -439,10 +440,8 @@ class _MenosTrabajados extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ui.Grupo(
-    cabecera: 'Menos trabajados',
-    pie:
-        'Cuenta desde la última vez que entrenaste cada músculo, con todo tu '
-        'histórico y no solo con el periodo elegido arriba.',
+    cabecera: context.t.cuerpoMenosTrabajados,
+    pie: context.t.cuerpoMenosTrabajadosPie,
     filas: [
       for (final (region, dias) in menosTrabajados(trabajos, hoy: hoy))
         CupertinoListTile(
@@ -454,7 +453,7 @@ class _MenosTrabajados extends StatelessWidget {
             style: ui.estilo(context),
           ),
           additionalInfo: Text(
-            dias == null ? 'nunca' : context.t.desdeDias(dias),
+            dias == null ? context.t.cuerpoNunca : context.t.desdeDias(dias),
             style: ui.estilo(
               context,
               size: t.footnote,
@@ -537,7 +536,7 @@ class _HojaRegion extends ConsumerWidget {
                     padding: EdgeInsets.zero,
                     minimumSize: Size.zero,
                     onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Listo'),
+                    child: Text(context.t.comunListo),
                   ),
                 ],
               ),
@@ -564,29 +563,33 @@ class _HojaRegion extends ConsumerWidget {
     List<String> enRutinas,
     Formato f,
   ) => ui.Grupo(
-    cabecera: 'Últimos $dias días',
-    pie:
-        'El músculo objetivo del ejercicio cuenta entero, el grupo muscular a '
-        'la mitad y los secundarios a un tercio.',
+    cabecera: context.t.cuerpoUltimosDias(dias),
+    pie: context.t.cuerpoResumenPie,
     filas: [
-      _fila(context, 'Series', trabajo == null ? '—' : '${trabajo.nSeries}'),
       _fila(
         context,
-        'Volumen',
+        context.t.comunSeriesEtiqueta,
+        trabajo == null ? '—' : '${trabajo.nSeries}',
+      ),
+      _fila(
+        context,
+        context.t.comunVolumen,
         trabajo == null ? '—' : f.peso(trabajo.volumen),
       ),
       _fila(
         context,
-        'Sesiones',
+        context.t.rutinaSesiones,
         trabajo == null ? '—' : '${trabajo.nSesiones}',
       ),
       _fila(
         context,
-        'Última vez',
-        trabajo?.ultima == null ? 'Sin registros' : f.hace(trabajo!.ultima!),
+        context.t.cuerpoUltimaVez,
+        trabajo?.ultima == null
+            ? context.t.comunSinRegistros
+            : f.hace(trabajo!.ultima!),
       ),
       if (enRutinas.isNotEmpty)
-        _fila(context, 'En tus rutinas', enRutinas.join(', ')),
+        _fila(context, context.t.cuerpoEnTusRutinas, enRutinas.join(', ')),
     ],
   );
 
@@ -612,7 +615,7 @@ class _HojaRegion extends ConsumerWidget {
   ) {
     if (sesiones.isEmpty) return const SizedBox.shrink();
     return ui.Grupo(
-      cabecera: 'Tus entrenamientos',
+      cabecera: context.t.cuerpoTusEntrenamientos,
       filas: [
         for (final s in sesiones)
           CupertinoListTile(
@@ -624,8 +627,10 @@ class _HojaRegion extends ConsumerWidget {
               style: ui.estilo(context),
             ),
             subtitle: Text(
-              '${formatoDe(context, ref).fechaCorta(s.fecha)} · '
-              '${context.t.comunSeries(s.nSeries)}',
+              context.t.cuerpoSesionResumen(
+                formatoDe(context, ref).fechaCorta(s.fecha),
+                context.t.comunSeries(s.nSeries),
+              ),
               style: ui.estilo(
                 context,
                 size: t.footnote,
@@ -670,7 +675,7 @@ class _Ejercicios extends ConsumerWidget {
       });
 
     return ui.Grupo(
-      cabecera: 'Ejercicios',
+      cabecera: context.t.comunEjerciciosCabecera,
       filas: [
         for (final ficha in fichas.take(8))
           CupertinoListTile(
@@ -684,7 +689,7 @@ class _Ejercicios extends ConsumerWidget {
             ),
             subtitle: Text(
               mios.contains(ficha.id)
-                  ? 'Ya está en tus rutinas'
+                  ? context.t.cuerpoYaEnTusRutinas
                   : formatoDe(context, ref).subtituloCatalogo(ficha),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -718,7 +723,7 @@ class _Ejercicios extends ConsumerWidget {
         CupertinoListTile(
           backgroundColor: context.tarjeta,
           title: Text(
-            'Ver los ${catalogo.total} ejercicios',
+            context.t.cuerpoVerTodos(catalogo.total),
             style: ui.estilo(context, color: context.acento),
           ),
           trailing: const CupertinoListTileChevron(),

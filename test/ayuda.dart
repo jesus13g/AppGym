@@ -28,3 +28,6 @@ Formato formatoDePrueba({
     ajustes: ajustes,
   );
 }
+
+/// Los textos traducidos de un idioma, sin montar un widget.
+Textos textosDePrueba({String idioma = 'es'}) => lookupTextos(Locale(idioma));
