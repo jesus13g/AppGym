@@ -27,7 +27,7 @@ import 'respaldo.dart';
 // pidiéndolos donde ya los pedían. Las claves y los valores admitidos viven en
 // `ajustes.dart` y solo los necesita la pantalla de Ajustes.
 export 'ajustes.dart'
-    show Ajustes, EscalaEsfuerzo, Formula, Perfil, Tema, Unidad;
+    show Ajustes, EscalaEsfuerzo, Formula, Idioma, Perfil, Tema, Unidad;
 
 /// `Value` sale por aquí para que las pantallas no tengan que importar drift.
 ///

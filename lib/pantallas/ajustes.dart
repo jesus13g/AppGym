@@ -329,8 +329,33 @@ class PantallaAjustes extends ConsumerWidget {
             },
             onValor: (valor) => _fijar(ref, Claves.tema, valor),
           ),
+          _fila(
+            context,
+            titulo: context.t.ajustesIdioma,
+            valor: _idioma(context, ajustes.idioma),
+            onTap: () => _elegir<Idioma>(
+              context,
+              ref,
+              clave: Claves.idioma,
+              titulo: context.t.ajustesIdioma,
+              mensaje: context.t.ajustesIdiomaMensaje,
+              actual: ajustes.idioma,
+              opciones: [
+                for (final idioma in Idioma.values)
+                  (idioma, _idioma(context, idioma)),
+              ],
+            ),
+          ),
         ],
       );
+
+  /// Cada idioma se escribe **en el suyo**, que es la convención universal y
+  /// evita el absurdo de buscar «Inglés» estando la app en inglés.
+  String _idioma(BuildContext context, Idioma idioma) => switch (idioma) {
+    Idioma.auto => context.t.ajustesIdiomaAuto,
+    Idioma.es => 'Español',
+    Idioma.en => 'English',
+  };
 
   // ── Acerca de ──────────────────────────────────────────────────────────────
 

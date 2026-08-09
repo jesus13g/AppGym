@@ -2202,5 +2202,17 @@
   "regionTibial": "Tibial anterior",
   "@regionTibial": {
     "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "ajustesIdioma": "Idioma",
+  "@ajustesIdioma": {
+    "description": "Etiqueta de la fila que elige el idioma de la app"
+  },
+  "ajustesIdiomaAuto": "Automático",
+  "@ajustesIdiomaAuto": {
+    "description": "Opción de idioma que sigue al del sistema"
+  },
+  "ajustesIdiomaMensaje": "Cambiar de idioma no renombra lo que ya has creado: tus rutinas conservan el nombre que les pusiste.",
+  "@ajustesIdiomaMensaje": {
+    "description": "Mensaje de la hoja de idioma"
   }
 }

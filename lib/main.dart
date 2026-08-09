@@ -21,7 +21,9 @@ class AppGym extends ConsumerWidget {
     // Mientras las preferencias cargan no hay `brightness`, que es exactamente
     // lo que se quiere: seguir al sistema. Así el primer frame no parpadea en
     // el caso de largo el más común.
-    final tema = ref.watch(ajustesProvider).value?.tema ?? Tema.sistema;
+    final ajustes = ref.watch(ajustesProvider).value;
+    final tema = ajustes?.tema ?? Tema.sistema;
+    final idioma = ajustes?.idioma ?? Idioma.auto;
 
     return CupertinoApp(
       title: 'AppGym',
@@ -38,7 +40,11 @@ class AppGym extends ConsumerWidget {
           Tema.oscuro => Brightness.dark,
         },
       ),
-      locale: const Locale('es'),
+      // Con `locale: null` manda el idioma del sistema, resuelto contra
+      // `idiomasSoportados`; si el móvil está en uno que no tenemos, Flutter cae
+      // al primero de la lista, que es el español. Cambiar la preferencia
+      // repinta la app entera sin reiniciar, igual que cambiar el tema.
+      locale: idioma.codigo == null ? null : Locale(idioma.codigo!),
       supportedLocales: idiomasSoportados,
       localizationsDelegates: Textos.localizationsDelegates,
       home: const Raiz(),

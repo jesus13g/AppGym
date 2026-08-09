@@ -413,5 +413,8 @@
   "regionAbductor": "Abductors",
   "regionFlexorCadera": "Hip flexors",
   "regionGemelo": "Calves",
-  "regionTibial": "Tibialis anterior"
+  "regionTibial": "Tibialis anterior",
+  "ajustesIdioma": "Language",
+  "ajustesIdiomaAuto": "Automatic",
+  "ajustesIdiomaMensaje": "Changing the language does not rename what you already created: your routines keep the name you gave them."
 }
