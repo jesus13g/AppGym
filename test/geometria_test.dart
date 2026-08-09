@@ -185,12 +185,12 @@ void main() {
         expect(
           enFrente,
           datos.vista.seVeEn(Vista.frente),
-          reason: '${datos.nombre} y la vista frontal no concuerdan',
+          reason: '${region.name} y la vista frontal no concuerdan',
         );
         expect(
           enEspalda,
           datos.vista.seVeEn(Vista.espalda),
-          reason: '${datos.nombre} y la vista dorsal no concuerdan',
+          reason: '${region.name} y la vista dorsal no concuerdan',
         );
       }
     });
@@ -232,7 +232,7 @@ void main() {
           expect(
             cara.silueta.contiene(punto!),
             isTrue,
-            reason: '${regiones[region]!.nombre} se sale del cuerpo en $nombre',
+            reason: '${region.name} se sale del cuerpo en $nombre',
           );
         }
       }
@@ -249,7 +249,7 @@ void main() {
           expect(
             _puntoQueGana(cara.regiones, region),
             isNotNull,
-            reason: '${regiones[region]!.nombre} en $nombre no se puede tocar',
+            reason: '${region.name} en $nombre no se puede tocar',
           );
         }
       }

@@ -59,16 +59,14 @@ enum Region {
   tibial,
 }
 
-/// Cómo se llama una región, dónde se dibuja y qué términos del catálogo casa.
+/// Dónde se dibuja una región y qué términos del catálogo casa.
+///
+/// **No lleva su nombre**: depende del idioma, que depende del `BuildContext`.
+/// Lo pone `nombreRegion` (`pantallas/musculatura.dart`), desde un `switch`
+/// exhaustivo que se rompe si se añade una región sin traducir. La clave del
+/// `enum` sí es estable: está en `assets/musculatura.json`.
 class DatosRegion {
-  const DatosRegion({
-    required this.nombre,
-    required this.vista,
-    required this.terminos,
-  });
-
-  /// El nombre que se pinta, en español.
-  final String nombre;
+  const DatosRegion({required this.vista, required this.terminos});
 
   /// La cara del modelo donde se dibuja.
   final Vista vista;
@@ -85,42 +83,31 @@ class DatosRegion {
 
 const regiones = <Region, DatosRegion>{
   Region.cuello: DatosRegion(
-    nombre: 'Cuello',
     vista: Vista.ambas,
     terminos: {'sternocleidomastoid', 'levator scapulae', 'neck'},
   ),
   Region.trapecio: DatosRegion(
-    nombre: 'Trapecios',
     vista: Vista.ambas,
     terminos: {'traps', 'trapezius'},
   ),
   Region.deltoides: DatosRegion(
-    nombre: 'Hombros',
     vista: Vista.ambas,
     terminos: {'delts', 'deltoids', 'shoulders', 'rotator cuff'},
   ),
   Region.deltoidesPost: DatosRegion(
-    nombre: 'Deltoides posterior',
     vista: Vista.espalda,
     terminos: {'rear deltoids'},
   ),
   Region.pectoral: DatosRegion(
-    nombre: 'Pecho',
     vista: Vista.frente,
     terminos: {'pectorals', 'chest', 'upper chest', 'serratus anterior'},
   ),
   Region.biceps: DatosRegion(
-    nombre: 'Bíceps',
     vista: Vista.frente,
     terminos: {'biceps', 'brachialis'},
   ),
-  Region.triceps: DatosRegion(
-    nombre: 'Tríceps',
-    vista: Vista.espalda,
-    terminos: {'triceps'},
-  ),
+  Region.triceps: DatosRegion(vista: Vista.espalda, terminos: {'triceps'}),
   Region.antebrazo: DatosRegion(
-    nombre: 'Antebrazos',
     vista: Vista.ambas,
     terminos: {
       'forearms',
@@ -132,67 +119,45 @@ const regiones = <Region, DatosRegion>{
     },
   ),
   Region.dorsal: DatosRegion(
-    nombre: 'Dorsales',
     vista: Vista.espalda,
     terminos: {'lats', 'latissimus dorsi'},
   ),
   Region.espaldaAlta: DatosRegion(
-    nombre: 'Espalda alta',
     vista: Vista.espalda,
     terminos: {'upper back', 'rhomboids', 'back'},
   ),
   Region.lumbar: DatosRegion(
-    nombre: 'Lumbares',
     vista: Vista.espalda,
     terminos: {'lower back', 'spine'},
   ),
   Region.abdomen: DatosRegion(
-    nombre: 'Abdominales',
     vista: Vista.frente,
     terminos: {'abs', 'abdominals', 'core', 'lower abs'},
   ),
-  Region.oblicuo: DatosRegion(
-    nombre: 'Oblicuos',
-    vista: Vista.frente,
-    terminos: {'obliques'},
-  ),
-  Region.gluteo: DatosRegion(
-    nombre: 'Glúteos',
-    vista: Vista.espalda,
-    terminos: {'glutes'},
-  ),
+  Region.oblicuo: DatosRegion(vista: Vista.frente, terminos: {'obliques'}),
+  Region.gluteo: DatosRegion(vista: Vista.espalda, terminos: {'glutes'}),
   Region.cuadriceps: DatosRegion(
-    nombre: 'Cuádriceps',
     vista: Vista.frente,
     terminos: {'quads', 'quadriceps'},
   ),
   Region.isquiotibial: DatosRegion(
-    nombre: 'Isquiotibiales',
     vista: Vista.espalda,
     terminos: {'hamstrings'},
   ),
   Region.aductor: DatosRegion(
-    nombre: 'Aductores',
     vista: Vista.frente,
     terminos: {'adductors', 'inner thighs', 'groin'},
   ),
-  Region.abductor: DatosRegion(
-    nombre: 'Abductores',
-    vista: Vista.frente,
-    terminos: {'abductors'},
-  ),
+  Region.abductor: DatosRegion(vista: Vista.frente, terminos: {'abductors'}),
   Region.flexorCadera: DatosRegion(
-    nombre: 'Flexores de cadera',
     vista: Vista.frente,
     terminos: {'hip flexors'},
   ),
   Region.gemelo: DatosRegion(
-    nombre: 'Gemelos',
     vista: Vista.ambas,
     terminos: {'calves', 'soleus'},
   ),
   Region.tibial: DatosRegion(
-    nombre: 'Tibial anterior',
     vista: Vista.frente,
     terminos: {'shins', 'ankles', 'ankle stabilizers', 'feet'},
   ),

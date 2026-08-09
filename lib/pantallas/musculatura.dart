@@ -447,7 +447,7 @@ class _MenosTrabajados extends StatelessWidget {
         CupertinoListTile(
           backgroundColor: context.tarjeta,
           title: Text(
-            regiones[region]!.nombre,
+            nombreRegion(context.t, region),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: ui.estilo(context),
@@ -492,7 +492,6 @@ class _HojaRegion extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final datos = regiones[region]!;
     final trabajos = ref.watch(trabajoMuscularProvider).value ?? const [];
     final f = formatoDe(context, ref);
     final desde = reloj.ahora().subtract(Duration(days: dias));
@@ -522,7 +521,7 @@ class _HojaRegion extends ConsumerWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      datos.nombre,
+                      nombreRegion(context.t, region),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: ui.estilo(
@@ -736,3 +735,33 @@ class _Ejercicios extends ConsumerWidget {
     );
   }
 }
+
+/// Cómo se llama cada una de las 21 regiones.
+///
+/// El `switch` es exhaustivo a propósito: añadir una región al `enum` rompe la
+/// compilación justo aquí, que es donde hay que ponerle nombre. La clave del
+/// `enum` no cambia nunca: está en `assets/musculatura.json` y en la atribución
+/// del trabajo.
+String nombreRegion(Textos t, Region region) => switch (region) {
+  Region.cuello => t.regionCuello,
+  Region.trapecio => t.regionTrapecio,
+  Region.deltoides => t.regionDeltoides,
+  Region.deltoidesPost => t.regionDeltoidesPost,
+  Region.pectoral => t.regionPectoral,
+  Region.biceps => t.regionBiceps,
+  Region.triceps => t.regionTriceps,
+  Region.antebrazo => t.regionAntebrazo,
+  Region.dorsal => t.regionDorsal,
+  Region.espaldaAlta => t.regionEspaldaAlta,
+  Region.lumbar => t.regionLumbar,
+  Region.abdomen => t.regionAbdomen,
+  Region.oblicuo => t.regionOblicuo,
+  Region.gluteo => t.regionGluteo,
+  Region.cuadriceps => t.regionCuadriceps,
+  Region.isquiotibial => t.regionIsquiotibial,
+  Region.aductor => t.regionAductor,
+  Region.abductor => t.regionAbductor,
+  Region.flexorCadera => t.regionFlexorCadera,
+  Region.gemelo => t.regionGemelo,
+  Region.tibial => t.regionTibial,
+};

@@ -1520,7 +1520,7 @@ void main() {
         expect(
           await bd.contarCatalogoPorMusculos(terminosDe(region)),
           porDart,
-          reason: 'la región ${regiones[region]!.nombre} no cuadra',
+          reason: 'la región ${region.name} no cuadra',
         );
       }
     });

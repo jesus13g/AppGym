@@ -2118,5 +2118,89 @@
         "type": "String"
       }
     }
+  },
+  "regionCuello": "Cuello",
+  "@regionCuello": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionTrapecio": "Trapecios",
+  "@regionTrapecio": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionDeltoides": "Hombros",
+  "@regionDeltoides": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionDeltoidesPost": "Deltoides posterior",
+  "@regionDeltoidesPost": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionPectoral": "Pecho",
+  "@regionPectoral": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionBiceps": "Bíceps",
+  "@regionBiceps": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionTriceps": "Tríceps",
+  "@regionTriceps": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionAntebrazo": "Antebrazos",
+  "@regionAntebrazo": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionDorsal": "Dorsales",
+  "@regionDorsal": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionEspaldaAlta": "Espalda alta",
+  "@regionEspaldaAlta": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionLumbar": "Lumbares",
+  "@regionLumbar": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionAbdomen": "Abdominales",
+  "@regionAbdomen": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionOblicuo": "Oblicuos",
+  "@regionOblicuo": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionGluteo": "Glúteos",
+  "@regionGluteo": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionCuadriceps": "Cuádriceps",
+  "@regionCuadriceps": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionIsquiotibial": "Isquiotibiales",
+  "@regionIsquiotibial": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionAductor": "Aductores",
+  "@regionAductor": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionAbductor": "Abductores",
+  "@regionAbductor": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionFlexorCadera": "Flexores de cadera",
+  "@regionFlexorCadera": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionGemelo": "Gemelos",
+  "@regionGemelo": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionTibial": "Tibial anterior",
+  "@regionTibial": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
   }
 }

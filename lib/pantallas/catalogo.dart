@@ -21,6 +21,7 @@ import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
 import 'anadir_a_rutina.dart';
 import 'ficha.dart';
+import 'musculatura.dart' show nombreRegion;
 
 /// Resultados por tanda. Nunca se pintan los 1.324 de golpe.
 const _pagina = 40;
@@ -313,7 +314,7 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
   Widget build(BuildContext context) {
     final titulo = switch ((_esModal, widget.region)) {
       (true, _) => context.t.catalogoTituloModal,
-      (false, final region?) => regiones[region]!.nombre,
+      (false, final region?) => nombreRegion(context.t, region),
       _ => context.t.comunEjerciciosCabecera,
     };
 
@@ -667,7 +668,9 @@ class _Filtros extends StatelessWidget {
               GestureDetector(
                 onTap: onQuitarRegion,
                 child: ui.Pildora(
-                  context.t.catalogoQuitarRegion(regiones[region]!.nombre),
+                  context.t.catalogoQuitarRegion(
+                    nombreRegion(context.t, region),
+                  ),
                   color: CupertinoColors.white,
                   relleno: context.acento,
                 ),

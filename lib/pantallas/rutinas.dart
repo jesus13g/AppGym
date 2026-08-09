@@ -24,7 +24,11 @@ class PantallaRutinas extends ConsumerWidget {
   /// catálogo, así que la lista de plantillas se ofrece antes que el diálogo
   /// del nombre y no escondida detrás de él.
   Future<void> _nueva(BuildContext context, WidgetRef ref) async {
-    final plantillas = await cargarPlantillas();
+    // El idioma sale del árbol, no de la preferencia: es el que la app está
+    // enseñando, y es el que el usuario verá escrito en sus rutinas nuevas.
+    final plantillas = await cargarPlantillas(
+      Localizations.localeOf(context).languageCode,
+    );
     if (!context.mounted) return;
 
     final elegida = await showCupertinoModalPopup<int>(
