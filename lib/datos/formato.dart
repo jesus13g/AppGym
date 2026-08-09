@@ -21,7 +21,8 @@ import 'package:intl/intl.dart';
 
 import '../l10n/textos.dart';
 import 'bd.dart';
-import 'i18n.dart';
+import 'i18n.dart' as i18n;
+import 'semilla.dart' show pasosDe;
 import 'media.dart' as media;
 
 /// Fechas, números y unidades del idioma activo.
@@ -155,6 +156,24 @@ class Formato {
   };
 
   // ── Ejercicios ─────────────────────────────────────────────────────────────
+
+  // ── Vocabulario del catálogo ───────────────────────────────────────────────
+
+  /// Traduce una zona del cuerpo ('chest' -> 'Pecho').
+  String zonaCuerpo(String? valor) => i18n.zonaCuerpo(valor, locale);
+
+  /// Traduce un equipamiento ('dumbbell' -> 'Mancuerna').
+  String equipamiento(String? valor) => i18n.equipamiento(valor, locale);
+
+  /// Traduce un músculo ('lats' -> 'Dorsales').
+  String musculo(String? valor) => i18n.musculo(valor, locale);
+
+  /// Traduce una lista de músculos, sin repetir traducciones.
+  List<String> musculos(Iterable<String>? valores) =>
+      i18n.musculos(valores, locale);
+
+  /// Los pasos de una ficha, en el idioma activo con caída al español.
+  List<String> instrucciones(String? columna) => pasosDe(columna, locale);
 
   /// 'Pectorales · Mancuerna' para una ficha del catálogo.
   String subtituloCatalogo(FichaCatalogo? ficha) {

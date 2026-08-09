@@ -10,6 +10,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
+import '../datos/formato.dart';
 import '../datos/i18n.dart' as i18n;
 import '../datos/musculos.dart';
 import '../datos/media.dart' as media;
@@ -252,7 +253,7 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
           for (final valor in disponibles)
             CupertinoActionSheetAction(
               onPressed: () => Navigator.pop(hoja, (valor,)),
-              child: Text(i18n.equipamiento(valor)),
+              child: Text(formatoDe(context, ref).equipamiento(valor)),
             ),
         ],
         cancelButton: CupertinoActionSheetAction(
@@ -285,7 +286,10 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
         for (final (valor, cuantos) in disponibles)
           (
             valor,
-            context.t.catalogoOpcionConCuenta(i18n.musculo(valor), cuantos),
+            context.t.catalogoOpcionConCuenta(
+              formatoDe(context, ref).musculo(valor),
+              cuantos,
+            ),
           ),
       ],
       etiquetaCancelar: context.t.comunCancelar,
@@ -357,6 +361,7 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
               ),
             ),
             _Filtros(
+              formato: formatoDe(context, ref),
               zona: _zona,
               equipo: _equipo,
               objetivo: _objetivo,
@@ -596,6 +601,7 @@ class _Destacados extends ConsumerWidget {
 
 class _Filtros extends StatelessWidget {
   const _Filtros({
+    required this.formato,
     required this.zona,
     required this.equipo,
     required this.objetivo,
@@ -607,6 +613,7 @@ class _Filtros extends StatelessWidget {
     required this.onQuitarRegion,
   });
 
+  final Formato formato;
   final String? zona;
   final String? equipo;
   final String? objetivo;
@@ -650,7 +657,7 @@ class _Filtros extends StatelessWidget {
               context,
               equipo == null
                   ? context.t.catalogoFiltroEquipamiento
-                  : i18n.equipamiento(equipo),
+                  : formato.equipamiento(equipo),
               onEquipo,
             ),
             const SizedBox(width: t.l),
@@ -670,7 +677,7 @@ class _Filtros extends StatelessWidget {
                 context,
                 objetivo == null
                     ? context.t.catalogoFiltroMusculo
-                    : i18n.musculo(objetivo),
+                    : formato.musculo(objetivo),
                 onObjetivo,
               ),
             const Spacer(),

@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
 import '../datos/formato.dart';
-import '../datos/i18n.dart' as i18n;
 import '../datos/media.dart' as media;
 import '../estado/providers.dart';
 import '../l10n/textos.dart';
@@ -81,8 +80,11 @@ class _Contenido extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final secundarios = i18n.musculos(listaJson(ficha.secondaryMuscles));
-    final pasos = listaJson(ficha.instrucciones);
+    final f = formatoDe(context, ref);
+    final secundarios = f.musculos(listaJson(ficha.secondaryMuscles));
+    // Los pasos van por idioma desde la resiembra del bloque I; si la base
+    // todavía guarda la lista suelta de antes, `instrucciones` la entiende.
+    final pasos = f.instrucciones(ficha.instrucciones);
     final animacion = media.resolver(ficha.gif);
 
     return SafeArea(
@@ -125,12 +127,12 @@ class _Contenido extends ConsumerWidget {
               runSpacing: t.s,
               children: [
                 ui.Pildora(
-                  i18n.musculo(ficha.target),
+                  f.musculo(ficha.target),
                   color: CupertinoColors.white,
                   relleno: context.acento,
                 ),
-                ui.Pildora(i18n.equipamiento(ficha.equipment)),
-                ui.Pildora(i18n.zonaCuerpo(ficha.bodyPart)),
+                ui.Pildora(f.equipamiento(ficha.equipment)),
+                ui.Pildora(f.zonaCuerpo(ficha.bodyPart)),
               ],
             ),
           ),
@@ -150,17 +152,17 @@ class _Contenido extends ConsumerWidget {
               _detalle(
                 context,
                 context.t.fichaMusculoPrincipal,
-                i18n.musculo(ficha.target),
+                f.musculo(ficha.target),
               ),
               _detalle(
                 context,
                 context.t.fichaGrupoMuscular,
-                i18n.musculo(ficha.muscleGroup),
+                f.musculo(ficha.muscleGroup),
               ),
               _detalle(
                 context,
                 context.t.fichaEquipamiento,
-                i18n.equipamiento(ficha.equipment),
+                f.equipamiento(ficha.equipment),
               ),
               if (secundarios.isNotEmpty)
                 CupertinoListTile(

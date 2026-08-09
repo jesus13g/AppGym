@@ -93,6 +93,10 @@ abstract final class Claves {
   static const repMin = 'rep_min';
   static const repMax = 'rep_max';
   static const perfilProgresion = 'perfil_progresion';
+
+  /// Versión del índice de búsqueda del catálogo. No es una preferencia del
+  /// usuario: vive aquí porque es el sitio donde ya hay una tabla clave/valor.
+  static const versionIndice = 'version_indice';
 }
 
 /// Pasos de peso que se ofrecen, en la unidad activa.

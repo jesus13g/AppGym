@@ -1,115 +1,49 @@
-/// Traducciones al español del vocabulario del catálogo de ejercicios.
+/// Traducción del vocabulario del catálogo de ejercicios.
 ///
-/// Los nombres de los ejercicios vienen solo en inglés en el dataset original y
-/// se muestran tal cual, pero las categorías sí son vocabularios cerrados y
-/// pequeños, así que se traducen aquí. Estas traducciones también alimentan el
-/// índice de búsqueda (ver `semilla.dart`), de forma que buscar «mancuerna»
-/// encuentra los ejercicios cuyo equipamiento es «dumbbell».
+/// Los cuatro vocabularios del dataset (`bodyPart`, `equipment`, `target` y los
+/// músculos) son cerrados y pequeños, así que se traducen con una tabla por
+/// idioma: `i18n_es.dart` e `i18n_en.dart`. Los **nombres de ejercicio no se
+/// traducen** en ningún idioma (ver la cabecera de `i18n_es.dart`).
 ///
-/// **Si tocas este fichero hay que volver a sembrar el catálogo**, porque la
-/// columna `busqueda` se construye a partir de estas tablas.
+/// Estas traducciones no son solo presentación: alimentan la columna `busqueda`
+/// de `catalogo_ejercicios`, que es el índice del buscador. Y ahí entran **los
+/// términos de todos los idiomas a la vez**, no solo los del activo: así el
+/// índice se construye una vez, cambiar de idioma no toca la base, y un usuario
+/// inglés que aprendió los nombres en español los sigue encontrando.
+///
+/// **Si tocas las tablas hay que subir `versionIndice`** (ver `semilla.dart`).
 library;
 
-const zonasCuerpo = <String, String>{
-  'back': 'Espalda',
-  'cardio': 'Cardio',
-  'chest': 'Pecho',
-  'lower arms': 'Antebrazos',
-  'lower legs': 'Piernas (inferior)',
-  'neck': 'Cuello',
-  'shoulders': 'Hombros',
-  'upper arms': 'Brazos',
-  'upper legs': 'Piernas',
-  'waist': 'Core',
+import 'i18n_en.dart';
+import 'i18n_es.dart';
+
+/// Los idiomas con vocabulario propio, en el mismo orden que
+/// `idiomasSoportados`. Un idioma sin tabla cae al español.
+const idiomasCatalogo = <String>['es', 'en'];
+
+const _zonasCuerpo = <String, Map<String, String>>{
+  'es': zonasCuerpoEs,
+  'en': zonasCuerpoEn,
 };
 
-const equipamientos = <String, String>{
-  'assisted': 'Asistido',
-  'band': 'Banda',
-  'barbell': 'Barra',
-  'body weight': 'Peso corporal',
-  'bosu ball': 'Bosu',
-  'cable': 'Polea',
-  'dumbbell': 'Mancuerna',
-  'elliptical machine': 'Elíptica',
-  'ez barbell': 'Barra Z',
-  'hammer': 'Martillo',
-  'kettlebell': 'Kettlebell',
-  'leverage machine': 'Máquina',
-  'medicine ball': 'Balón medicinal',
-  'olympic barbell': 'Barra olímpica',
-  'resistance band': 'Banda elástica',
-  'roller': 'Rodillo',
-  'rope': 'Cuerda',
-  'skierg machine': 'SkiErg',
-  'sled machine': 'Trineo',
-  'smith machine': 'Multipower',
-  'stability ball': 'Fitball',
-  'stationary bike': 'Bicicleta estática',
-  'stepmill machine': 'Escaladora',
-  'tire': 'Neumático',
-  'trap bar': 'Barra hexagonal',
-  'upper body ergometer': 'Ergómetro de brazos',
-  'weighted': 'Lastrado',
-  'wheel roller': 'Rueda abdominal',
+const _equipamientos = <String, Map<String, String>>{
+  'es': equipamientosEs,
+  'en': equipamientosEn,
 };
 
-const musculosTabla = <String, String>{
-  'abdominals': 'Abdominales',
-  'abductors': 'Abductores',
-  'abs': 'Abdominales',
-  'adductors': 'Aductores',
-  'ankle stabilizers': 'Estabilizadores del tobillo',
-  'ankles': 'Tobillos',
-  'back': 'Espalda',
-  'biceps': 'Bíceps',
-  'brachialis': 'Braquial',
-  'calves': 'Gemelos',
-  'cardiovascular system': 'Sistema cardiovascular',
-  'chest': 'Pecho',
-  'core': 'Core',
-  'deltoids': 'Deltoides',
-  'delts': 'Deltoides',
-  'feet': 'Pies',
-  'forearms': 'Antebrazos',
-  'glutes': 'Glúteos',
-  'grip muscles': 'Agarre',
-  'groin': 'Ingle',
-  'hamstrings': 'Isquiotibiales',
-  'hands': 'Manos',
-  'hip flexors': 'Flexores de cadera',
-  'inner thighs': 'Cara interna del muslo',
-  'latissimus dorsi': 'Dorsal ancho',
-  'lats': 'Dorsales',
-  'levator scapulae': 'Elevador de la escápula',
-  'lower abs': 'Abdomen inferior',
-  'lower back': 'Lumbares',
-  'obliques': 'Oblicuos',
-  'pectorals': 'Pectorales',
-  'quadriceps': 'Cuádriceps',
-  'quads': 'Cuádriceps',
-  'rear deltoids': 'Deltoides posterior',
-  'rhomboids': 'Romboides',
-  'rotator cuff': 'Manguito rotador',
-  'serratus anterior': 'Serrato anterior',
-  'shins': 'Espinillas',
-  'shoulders': 'Hombros',
-  'soleus': 'Sóleo',
-  'spine': 'Columna',
-  'sternocleidomastoid': 'Esternocleidomastoideo',
-  'traps': 'Trapecios',
-  'trapezius': 'Trapecios',
-  'triceps': 'Tríceps',
-  'upper back': 'Espalda alta',
-  'upper chest': 'Pecho superior',
-  'wrist extensors': 'Extensores de muñeca',
-  'wrist flexors': 'Flexores de muñeca',
-  'wrists': 'Muñecas',
+const _musculos = <String, Map<String, String>>{
+  'es': musculosEs,
+  'en': musculosEn,
 };
 
-String _traducir(String? valor, Map<String, String> tabla) {
+String _traducir(
+  String? valor,
+  Map<String, Map<String, String>> tablas,
+  String idioma,
+) {
   if (valor == null || valor.isEmpty) return '';
   final clave = valor.toLowerCase().trim();
+  final tabla = tablas[idioma] ?? tablas['es']!;
   final traducido = tabla[clave];
   if (traducido != null) return traducido;
   // Sin traducción, se muestra capitalizado en vez de en crudo.
@@ -117,23 +51,33 @@ String _traducir(String? valor, Map<String, String> tabla) {
 }
 
 /// Traduce una zona del cuerpo ('chest' -> 'Pecho').
-String zonaCuerpo(String? valor) => _traducir(valor, zonasCuerpo);
+String zonaCuerpo(String? valor, String idioma) =>
+    _traducir(valor, _zonasCuerpo, idioma);
 
 /// Traduce un equipamiento ('dumbbell' -> 'Mancuerna').
-String equipamiento(String? valor) => _traducir(valor, equipamientos);
+String equipamiento(String? valor, String idioma) =>
+    _traducir(valor, _equipamientos, idioma);
 
 /// Traduce un músculo ('lats' -> 'Dorsales').
-String musculo(String? valor) => _traducir(valor, musculosTabla);
+String musculo(String? valor, String idioma) =>
+    _traducir(valor, _musculos, idioma);
 
 /// Traduce una lista de músculos, sin repetir traducciones.
-List<String> musculos(Iterable<String>? valores) {
+List<String> musculos(Iterable<String>? valores, String idioma) {
   final vistos = <String>[];
   for (final v in valores ?? const <String>[]) {
-    final t = musculo(v);
+    final t = musculo(v, idioma);
     if (t.isNotEmpty && !vistos.contains(t)) vistos.add(t);
   }
   return vistos;
 }
+
+/// Cómo se dice un término en **todos** los idiomas, para el índice de
+/// búsqueda. Se usa desde `semilla.dart` y de ahí sale el índice multilingüe.
+Iterable<String> enTodosLosIdiomas(
+  String? valor,
+  String Function(String? valor, String idioma) traducir,
+) => {for (final idioma in idiomasCatalogo) traducir(valor, idioma)};
 
 /// Marcas diacríticas de la descomposición Unicode NFD.
 final _diacriticos = RegExp('[̀-ͯ]');

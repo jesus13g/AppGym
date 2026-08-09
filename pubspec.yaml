@@ -89,6 +89,11 @@ flutter:
     # Las imágenes y GIFs NO se empaquetan: son © Gym visual y se descargan.
     - assets/ejercicios.es.json
 
+    # Los pasos en inglés, aparte: lo único que cambia entre idiomas son las
+    # instrucciones, así que duplicar el catálogo entero sería tirar 300 KB.
+    # Se generan con `python3 tool/instrucciones_en.py`.
+    - assets/instrucciones.en.json
+
     # Rutinas predefinidas. Referencian el catálogo por id; hay un test que
     # comprueba que todos esos ids siguen existiendo.
     - assets/plantillas.json
