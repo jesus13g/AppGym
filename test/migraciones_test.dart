@@ -29,6 +29,7 @@ import 'esquemas/schema_v3.dart' as v3;
 import 'esquemas/schema_v4.dart' as v4;
 import 'esquemas/schema_v5.dart' as v5;
 import 'esquemas/schema_v6.dart' as v6;
+import 'esquemas/schema_v7.dart' as v7;
 
 /// Segundos desde época, que es como drift guarda las fechas aquí.
 int _epoca(DateTime fecha) => fecha.millisecondsSinceEpoch ~/ 1000;
@@ -372,6 +373,51 @@ void main() {
     test('con la base sin crear no hay nada que respaldar', () async {
       await respaldarSiHaceFalta(fichero);
       expect(directorio.listSync(), isEmpty);
+    });
+  });
+
+  // ── I2: las claves persistidas no se traducen ────────────────────────────────
+
+  /// El riesgo caro del bloque de internacionalización: traducir por error una
+  /// clave que está escrita en la base de todos los móviles instalados y en
+  /// todas las copias exportadas. Estas dos listas son contratos, no textos.
+  group('claves que nunca cambian de valor', () {
+    test('los tipos de medida siguen siendo los mismos', () {
+      expect(tiposMedida.map((t) => t.$1), [
+        'peso',
+        'grasa',
+        'cintura',
+        'pecho',
+        'brazo',
+        'muslo',
+      ]);
+    });
+
+    test('una base de la v7 conserva sus medidas y sus ajustes', () async {
+      final esquema = await verificador.schemaAt(7);
+
+      final vieja = v7.DatabaseAtV7(esquema.newConnection());
+      // La fecha va como segundos desde la época, que es como la guarda drift.
+      await vieja.customStatement(
+        'INSERT INTO medidas (id, fecha, tipo, valor) '
+        "VALUES (1, ?, 'peso', 78.4)",
+        [DateTime(2026, 8, 1).millisecondsSinceEpoch ~/ 1000],
+      );
+      await vieja.customStatement(
+        "INSERT INTO ajustes (clave, valor) VALUES ('unidad', 'lb')",
+      );
+      await vieja.close();
+
+      final bd = AppBD(esquema.newConnection());
+      await verificador.migrateAndValidate(bd, bd.schemaVersion);
+
+      // Si «peso» se hubiera traducido, la medida existiría pero nadie la
+      // encontraría: el histórico se perdería en silencio.
+      expect((await bd.ultimaMedida('peso'))!.valor, 78.4);
+      expect((await bd.ajustes()).unidad, Unidad.lb);
+      expect((await bd.ajustesCrudos()).keys, contains('unidad'));
+
+      await bd.close();
     });
   });
 }

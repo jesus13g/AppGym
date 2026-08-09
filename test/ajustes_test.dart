@@ -120,6 +120,30 @@ void main() {
     });
   });
 
+  group('idioma', () {
+    test('sin preferencia se sigue al del sistema', () {
+      expect(const Ajustes().idioma, Idioma.auto);
+      expect(Ajustes.desdeMapa(const {}).idioma, Idioma.auto);
+    });
+
+    test('un código desconocido no rompe nada', () {
+      // Una clave con basura —una copia de otra versión, un fichero editado a
+      // mano— no puede impedir que la app arranque.
+      expect(
+        Ajustes.desdeMapa(const {'idioma': 'klingon'}).idioma,
+        Idioma.auto,
+      );
+      expect(Ajustes.desdeMapa(const {'idioma': ''}).idioma, Idioma.auto);
+    });
+
+    test('ida y vuelta por la tabla', () {
+      for (final idioma in Idioma.values) {
+        final texto = Ajustes.texto(idioma);
+        expect(Ajustes.desdeMapa({Claves.idioma: texto}).idioma, idioma);
+      }
+    });
+  });
+
   group('conversión de unidades', () {
     test('en kilos no se convierte nada', () {
       const ajustes = Ajustes();

@@ -14,6 +14,7 @@ import 'package:appgym/l10n/textos.dart';
 import 'package:appgym/main.dart';
 import 'package:appgym/datos/semilla.dart';
 import 'package:appgym/estado/providers.dart';
+import 'package:appgym/pantallas/ajustes.dart';
 import 'package:appgym/pantallas/catalogo.dart';
 import 'package:appgym/pantallas/entrenar.dart';
 import 'package:appgym/pantallas/ficha.dart';
@@ -41,6 +42,9 @@ import 'ayuda.dart';
 /// Los formatos en español, para las aserciones que comparan una fecha ya
 /// escrita. Es el mismo idioma que fija `_app`.
 final _es = formatoDePrueba();
+
+/// Y los ingleses, para el grupo que monta la app en inglés.
+final _en = formatoDePrueba(idioma: 'en');
 
 final _catalogoFalso = [
   const EjercicioJson(
@@ -2304,6 +2308,131 @@ void main() {
       expect(find.text('barbell bench press'), findsOneWidget);
       // El curl de bíceps no es de pecho y no debe salir.
       expect(find.text('dumbbell curl'), findsNothing);
+    });
+  });
+
+  // ── I7: la app en inglés ───────────────────────────────────────────────────
+
+  /// El único grupo que monta en otro idioma.
+  ///
+  /// No se duplican las 300 aserciones en inglés: eso probaría a Flutter, no a
+  /// la app. Se prueba lo que **de verdad** depende del idioma —una pantalla de
+  /// cada tipo, los formatos, el vocabulario del catálogo y las plantillas—, que
+  /// es donde puede quedarse una cadena sin traducir.
+  group('la app en inglés', () {
+    late int idRutina;
+
+    Widget enIngles(Widget pantalla) =>
+        _app(bd, pantalla, idioma: const Locale('en'));
+
+    setUp(() async {
+      await sembrarCatalogo(bd, datos: _catalogoFalso);
+      idRutina = (await bd.insertarRutina('Push'))!;
+      await bd.insertarEjercicio(idRutina, 'Bench press', idCatalogo: '0001');
+    });
+
+    testWidgets('la lista de rutinas', (tester) async {
+      await tester.pumpWidget(enIngles(const PantallaRutinas()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Routines'), findsWidgets);
+      // Sin entrenar, y con la frase inglesa: si la clave se hubiera quedado
+      // sin traducir, aquí saldría «1 ejercicio · Sin entrenar».
+      expect(find.text('1 exercise · Not trained yet'), findsOneWidget);
+    });
+
+    testWidgets('el registro de una sesión', (tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(enIngles(PantallaEntrenar(idRutina: idRutina)));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Log session'), findsOneWidget);
+      expect(find.text('Add set'), findsOneWidget);
+      expect(find.text('Save workout'), findsOneWidget);
+      // La fecha, con el orden inglés y no con el español.
+      expect(find.text(_en.fechaLarga(DateTime.now())), findsOneWidget);
+    });
+
+    testWidgets('el catálogo traduce las categorías, no los nombres', (
+      tester,
+    ) async {
+      await tester.pumpWidget(enIngles(const PantallaCatalogo()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Exercises'), findsWidgets);
+      // El nombre del ejercicio se queda en inglés siempre, que es como se
+      // llama en el gimnasio.
+      expect(find.text('barbell bench press'), findsOneWidget);
+      // Y su categoría sí cambia: en español sería «Pectorales · Barra».
+      expect(find.text('Pectorals · Barbell'), findsOneWidget);
+    });
+
+    testWidgets('el progreso y su resumen semanal', (tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(enIngles(const PantallaProgreso()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Progress'), findsWidgets);
+      expect(find.text('Summary'), findsOneWidget);
+      expect(find.text('Calendar'), findsOneWidget);
+      expect(find.text('Body'), findsOneWidget);
+    });
+
+    testWidgets('los ajustes, con el idioma en su propio idioma', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(enIngles(const PantallaAjustes()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Settings'), findsWidgets);
+      expect(find.text('Weight unit'), findsOneWidget);
+
+      // La fila del idioma está más abajo: en un móvil hay que bajar hasta ella.
+      await tester.scrollUntilVisible(find.text('Language'), 300);
+      await tester.pumpAndSettle();
+      expect(find.text('Language'), findsOneWidget);
+      // Los nombres de idioma no se traducen: cada uno va en el suyo.
+      expect(find.text('Automatic'), findsOneWidget);
+    });
+
+    testWidgets('las medidas se llaman en inglés', (tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(enIngles(const PantallaMedidas()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Bodyweight'), findsWidgets);
+      expect(find.text('Waist'), findsOneWidget);
+      expect(find.text('No Bodyweight records'), findsOneWidget);
+    });
+
+    testWidgets('el plural sale de la clave ICU', (tester) async {
+      await bd.insertarEjercicio(idRutina, 'Row', idCatalogo: '0002');
+      await tester.pumpWidget(enIngles(const PantallaRutinas()));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('2 exercises'), findsOneWidget);
+      expect(find.textContaining('1 exercise ·'), findsNothing);
+    });
+
+    testWidgets('cambiar de idioma con una sesión viva no la rompe', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      _RelojFalso().instalar();
+
+      // Se monta la sesión viva en español y se repinta en inglés con el mismo
+      // estado: el borrador es JSON con ids y números, así que el idioma no lo
+      // toca.
+      final vivo = PantallaEntrenar(idRutina: idRutina, modo: Modo.vivo);
+      await tester.pumpWidget(_app(bd, vivo));
+      await _asentar(tester);
+      expect(find.text('Entrenando'), findsOneWidget);
+
+      await tester.pumpWidget(_app(bd, vivo, idioma: const Locale('en')));
+      await _asentar(tester);
+      expect(find.text('Working out'), findsOneWidget);
+      expect(find.text('Finish'), findsOneWidget);
     });
   });
 }
