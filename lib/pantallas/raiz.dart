@@ -10,6 +10,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/media.dart' as media;
+import '../estado/copia_automatica.dart';
 import '../estado/providers.dart';
 import '../l10n/textos.dart';
 import '../tema/tokens.dart';
@@ -69,16 +70,42 @@ class Pestanas extends ConsumerStatefulWidget {
   ConsumerState<Pestanas> createState() => _PestanasState();
 }
 
-class _PestanasState extends ConsumerState<Pestanas> {
+class _PestanasState extends ConsumerState<Pestanas>
+    with WidgetsBindingObserver {
   /// Solo se pregunta una vez por arranque, se conteste lo que se conteste.
   bool _preguntado = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Tras el primer frame: mientras se construye el árbol no se puede navegar
     // ni abrir un diálogo.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _ofrecerContinuar());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ofrecerContinuar();
+      // La copia automática, si toca. Va después del primer frame y no se
+      // espera: la app no puede quedarse en blanco por una copia, y su fallo
+      // no es visible en la ruta de entrenar.
+      _copiar(Disparador.arranque);
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Al volver del segundo plano. El motor pone el mínimo de cinco minutos
+  /// entre intentos, así que alternar de app no dispara nada.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState estado) {
+    if (estado == AppLifecycleState.resumed) _copiar(Disparador.vuelta);
+  }
+
+  void _copiar(Disparador disparador) {
+    if (!mounted) return;
+    ref.read(motorCopiaProvider.notifier).intentar(disparador);
   }
 
   Future<void> _ofrecerContinuar() async {

@@ -116,12 +116,28 @@ jobs:
       # --dart-define pasa la misma versión al código: es lo que lee
       # `versionApp` para el «Acerca de» de Ajustes, sin necesidad de
       # package_info_plus solo para una cadena.
+      # Las credenciales de la copia automática entran igual que la versión, por
+      # --dart-define, desde secretos del repositorio. NO se escriben aquí.
+      #
+      # Si no están configuradas, las variables llegan vacías y la copia
+      # automática queda desactivada y no visible: la app se comporta como antes
+      # de la fase 8a y el APK se construye igual. Es lo que hace que un fork
+      # compile sin tener que tocar nada.
+      #
+      # El «secreto» de un cliente OAuth de aplicación instalada no es
+      # confidencial (RFC 8252): lo que protege el canje es PKCE. Se guarda como
+      # secreto de todas formas para no regalar la cuota del proyecto.
       - name: Construir APK
         run: |
           flutter build apk --release \
             --build-name "${{ steps.version.outputs.nombre }}" \
             --build-number "$GITHUB_RUN_NUMBER" \
-            --dart-define "VERSION=${{ steps.version.outputs.nombre }}"
+            --dart-define "VERSION=${{ steps.version.outputs.nombre }}" \
+            --dart-define "GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" \
+            --dart-define "GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET"
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
 
       - name: Renombrar el APK
         run: |

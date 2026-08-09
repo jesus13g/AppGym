@@ -12,6 +12,7 @@ library;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../datos/ajustes.dart';
 import '../datos/media.dart' as media;
@@ -21,6 +22,7 @@ import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
+import 'copia_nube.dart';
 import 'copia_seguridad.dart';
 
 /// Versión con la que se compiló, que CI pasa con `--dart-define`.
@@ -81,6 +83,9 @@ class PantallaAjustes extends ConsumerWidget {
             _entrenamiento(context, ref, ajustes),
             _objetivos(context, ref, ajustes),
             _apariencia(context, ref, ajustes),
+            // Encima del grupo «Datos», que es su vecino temático: los dos
+            // hablan de la copia de seguridad, uno a mano y el otro solo.
+            const GrupoCopiaNube(),
             const GrupoDatos(),
             _acercaDe(context, ref),
             const SizedBox(height: t.xxl),
@@ -373,6 +378,20 @@ class PantallaAjustes extends ConsumerWidget {
           valor: catalogo == null
               ? '…'
               : context.t.ajustesCatalogoValor(catalogo),
+        ),
+        // La política de privacidad se enlaza al repositorio en vez de
+        // empaquetarla: hay que poder leerla también desde la pantalla de
+        // consentimiento de Google, que solo admite una URL.
+        _fila(
+          context,
+          titulo: context.t.ajustesPrivacidad,
+          valor: '',
+          onTap: () => launchUrl(
+            Uri.parse(
+              'https://github.com/jesus13g/AppGym/blob/main/docs/privacidad.md',
+            ),
+            mode: LaunchMode.externalApplication,
+          ),
         ),
       ],
     );

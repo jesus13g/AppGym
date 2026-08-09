@@ -2214,5 +2214,119 @@
   "ajustesIdiomaMensaje": "Cambiar de idioma no renombra lo que ya has creado: tus rutinas conservan el nombre que les pusiste.",
   "@ajustesIdiomaMensaje": {
     "description": "Mensaje de la hoja de idioma"
+  },
+  "ajustesPrivacidad": "Privacidad",
+  "@ajustesPrivacidad": {
+    "description": "Fila de Acerca de que abre la política de privacidad"
+  },
+  "nubeCabecera": "Copia automática",
+  "@nubeCabecera": {
+    "description": "Cabecera del grupo de copia automática en Ajustes. No se llama «sincronización» a propósito: no lo es"
+  },
+  "nubeSinConectar": "Sin conectar",
+  "@nubeSinConectar": {
+    "description": "Estado del grupo cuando no hay ninguna cuenta"
+  },
+  "nubeSinConectarPie": "Sube tus copias solo, sin acordarte. Sirven para recuperar todo tu histórico en un móvil nuevo.",
+  "@nubeSinConectarPie": {
+    "description": "Pie del grupo cuando no hay cuenta conectada"
+  },
+  "nubeConectar": "Conectar con {destino}",
+  "@nubeConectar": {
+    "description": "Botón que abre el navegador para dar permiso",
+    "placeholders": {
+      "destino": {
+        "type": "String",
+        "example": "Google Drive"
+      }
+    }
+  },
+  "nubeCuenta": "Cuenta",
+  "@nubeCuenta": {
+    "description": "Etiqueta de la fila con el correo conectado"
+  },
+  "nubeFrecuencia": "Frecuencia",
+  "@nubeFrecuencia": {
+    "description": "Etiqueta de la fila que elige cada cuánto se copia"
+  },
+  "nubeFrecuenciaMensaje": "La copia se sube cuando abres la app o guardas un entrenamiento, nunca mientras entrenas.",
+  "@nubeFrecuenciaMensaje": {
+    "description": "Mensaje de la hoja de frecuencia"
+  },
+  "nubeFrecuenciaNo": "Desactivada",
+  "@nubeFrecuenciaNo": {
+    "description": "Opción de frecuencia: no copiar"
+  },
+  "nubeFrecuenciaDiaria": "Diaria",
+  "@nubeFrecuenciaDiaria": {
+    "description": "Opción de frecuencia"
+  },
+  "nubeFrecuenciaSemanal": "Semanal",
+  "@nubeFrecuenciaSemanal": {
+    "description": "Opción de frecuencia"
+  },
+  "nubeFrecuenciaMensual": "Mensual",
+  "@nubeFrecuenciaMensual": {
+    "description": "Opción de frecuencia"
+  },
+  "nubeUltima": "Última copia",
+  "@nubeUltima": {
+    "description": "Etiqueta de la fila con la fecha de la última copia"
+  },
+  "nubeNunca": "Todavía ninguna",
+  "@nubeNunca": {
+    "description": "Valor de «última copia» cuando aún no se ha subido ninguna"
+  },
+  "nubeAhora": "Copiar ahora",
+  "@nubeAhora": {
+    "description": "Botón que fuerza una copia sin esperar a que toque"
+  },
+  "nubeDesconectar": "Desconectar",
+  "@nubeDesconectar": {
+    "description": "Botón que revoca el permiso y olvida la cuenta"
+  },
+  "nubeDesconectarTitulo": "¿Desconectar la cuenta?",
+  "@nubeDesconectarTitulo": {
+    "description": "Título del diálogo de confirmación al desconectar"
+  },
+  "nubeDesconectarMensaje": "Dejarán de subirse copias nuevas. Ni tus datos de este móvil ni las copias que ya están en la nube se tocan.",
+  "@nubeDesconectarMensaje": {
+    "description": "Mensaje del diálogo de confirmación al desconectar"
+  },
+  "nubePie": "Se conservan las {copias} más recientes en la carpeta «{carpeta}» de {destino}. Las anteriores se borran solas.",
+  "@nubePie": {
+    "description": "Pie del grupo con cuenta conectada",
+    "placeholders": {
+      "copias": {
+        "type": "int",
+        "example": "10"
+      },
+      "carpeta": {
+        "type": "String",
+        "example": "AppGym"
+      },
+      "destino": {
+        "type": "String",
+        "example": "Google Drive"
+      }
+    }
+  },
+  "nubeErrorPie": "La última copia no se pudo subir: {error}",
+  "@nubeErrorPie": {
+    "description": "Pie del grupo cuando el último intento falló",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "Sin conexión"
+      }
+    }
+  },
+  "nubeVuelta": "Listo. Ya puedes volver a AppGym.",
+  "@nubeVuelta": {
+    "description": "Lo que se lee en el navegador al terminar de dar permiso"
+  },
+  "nubeAviso": "La copia automática no está al día",
+  "@nubeAviso": {
+    "description": "Aviso discreto de la cabecera de Rutinas cuando la copia falla o se retrasa"
   }
 }

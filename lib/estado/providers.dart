@@ -21,10 +21,13 @@ import '../datos/formato.dart';
 import '../datos/geometria.dart';
 import '../datos/media.dart';
 import '../datos/musculos.dart';
+import '../datos/nube/drive.dart';
+import '../datos/nube/nube.dart';
 import '../datos/progresion.dart';
 import '../datos/reloj.dart' as reloj;
 import '../datos/semilla.dart';
 import '../l10n/textos.dart';
+import 'copia_automatica.dart';
 
 /// La base de datos, viva mientras viva la app.
 final bdProvider = Provider<AppBD>((ref) {
@@ -286,6 +289,21 @@ final ajustesProvider = FutureProvider<Ajustes>(
   (ref) => ref.watch(bdProvider).ajustes(),
 );
 
+// ── Copia automática ─────────────────────────────────────────────────────────
+
+/// A dónde suben las copias, o `null` si esta compilación no lleva destino.
+///
+/// Devuelve `null` cuando faltan las `--dart-define` del proveedor, y entonces
+/// **la funcionalidad no existe**: el grupo de Ajustes no se pinta y no hay
+/// disparador que haga nada. Es lo mismo que hoy hace la versión, que en una
+/// compilación local pone `local`.
+///
+/// Los tests lo sobrescriben con la nube falsa, que es lo que permite probar
+/// todo el motor sin red y sin cuenta.
+final nubeProvider = Provider<DestinoNube?>(
+  (ref) => driveDisponible ? DriveNube() : null,
+);
+
 /// Fechas, números y unidades listos para pintar.
 ///
 /// Reúne las dos cosas que casi siempre viajan juntas —el idioma y las
@@ -414,6 +432,13 @@ void invalidarEntrenamientos(WidgetRef ref, int idRutina) {
 /// Refresca lo que depende de las preferencias.
 void invalidarAjustes(WidgetRef ref) => ref.invalidate(ajustesProvider);
 
+/// Vuelve a leer el estado de la copia automática desde la tabla.
+///
+/// No es un `invalidate`: el estado lo lleva un `Notifier`, no una consulta, y
+/// tirarlo entero perdería la copia que pudiera estar subiéndose.
+void invalidarCopiaAutomatica(WidgetRef ref) =>
+    ref.read(motorCopiaProvider.notifier).refrescar();
+
 /// Refresca los favoritos y los vistos recientemente.
 void invalidarCatalogoDelUsuario(WidgetRef ref) {
   ref.invalidate(favoritosProvider);
@@ -437,6 +462,7 @@ void invalidarTodo(WidgetRef ref) {
   invalidarCatalogoDelUsuario(ref);
   invalidarMedidas(ref);
   invalidarAjustes(ref);
+  invalidarCopiaAutomatica(ref);
   ref.invalidate(ejerciciosRutinaProvider);
   ref.invalidate(ejercicioProvider);
   ref.invalidate(estadisticasRutinaProvider);
