@@ -10,6 +10,11 @@ build/
 #   dart run build_runner build --delete-conflicting-outputs
 *.g.dart
 
+# Traducciones generadas por el SDK a partir de los ARB; se regeneran con
+#   flutter gen-l10n
+# Los ARB (lib/l10n/*.arb) sí se versionan: son la fuente.
+lib/l10n/generado/
+
 # Android
 android/.gradle/
 android/local.properties

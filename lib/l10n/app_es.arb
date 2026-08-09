@@ -1,0 +1,20 @@
+{
+  "@@locale": "es",
+
+  "comunGuardar": "Guardar",
+  "@comunGuardar": {
+    "description": "Botón de confirmación de un formulario o diálogo"
+  },
+  "comunCancelar": "Cancelar",
+  "@comunCancelar": {
+    "description": "Botón que descarta un diálogo o una hoja sin hacer nada"
+  },
+  "comunEliminar": "Eliminar",
+  "@comunEliminar": {
+    "description": "Botón destructivo de un diálogo de confirmación"
+  },
+  "comunListo": "Listo",
+  "@comunListo": {
+    "description": "Botón que cierra el selector de fecha aceptando el valor"
+  }
+}

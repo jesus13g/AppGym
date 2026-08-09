@@ -1,0 +1,8 @@
+{
+  "@@locale": "en",
+
+  "comunGuardar": "Save",
+  "comunCancelar": "Cancel",
+  "comunEliminar": "Delete",
+  "comunListo": "Done"
+}

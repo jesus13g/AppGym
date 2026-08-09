@@ -68,6 +68,7 @@ Requiere **Flutter 3.44.8** o posterior.
 ```bash
 flutter pub get
 dart run build_runner build     # genera el código de drift; obligatorio tras clonar
+flutter gen-l10n                # genera las traducciones; obligatorio tras clonar
 flutter run
 ```
 

@@ -10,6 +10,7 @@ al añadir código.
 ```bash
 flutter pub get
 dart run build_runner build     # genera bd.g.dart; obligatorio tras clonar
+flutter gen-l10n                # genera lib/l10n/generado/; obligatorio tras clonar
 flutter run                     # app en un dispositivo o emulador
 flutter analyze                 # objetivo permanente: 0 issues
 flutter test                    # 343 tests: datos, pantallas, migraciones, copia, ajustes,
@@ -22,7 +23,9 @@ Se desarrolla con **Flutter 3.44.8 / Dart 3.12.2**. La versión está fijada en
 `.github/workflows/build-apk.yml`; si la subes, súbela también ahí.
 
 **Los `*.g.dart` no se versionan** (ver `.gitignore`). Sin `build_runner build` no compila nada, ni
-en local ni en CI.
+en local ni en CI. **`lib/l10n/generado/` tampoco**: sin `flutter gen-l10n` no existe la clase
+`Textos` y no compila ninguna pantalla. Son dos generadores independientes —`gen-l10n` es un
+comando del propio SDK y no pasa por `build_runner`—, así que no se pisan.
 
 ### Cómo verificar cambios
 

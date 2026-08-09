@@ -11,6 +11,7 @@ import 'package:appgym/datos/geometria.dart';
 import 'package:appgym/datos/musculos.dart';
 import 'package:appgym/datos/reloj.dart' as reloj;
 import 'package:appgym/estado/descanso.dart';
+import 'package:appgym/l10n/textos.dart';
 import 'package:appgym/main.dart';
 import 'package:appgym/datos/semilla.dart';
 import 'package:appgym/estado/providers.dart';
@@ -33,7 +34,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -68,6 +68,7 @@ Widget _app(
   AppBD bd,
   Widget pantalla, {
   Brightness? brillo,
+  Locale idioma = const Locale('es'),
   MapaCuerpo<Region>? modelo,
   // `Override` no lo exporta `flutter_riverpod`, así que no se puede nombrar
   // aquí; el `cast` lo resuelve la lista de destino, que sí está tipada.
@@ -79,13 +80,12 @@ Widget _app(
     ...overrides.cast(),
   ],
   child: CupertinoApp(
-    locale: const Locale('es'),
-    supportedLocales: const [Locale('es')],
-    localizationsDelegates: const [
-      GlobalCupertinoLocalizations.delegate,
-      GlobalMaterialLocalizations.delegate,
-      GlobalWidgetsLocalizations.delegate,
-    ],
+    // El idioma se fija a español a propósito: así las aserciones de texto de
+    // toda la suite siguen siendo válidas tal cual, y lo que de verdad depende
+    // del idioma se prueba aparte, en el grupo que monta en inglés.
+    locale: idioma,
+    supportedLocales: idiomasSoportados,
+    localizationsDelegates: Textos.localizationsDelegates,
     theme: CupertinoThemeData(brightness: brillo),
     home: pantalla,
   ),

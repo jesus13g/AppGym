@@ -65,6 +65,11 @@ jobs:
       - name: Generar el código de drift
         run: dart run build_runner build
 
+      # Las traducciones tampoco se versionan (lib/l10n/generado/). No pasan por
+      # build_runner: gen-l10n es un comando del propio SDK.
+      - name: Generar las traducciones
+        run: flutter gen-l10n
+
       - name: Comprobar el formato
         run: dart format --set-exit-if-changed lib test
 
@@ -96,6 +101,9 @@ jobs:
 
       - name: Generar el código de drift
         run: dart run build_runner build
+
+      - name: Generar las traducciones
+        run: flutter gen-l10n
 
       - name: Calcular la versión
         id: version

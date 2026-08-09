@@ -2,11 +2,11 @@
 library;
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'datos/bd.dart';
 import 'estado/providers.dart';
+import 'l10n/textos.dart';
 import 'pantallas/raiz.dart';
 
 void main() {
@@ -39,12 +39,8 @@ class AppGym extends ConsumerWidget {
         },
       ),
       locale: const Locale('es'),
-      supportedLocales: const [Locale('es'), Locale('en')],
-      localizationsDelegates: const [
-        GlobalCupertinoLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-      ],
+      supportedLocales: idiomasSoportados,
+      localizationsDelegates: Textos.localizationsDelegates,
       home: const Raiz(),
     );
   }
