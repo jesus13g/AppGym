@@ -9,6 +9,7 @@ import '../datos/formato.dart';
 import '../datos/i18n.dart' as i18n;
 import '../datos/media.dart' as media;
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -52,20 +53,20 @@ class _PantallaFichaState extends ConsumerState<PantallaFicha> {
       backgroundColor: context.fondo,
       navigationBar: ui.barra(
         context,
-        titulo: ficha.value?.nombre ?? 'Ejercicio',
+        titulo: ficha.value?.nombre ?? context.t.fichaTitulo,
         derecha: BotonFavorito(idCatalogo: widget.idCatalogo),
       ),
       child: ficha.when(
         loading: () => const ui.Cargando(),
         error: (e, _) => ui.EstadoVacio(
           icono: CupertinoIcons.exclamationmark_triangle,
-          titulo: 'No se pudo cargar el ejercicio',
+          titulo: context.t.fichaError,
           subtitulo: '$e',
         ),
         data: (datos) => datos == null
-            ? const ui.EstadoVacio(
+            ? ui.EstadoVacio(
                 icono: CupertinoIcons.exclamationmark_triangle,
-                titulo: 'Ejercicio no encontrado',
+                titulo: context.t.fichaNoEncontrado,
               )
             : _Contenido(ficha: datos),
       ),
@@ -136,7 +137,7 @@ class _Contenido extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: t.l),
             child: ui.BotonPrincipal(
-              'Añadir a una rutina',
+              context.t.fichaAnadirARutina,
               icono: CupertinoIcons.add,
               onPressed: () => anadirARutina(context, ref, ficha),
             ),
@@ -144,28 +145,28 @@ class _Contenido extends ConsumerWidget {
           _EnRutinas(idCatalogo: ficha.id),
           const SizedBox(height: t.s),
           ui.Grupo(
-            cabecera: 'Detalles',
+            cabecera: context.t.fichaDetalles,
             filas: [
               _detalle(
                 context,
-                'Músculo principal',
+                context.t.fichaMusculoPrincipal,
                 i18n.musculo(ficha.target),
               ),
               _detalle(
                 context,
-                'Grupo muscular',
+                context.t.fichaGrupoMuscular,
                 i18n.musculo(ficha.muscleGroup),
               ),
               _detalle(
                 context,
-                'Equipamiento',
+                context.t.fichaEquipamiento,
                 i18n.equipamiento(ficha.equipment),
               ),
               if (secundarios.isNotEmpty)
                 CupertinoListTile(
                   backgroundColor: context.tarjeta,
                   title: Text(
-                    'Músculos secundarios',
+                    context.t.fichaMusculosSecundarios,
                     style: ui.estilo(context),
                   ),
                   subtitle: Text(
@@ -181,13 +182,13 @@ class _Contenido extends ConsumerWidget {
           ),
           const SizedBox(height: t.l),
           ui.Grupo(
-            cabecera: 'Cómo se hace',
+            cabecera: context.t.fichaComoSeHace,
             filas: pasos.isEmpty
                 ? [
                     CupertinoListTile(
                       backgroundColor: context.tarjeta,
                       title: Text(
-                        'Sin instrucciones disponibles',
+                        context.t.fichaSinInstrucciones,
                         style: ui.estilo(context),
                       ),
                     ),
@@ -204,7 +205,7 @@ class _Contenido extends ConsumerWidget {
               vertical: t.xl,
             ),
             child: Text(
-              'Animación e imagen: ${media.atribucion}',
+              context.t.fichaAtribucion(media.atribucion),
               textAlign: TextAlign.center,
               style: ui.estilo(
                 context,
@@ -247,7 +248,7 @@ class _EnRutinas extends ConsumerWidget {
     return Padding(
       padding: const EdgeInsets.only(left: t.l, right: t.l, top: t.s),
       child: Text(
-        'Ya está en: ${rutinas.map((r) => r.nombre).join(' · ')}',
+        context.t.fichaYaEstaEn(rutinas.map((r) => r.nombre).join(' · ')),
         textAlign: TextAlign.center,
         style: ui.estilo(context, size: t.footnote, color: context.textoSec),
       ),

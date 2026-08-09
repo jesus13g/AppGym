@@ -27,6 +27,7 @@ import '../datos/progresion.dart' as progresion;
 import '../datos/reloj.dart' as reloj;
 import '../estado/descanso.dart';
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -361,6 +362,8 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
       context,
       inicial: _fecha,
       maxima: ahora,
+      etiquetaCancelar: context.t.comunCancelar,
+      etiquetaListo: context.t.comunListo,
     );
     if (elegida == null || !mounted) return;
 
@@ -442,6 +445,7 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
         (true, 'Seguir luego'),
         (false, 'Descartar el entrenamiento'),
       ],
+      etiquetaCancelar: context.t.comunCancelar,
     );
     if (elegido == null || !mounted) return;
 
@@ -518,6 +522,7 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
                     onMas: () => _descanso?.ajustar(ajusteDescanso),
                     onMenos: () => _descanso?.ajustar(-ajusteDescanso),
                     onSaltar: () => _descanso?.saltar(),
+                    etiquetaSaltar: context.t.comunSaltar,
                   ),
               ],
             ),
@@ -758,6 +763,8 @@ class TarjetaEjercicio extends StatelessWidget {
       marcador: 'Fallo en la última, con ayuda…',
       valor: serie.nota ?? '',
       permitirVacio: true,
+      etiquetaAceptar: context.t.comunGuardar,
+      etiquetaCancelar: context.t.comunCancelar,
     );
     if (texto == null) return;
 

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../datos/bd.dart';
 import '../datos/formato.dart';
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -53,6 +54,8 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
       titulo: 'Renombrar rutina',
       marcador: 'Nombre de la rutina',
       valor: actual,
+      etiquetaAceptar: context.t.comunGuardar,
+      etiquetaCancelar: context.t.comunCancelar,
     );
     if (nombre == null || !context.mounted) return;
 
@@ -108,6 +111,7 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
           'nueva empieza sin histórico.',
       valor: '$nombre (copia)',
       etiquetaAceptar: 'Duplicar',
+      etiquetaCancelar: context.t.comunCancelar,
     );
     if (propuesto == null || !context.mounted) return;
 
@@ -358,6 +362,8 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
                             mensaje:
                                 'Se eliminarán también las series '
                                 'registradas de este ejercicio en esta rutina.',
+                            etiquetaEliminar: context.t.comunEliminar,
+                            etiquetaCancelar: context.t.comunCancelar,
                             // Mantener pulsado abre las opciones propias del
                             // ejercicio —descanso y progresión—, que es donde
                             // se configuran sin estar entrenando.

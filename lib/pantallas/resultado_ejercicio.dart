@@ -311,7 +311,7 @@ class _TarjetaSugerencia extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(t.l, 0, t.l, t.m),
             child: Text(
-              avisoDescarga,
+              avisoDescarga(context.t),
               style: ui.estilo(
                 context,
                 size: t.caption,

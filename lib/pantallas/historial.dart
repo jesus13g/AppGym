@@ -44,7 +44,7 @@ class PantallaHistorial extends ConsumerWidget {
       backgroundColor: context.fondo,
       navigationBar: ui.barra(
         context,
-        titulo: 'Sesiones',
+        titulo: context.t.historialTitulo,
         tituloAnterior: rutina.value?.nombre,
       ),
       child: SafeArea(
@@ -52,32 +52,29 @@ class PantallaHistorial extends ConsumerWidget {
           loading: () => const ui.Cargando(),
           error: (e, _) => ui.EstadoVacio(
             icono: CupertinoIcons.exclamationmark_triangle,
-            titulo: 'No se pudo cargar el historial',
+            titulo: context.t.historialError,
             subtitulo: '$e',
           ),
           data: (sesiones) => sesiones.isEmpty
-              ? const ui.EstadoVacio(
+              ? ui.EstadoVacio(
                   icono: CupertinoIcons.calendar,
-                  titulo: 'Todavía no hay sesiones',
-                  subtitulo:
-                      'Registra un entrenamiento de esta rutina y aquí '
-                      'podrás repasarlo, corregirlo o eliminarlo.',
+                  titulo: context.t.historialVacio,
+                  subtitulo: context.t.historialVacioDetalle,
                 )
               : ListView(
                   children: [
                     ui.Grupo(
                       cabecera: context.t.comunSesiones(sesiones.length),
-                      pie: 'Desliza una sesión para eliminarla.',
+                      pie: context.t.historialPie,
                       filas: [
                         for (final sesion in sesiones)
                           ui.DeslizarParaBorrar(
                             llave: ValueKey(sesion.id),
                             onBorrar: () => _borrar(ref, sesion.id),
-                            titulo: '¿Eliminar la sesión?',
-                            mensaje:
-                                'Se borrarán sus series y dejará de contar '
-                                'en el calendario y en las estadísticas. '
-                                'No se puede deshacer.',
+                            titulo: context.t.comunEliminarSesionTitulo,
+                            mensaje: context.t.comunEliminarSesionMensaje,
+                            etiquetaEliminar: context.t.comunEliminar,
+                            etiquetaCancelar: context.t.comunCancelar,
                             child: CupertinoListTile(
                               backgroundColor: context.tarjeta,
                               title: Text(
@@ -123,7 +120,9 @@ class PantallaHistorial extends ConsumerWidget {
   }
 
   String _resumen(BuildContext context, Formato f, ResumenSesion sesion) =>
-      '${context.t.comunEjercicios(sesion.nEjercicios)} · '
-      '${context.t.comunSeries(sesion.nSeries)} · '
-      '${f.peso(sesion.volumen)}';
+      context.t.historialResumen(
+        context.t.comunEjercicios(sesion.nEjercicios),
+        context.t.comunSeries(sesion.nSeries),
+        f.peso(sesion.volumen),
+      );
 }

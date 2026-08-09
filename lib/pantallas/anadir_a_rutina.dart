@@ -14,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/ui.dart' as ui;
 
@@ -31,7 +32,7 @@ Future<bool> anadirARutina(
   if (!context.mounted) return false;
 
   if (rutinas.isEmpty) {
-    ui.aviso(context, 'Crea antes una rutina');
+    ui.aviso(context, context.t.comunCreaAntesRutina);
     return false;
   }
 
@@ -41,8 +42,9 @@ Future<bool> anadirARutina(
   } else {
     final elegida = await ui.elegirEnHoja<int>(
       context,
-      titulo: 'Añadir «${ficha.nombre}»',
+      titulo: context.t.anadirATitulo(ficha.nombre),
       opciones: [for (final r in rutinas) (r.id, r.nombre)],
+      etiquetaCancelar: context.t.comunCancelar,
     );
     if (elegida == null || !context.mounted) return false;
     destino = elegida.$1;
@@ -57,13 +59,13 @@ Future<bool> anadirARutina(
 
   final nombre = rutinas.firstWhere((r) => r.id == destino).nombre;
   if (!bien) {
-    ui.aviso(context, '«$nombre» ya tiene este ejercicio');
+    ui.aviso(context, context.t.anadirYaEsta(nombre));
     return false;
   }
 
   invalidarRutina(ref, destino);
   ref.invalidate(rutinasQueContienenProvider(ficha.id));
-  ui.aviso(context, 'Añadido a «$nombre»');
+  ui.aviso(context, context.t.anadirHecho(nombre));
   return true;
 }
 

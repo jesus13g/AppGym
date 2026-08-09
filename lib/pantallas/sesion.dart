@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../datos/bd.dart';
 import '../datos/formato.dart';
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -34,10 +35,10 @@ class PantallaSesion extends ConsumerWidget {
   ) async {
     final confirmado = await ui.dialogoConfirmar(
       context,
-      titulo: '¿Eliminar la sesión?',
-      mensaje:
-          'Se borrarán sus series y dejará de contar en el calendario y en '
-          'las estadísticas. No se puede deshacer.',
+      titulo: context.t.comunEliminarSesionTitulo,
+      mensaje: context.t.comunEliminarSesionMensaje,
+      etiquetaAceptar: context.t.comunEliminar,
+      etiquetaCancelar: context.t.comunCancelar,
     );
     if (!confirmado || !context.mounted) return;
 
@@ -55,15 +56,15 @@ class PantallaSesion extends ConsumerWidget {
       backgroundColor: context.fondo,
       navigationBar: ui.barra(
         context,
-        titulo: 'Sesión',
-        tituloAnterior: 'Sesiones',
+        titulo: context.t.sesionTitulo,
+        tituloAnterior: context.t.historialTitulo,
         derecha: switch (sesion.value) {
           final datos? => CupertinoButton(
             padding: EdgeInsets.zero,
             minimumSize: Size.zero,
             onPressed: () =>
                 abrirEditarEntrenamiento(context, datos.idRutina, datos.id),
-            child: const Text('Editar'),
+            child: Text(context.t.sesionEditar),
           ),
           _ => null,
         },
@@ -73,13 +74,13 @@ class PantallaSesion extends ConsumerWidget {
           loading: () => const ui.Cargando(),
           error: (e, _) => ui.EstadoVacio(
             icono: CupertinoIcons.exclamationmark_triangle,
-            titulo: 'No se pudo cargar la sesión',
+            titulo: context.t.sesionError,
             subtitulo: '$e',
           ),
           data: (datos) => datos == null
-              ? const ui.EstadoVacio(
+              ? ui.EstadoVacio(
                   icono: CupertinoIcons.exclamationmark_triangle,
-                  titulo: 'Esta sesión ya no existe',
+                  titulo: context.t.sesionNoExiste,
                 )
               : _Contenido(
                   sesion: datos,
@@ -140,13 +141,18 @@ class _Contenido extends StatelessWidget {
                 child: _Dato('${sesion.ejercicios.length}', 'Ejercicios'),
               ),
               Expanded(child: _Dato('$nSeries', 'Series')),
-              Expanded(child: _Dato(formato.peso(sesion.volumen), 'Volumen')),
+              Expanded(
+                child: _Dato(
+                  formato.peso(sesion.volumen),
+                  context.t.comunVolumen,
+                ),
+              ),
             ],
           ),
         ),
         if (sesion.nota case final nota?)
           ui.Grupo(
-            cabecera: 'Notas',
+            cabecera: context.t.sesionNotas,
             filas: [
               Padding(
                 padding: const EdgeInsets.symmetric(
@@ -208,7 +214,7 @@ class _Contenido extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.all(t.l),
           child: ui.BotonPrincipal(
-            'Eliminar sesión',
+            context.t.sesionEliminar,
             icono: CupertinoIcons.delete,
             color: context.destructivo,
             onPressed: onEliminar,

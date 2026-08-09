@@ -199,6 +199,7 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
       marcador: 'Nombre del ejercicio',
       mensaje: 'Para lo que no esté en el catálogo.',
       etiquetaAceptar: 'Añadir',
+      etiquetaCancelar: context.t.comunCancelar,
     );
     if (nombre == null || !mounted) return;
 
@@ -264,6 +265,7 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
         for (final (valor, cuantos) in disponibles)
           (valor, '${i18n.musculo(valor)} · $cuantos'),
       ],
+      etiquetaCancelar: context.t.comunCancelar,
     );
     if (elegido == null || !mounted) return;
 

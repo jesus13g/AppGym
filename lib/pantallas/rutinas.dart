@@ -141,6 +141,7 @@ class PantallaRutinas extends ConsumerWidget {
       marcador: 'Nombre de la rutina',
       mensaje: 'Por ejemplo: Empuje, Pierna, Full body…',
       etiquetaAceptar: 'Crear',
+      etiquetaCancelar: context.t.comunCancelar,
     );
     if (nombre == null || !context.mounted) return;
 
@@ -252,6 +253,8 @@ class _Lista extends StatelessWidget {
                   'Se borrarán también sus ejercicios y todo su '
                   'histórico de entrenamientos. Esta acción no se puede '
                   'deshacer.',
+              etiquetaEliminar: context.t.comunEliminar,
+              etiquetaCancelar: context.t.comunCancelar,
               child: CupertinoListTile(
                 backgroundColor: context.tarjeta,
                 leading: ui.PuntoColor(

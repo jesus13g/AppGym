@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../datos/bd.dart';
 import '../datos/formato.dart';
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -53,7 +54,7 @@ class _PantallaMedidasState extends ConsumerState<PantallaMedidas> {
       navigationBar: ui.barra(
         context,
         titulo: etiqueta,
-        tituloAnterior: 'Progreso',
+        tituloAnterior: context.t.comunProgreso,
         derecha: CupertinoButton(
           padding: EdgeInsets.zero,
           minimumSize: Size.zero,
@@ -95,11 +96,10 @@ class _PantallaMedidasState extends ConsumerState<PantallaMedidas> {
                 padding: const EdgeInsets.only(top: t.xxl),
                 child: ui.EstadoVacio(
                   icono: CupertinoIcons.chart_bar_alt_fill,
-                  titulo: 'Sin registros de $etiqueta',
-                  subtitulo:
-                      'Anota el primer valor y aquí verás cómo evoluciona.',
+                  titulo: context.t.medidasSinRegistros(etiqueta),
+                  subtitulo: context.t.medidasVacioDetalle,
                   accion: ui.BotonPrincipal(
-                    'Registrar',
+                    context.t.medidasRegistrar,
                     icono: CupertinoIcons.add,
                     onPressed: () => registrarMedida(context, ref, _tipo),
                   ),
@@ -129,8 +129,7 @@ class _PantallaMedidasState extends ConsumerState<PantallaMedidas> {
                     top: t.s,
                   ),
                   child: Text(
-                    'La línea continua es la media de $ventanaMedia días; los '
-                    'puntos, cada pesada.',
+                    context.t.medidasNotaMedia(ventanaMedia),
                     textAlign: TextAlign.center,
                     style: ui.estilo(
                       context,
@@ -140,8 +139,8 @@ class _PantallaMedidasState extends ConsumerState<PantallaMedidas> {
                   ),
                 ),
               ui.Grupo(
-                cabecera: 'Histórico',
-                pie: 'Desliza para eliminar un registro.',
+                cabecera: context.t.comunHistorico,
+                pie: context.t.medidasPieHistorico,
                 filas: [
                   for (final medida in serie.reversed)
                     ui.DeslizarParaBorrar(
@@ -214,7 +213,9 @@ Future<void> registrarMedida(
     titulo: etiqueta,
     marcador: tipo == 'peso' ? ajustes.unidad.sufijo : unidad,
     valor: enPantalla == null ? '' : f.numero((enPantalla * 10).round() / 10),
-    mensaje: 'Un valor por día: si ya anotaste hoy, este lo sustituye.',
+    mensaje: context.t.medidasUnoPorDia,
+    etiquetaAceptar: context.t.comunGuardar,
+    etiquetaCancelar: context.t.comunCancelar,
   );
   if (texto == null || !context.mounted) return;
 
@@ -222,7 +223,7 @@ Future<void> registrarMedida(
   // el punto.
   final numero = double.tryParse(texto.replaceAll(',', '.'));
   if (numero == null || numero <= 0) {
-    ui.aviso(context, 'Escribe un número, por ejemplo 78,4');
+    ui.aviso(context, context.t.medidasNumeroInvalido);
     return;
   }
 

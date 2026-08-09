@@ -40,13 +40,13 @@ class PantallaResumenSesion extends ConsumerWidget {
       backgroundColor: context.fondo,
       navigationBar: ui.barra(
         context,
-        titulo: 'Entrenamiento terminado',
+        titulo: context.t.resumenTitulo,
         derecha: CupertinoButton(
           padding: EdgeInsets.zero,
           minimumSize: Size.zero,
           onPressed: () => Navigator.of(context).pop(),
           child: Text(
-            'Listo',
+            context.t.comunListo,
             style: ui.estilo(
               context,
               weight: t.semibold,
@@ -101,7 +101,7 @@ class _Contenido extends StatelessWidget {
               ),
               const SizedBox(height: t.m),
               Text(
-                '¡Sesión guardada!',
+                context.t.resumenGuardada,
                 style: ui.estilo(context, size: t.title2, weight: t.bold),
               ),
               const SizedBox(height: t.xs),
@@ -126,11 +126,16 @@ class _Contenido extends StatelessWidget {
           child: Row(
             children: [
               Expanded(child: _Dato('$nSeries', 'Series')),
-              Expanded(child: _Dato(formato.peso(sesion.volumen), 'Volumen')),
+              Expanded(
+                child: _Dato(
+                  formato.peso(sesion.volumen),
+                  context.t.comunVolumen,
+                ),
+              ),
               Expanded(
                 child: _Dato(
                   duracion == null ? '—' : formato.duracion(duracion),
-                  'Duración',
+                  context.t.comunDuracion,
                 ),
               ),
             ],
@@ -139,10 +144,8 @@ class _Contenido extends StatelessWidget {
         const SizedBox(height: t.s),
         if (records.isNotEmpty)
           ui.Grupo(
-            cabecera: 'Récords',
-            pie:
-                'Comparado con lo que habías levantado antes de hoy en esta '
-                'misma rutina.',
+            cabecera: context.t.resumenRecords,
+            pie: context.t.resumenRecordsPie,
             filas: [
               for (final r in records)
                 CupertinoListTile(
@@ -155,7 +158,7 @@ class _Contenido extends StatelessWidget {
                   leadingSize: 24,
                   title: Text(r.nombre, style: ui.estilo(context)),
                   subtitle: Text(
-                    _detalle(r, formato),
+                    _detalle(context.t, r, formato),
                     style: ui.estilo(
                       context,
                       size: t.footnote,
@@ -170,7 +173,7 @@ class _Contenido extends StatelessWidget {
             ],
           ),
         ui.Grupo(
-          cabecera: 'Lo que has hecho',
+          cabecera: context.t.resumenLoHecho,
           filas: [
             for (final e in sesion.ejercicios)
               CupertinoListTile(
@@ -201,16 +204,19 @@ class _Contenido extends StatelessWidget {
 /// Se baten los tres a la vez con más frecuencia de la que parece —subir el
 /// peso suele subir también el 1RM y el volumen—, así que se enumeran en vez de
 /// quedarse solo con el primero.
-String _detalle(RecordSesion record, Formato formato) {
-  String contra(double? anterior) =>
-      anterior == null ? 'primera vez' : 'antes ${formato.peso(anterior)}';
+String _detalle(Textos t, RecordSesion record, Formato formato) {
+  String contra(double? anterior) => anterior == null
+      ? t.resumenPrimeraVez
+      : t.resumenAntes(formato.peso(anterior));
 
   final partes = [
     for (final tipo in record.batidos)
       switch (tipo) {
-        TipoRecord.peso => 'Peso (${contra(record.pesoAnterior)})',
-        TipoRecord.unoRm => '1RM (${contra(record.unoRmAnterior)})',
-        TipoRecord.volumen => 'Volumen (${contra(record.volumenAnterior)})',
+        TipoRecord.peso => t.resumenRecordPeso(contra(record.pesoAnterior)),
+        TipoRecord.unoRm => t.resumenRecord1RM(contra(record.unoRmAnterior)),
+        TipoRecord.volumen => t.resumenRecordVolumen(
+          contra(record.volumenAnterior),
+        ),
       },
   ];
   return partes.join(' · ');

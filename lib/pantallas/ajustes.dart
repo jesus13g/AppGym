@@ -57,6 +57,7 @@ class PantallaAjustes extends ConsumerWidget {
       mensaje: mensaje,
       opciones: opciones,
       actual: actual,
+      etiquetaCancelar: context.t.comunCancelar,
     );
     if (elegido == null) return;
     await _fijar(ref, clave, elegido.$1);
@@ -299,6 +300,7 @@ class PantallaAjustes extends ConsumerWidget {
     final elegido = await ui.elegirEnHoja<(int, int)>(
       context,
       titulo: 'Rango de repeticiones',
+      etiquetaCancelar: context.t.comunCancelar,
       mensaje:
           'Dentro de este rango se sube de repeticiones; al completarlo, de '
           'peso. Cada ejercicio puede llevar el suyo.',

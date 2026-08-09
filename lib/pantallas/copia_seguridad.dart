@@ -19,6 +19,7 @@ import '../datos/copia.dart' as copia;
 import '../datos/media.dart' as media;
 import '../datos/semilla.dart';
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -144,6 +145,7 @@ class _GrupoDatosState extends ConsumerState<GrupoDatos> {
             'Se borrarán tus rutinas, sesiones y medidas actuales y se '
             'restaurarán las de la copia. No se puede deshacer.',
         etiquetaAceptar: 'Reemplazar',
+        etiquetaCancelar: context.t.comunCancelar,
       );
       if (!confirmado || !mounted) return;
     }
@@ -175,6 +177,7 @@ class _GrupoDatosState extends ConsumerState<GrupoDatos> {
         (copia.ModoImportacion.fusionar, 'Fusionar con lo que tengo'),
         (copia.ModoImportacion.reemplazar, 'Reemplazar todos mis datos'),
       ],
+      etiquetaCancelar: context.t.comunCancelar,
     );
     return elegido?.$1;
   }
@@ -215,6 +218,7 @@ class _GrupoDatosState extends ConsumerState<GrupoDatos> {
           'Rutinas, ejercicios, sesiones, medidas y preferencias. El catálogo '
           'de ejercicios se conserva.',
       etiquetaAceptar: 'Borrar',
+      etiquetaCancelar: context.t.comunCancelar,
     );
     if (!primera || !mounted) return;
 
@@ -225,6 +229,7 @@ class _GrupoDatosState extends ConsumerState<GrupoDatos> {
           'Si no has exportado una copia de seguridad, esto es definitivo. '
           '¿Seguro?',
       etiquetaAceptar: 'Sí, borrar todo',
+      etiquetaCancelar: context.t.comunCancelar,
     );
     if (!segunda || !mounted) return;
 

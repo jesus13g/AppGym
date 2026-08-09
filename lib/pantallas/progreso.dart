@@ -217,7 +217,7 @@ class _Estancados extends ConsumerWidget {
       context: context,
       builder: (hoja) => CupertinoActionSheet(
         title: const Text('Ejercicios estancados'),
-        message: const Text(avisoDescarga),
+        message: Text(avisoDescarga(hoja.t)),
         actions: [
           for (final e in lista)
             CupertinoActionSheetAction(
@@ -892,6 +892,7 @@ Future<void> _registrarEnDia(
     titulo: leerFormato(context, ref).fechaLarga(dia),
     mensaje: 'Registrar un entrenamiento en este día',
     opciones: [for (final r in rutinas) (r.id, r.nombre)],
+    etiquetaCancelar: context.t.comunCancelar,
   );
   if (confirmado == null || !context.mounted) return;
 
