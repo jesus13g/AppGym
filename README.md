@@ -36,6 +36,11 @@ aquella versión.
 - **Copia de seguridad.** Exporta todo tu histórico a un archivo y vuelve a importarlo
   (fusionando o reemplazando). También en CSV, una fila por serie, para una hoja de
   cálculo.
+- **Copia automática.** Si quieres, la copia se sube sola a **tu propio Google Drive** —a
+  una carpeta `AppGym`, conservando las diez últimas— con la frecuencia que elijas. Viene
+  apagada; se enciende en *Ajustes → Copia automática*. No es sincronización: es la copia
+  de arriba, hecha sin que te acuerdes, para poder recuperarlo todo en un móvil nuevo.
+  Qué sale del móvil y cómo se revoca está en [docs/privacidad.md](docs/privacidad.md).
 
 Por defecto la interfaz sigue el tema y el idioma del sistema, y en Ajustes se puede
 forzar cualquiera de los dos. El idioma se cambia sin reiniciar; los nombres de las
@@ -102,7 +107,22 @@ sistema, porque en Android e iOS el directorio de trabajo no es escribible. Ning
 los dos se versiona.
 
 **Desinstalar la app borra la base de datos**, así que conviene exportar de vez en
-cuando una copia de seguridad desde *Ajustes → Datos* y guardarla fuera del móvil.
+cuando una copia de seguridad desde *Ajustes → Datos* y guardarla fuera del móvil, o
+encender la copia automática para no tener que acordarse.
+
+**Sobre la copia automática en las releases oficiales.** Apunta a un proyecto de Google
+Cloud personal, sin ninguna garantía de disponibilidad: puede dejar de funcionar en
+cualquier momento y la exportación manual seguirá estando igual. Una compilación local o un
+fork la traen **desactivada y no visible**, y la app funciona exactamente igual sin ella.
+Para apuntarla a un proyecto propio, crea un cliente OAuth de tipo *aplicación de
+escritorio* con la Drive API activada y pásalo al compilar:
+
+```bash
+flutter build apk --release \
+  --dart-define GOOGLE_CLIENT_ID=... --dart-define GOOGLE_CLIENT_SECRET=...
+```
+
+En CI son los secretos `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` del repositorio.
 
 ## Estructura
 
@@ -114,6 +134,8 @@ lib/
 │   ├── esquemas.dart       esquemas versionados, para las migraciones
 │   ├── ajustes.dart        preferencias: claves, valores por defecto y unidades
 │   ├── copia.dart          exportar e importar la copia de seguridad
+│   ├── copia_automatica.dart  cuándo toca copiar, qué se rota y cuándo se avisa
+│   ├── nube/               la costura del destino y el adaptador de Google Drive
 │   ├── respaldo.dart       duplicado del fichero antes de migrarlo
 │   ├── borrador.dart       estado de la sesión en curso, en JSON
 │   ├── plantillas.dart     rutinas predefinidas

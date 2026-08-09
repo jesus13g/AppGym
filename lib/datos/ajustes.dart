@@ -115,6 +115,47 @@ abstract final class Claves {
   /// Versión del índice de búsqueda del catálogo. No es una preferencia del
   /// usuario: vive aquí porque es el sitio donde ya hay una tabla clave/valor.
   static const versionIndice = 'version_indice';
+
+  // ── Copia automática ───────────────────────────────────────────────────────
+  //
+  // Tampoco son preferencias: son estado de **este** dispositivo, y por eso las
+  // interpreta `EstadoCopiaAutomatica` y no `Ajustes.desdeMapa`. Están todas en
+  // [locales], así que no salen en la copia de seguridad.
+
+  /// `no` · `diaria` · `semanal` · `mensual`.
+  static const copiaNubeFrecuencia = 'copia_nube_frecuencia';
+
+  /// El correo conectado, solo para enseñarlo.
+  static const copiaNubeCuenta = 'copia_nube_cuenta';
+
+  /// Cuándo se consiguió la última copia, en ISO-8601.
+  static const copiaNubeUltima = 'copia_nube_ultima';
+
+  /// El último fallo, vacío si la última vez fue bien.
+  static const copiaNubeError = 'copia_nube_error';
+
+  /// Las claves que **no** viajan en la copia de seguridad.
+  ///
+  /// Son estado del dispositivo, no preferencias: la cuenta conectada, la
+  /// carpeta remota, cuándo se copió por última vez y con qué versión del
+  /// índice se sembró el catálogo. Restaurar una copia en un móvil nuevo no
+  /// puede traerse nada de eso — diría que hay una cuenta conectada que en ese
+  /// móvil no lo está, y daría por hecha una copia que allí no se ha hecho.
+  ///
+  /// `copia.dart` la aplica **en las dos direcciones**: al exportar, para que
+  /// no salgan; y al importar, porque una copia hecha antes de esta regla sí
+  /// las trae dentro.
+  ///
+  /// El *refresh token* no está en la lista porque no está en esta tabla: vive
+  /// en el almacén seguro de la plataforma, que es lo único que garantiza que
+  /// no acabe en un JSON compartido por correo.
+  static const locales = <String>{
+    versionIndice,
+    copiaNubeFrecuencia,
+    copiaNubeCuenta,
+    copiaNubeUltima,
+    copiaNubeError,
+  };
 }
 
 /// Pasos de peso que se ofrecen, en la unidad activa.

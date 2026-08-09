@@ -2434,12 +2434,26 @@ class AppBD extends _$AppBD {
   /// solo serviría para que el siguiente arranque tardara más. Lo demás —
   /// rutinas con su cascade, medidas, favoritos, vistos, el borrador en curso y
   /// las preferencias— sí se va, en una sola transacción.
+  ///
+  /// **Salvo las claves de dispositivo** (`Claves.locales`). No son datos del
+  /// usuario: son de este móvil. Borrarlas aquí desconectaría la copia
+  /// automática sin haberlo pedido —el botón dice «rutinas, sesiones y
+  /// medidas»—, y dejaría además la cuenta olvidada en la tabla con su token
+  /// todavía en el almacén seguro. Por lo mismo, importar una copia con
+  /// «reemplazar» no apaga la copia automática de este dispositivo.
   Future<void> borrarTodosLosDatos() => transaction(() async {
+    final locales = {
+      for (final entrada in (await ajustesCrudos()).entries)
+        if (Claves.locales.contains(entrada.key)) entrada.key: entrada.value,
+    };
+
     await delete(sesionesActivas).go();
     await delete(rutinas).go();
     await delete(medidas).go();
     await delete(favoritos).go();
     await delete(vistos).go();
     await delete(ajustesTabla).go();
+
+    await fijarAjustes(locales);
   });
 }

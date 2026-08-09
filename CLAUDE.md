@@ -13,7 +13,8 @@ dart run build_runner build     # genera bd.g.dart; obligatorio tras clonar
 flutter gen-l10n                # genera lib/l10n/generado/; obligatorio tras clonar
 flutter run                     # app en un dispositivo o emulador
 flutter analyze                 # objetivo permanente: 0 issues
-flutter test                    # 390 tests: datos, pantallas, migraciones, copia, ajustes,
+flutter test                    # 441 tests: datos, pantallas, migraciones, copia, copia
+                                #            automática y su adaptador de Drive, ajustes,
                                 #            métricas, músculos, geometría, progresiones,
                                 #            formatos, traducciones y vocabulario
 dart format lib test
@@ -58,6 +59,8 @@ lib/
 │   ├── esquemas.dart  esquemas versionados, generados, para los pasos de migración
 │   ├── ajustes.dart   preferencias: claves, valores por defecto y unidades
 │   ├── copia.dart     exportar e importar la copia de seguridad (JSON y CSV)
+│   ├── copia_automatica.dart  cuándo toca copiar, qué se rota y cuándo se avisa (puro)
+│   ├── nube/          nube.dart (la costura) · drive.dart (Google) · token.dart
 │   ├── respaldo.dart  duplicado del fichero .sqlite antes de migrarlo
 │   ├── borrador.dart  estado de la sesión en curso, serializado a JSON
 │   ├── plantillas.dart rutinas predefinidas desde assets/plantillas.json
@@ -77,7 +80,8 @@ lib/
 │   ├── app_en.arb     los textos en inglés
 │   ├── textos.dart    `context.t`, `idiomasSoportados` y el reexport de lo generado
 │   └── generado/      `Textos` y sus delegates  ← NO se versiona
-├── estado/            providers.dart · descanso.dart (el temporizador)
+├── estado/            providers.dart · descanso.dart (el temporizador) ·
+│                      copia_automatica.dart (el motor de la copia a la nube)
 ├── tema/              tokens.dart · ui.dart
 └── pantallas/         quince pantallas + cinco piezas compartidas
 assets/                ejercicios.es.json (el catálogo) · instrucciones.en.json (sus pasos en
@@ -88,7 +92,8 @@ tool/                  musculatura.py (el modelo anatómico) · instrucciones_en
 test/                  datos · pantallas · migraciones · copia · ajustes · plantillas · metricas
                        musculos · geometria · progresion · formato · i18n · traducciones ·
                        esquemas/ (generado)
-docs/                  especificaciones.md (hecho) · especificaciones-2.md (I y J hechos, K no)
+docs/                  especificaciones.md (hecho) · especificaciones-2.md (I, J y la fase 8a
+                       de K hechos; 8b y 8c no) · privacidad.md
 ```
 
 Cinco ficheros de `pantallas/` no son pantallas, sino piezas que comparten varias:
@@ -124,8 +129,11 @@ tres puntos que el anterior dejó fuera de alcance a propósito:
 - **J — recomendación automática de progresiones** (`datos/progresion.dart`, doble progresión,
   esquema v7). **Hecho**, con sus nueve desviaciones documentadas en J6.
 - **K — sincronización en la nube, cuentas y multidispositivo** (`uuid` + `actualizado` +
-  lápidas, esquema v8, último en escribir gana). **Pendiente.** El bloque grande, y el único con un
-  servicio externo detrás.
+  lápidas, esquema v8, último en escribir gana). **Su fase 8a está hecha; 8b y 8c no.** El plan de
+  entrega parte K en tres, y la primera —la **copia automática** a la nube del propio usuario— es
+  publicable por sí sola y ya está: sin cuentas propias, sin backend y sin conflictos. Lo que sigue
+  pendiente es la sincronización de verdad, que es el bloque grande. **8a no es sincronización y no
+  debe llamarse así en ningún sitio.**
 
 Antes de proponer una funcionalidad nueva, mira si ya está especificada en uno de los dos.
 
@@ -386,6 +394,50 @@ las series efectivas llegan al tope, se sube el peso un escalón y se vuelve al 
   ampliado a 5–15—. `fijarProgresionEjercicio` toma `Value<T>` y no `T?` justamente porque aquí
   `null` significa algo y hay que distinguirlo de «no toques esa columna».
 
+### Copia automática: la costura, el destino y el disparador
+
+La fase 8a sube sola el mismo JSON que `copia.dart` ya exportaba. Está partida igual que los
+módulos puros del proyecto, y por el mismo motivo: **lo que decide algo se prueba sin red**.
+
+- `datos/copia_automatica.dart` es el **cuarto módulo puro** (ni Flutter, ni base, ni red):
+  `toca()`, `sobrantes()` y `avisar()`. Recibe el estado y una fecha, y devuelve decisiones.
+- `datos/nube/nube.dart` es la costura: `DestinoNube`, seis métodos. **El motor no importa el SDK
+  de nadie**, y por eso `test/nube_falsa.dart` puede sustituirlo por un mapa en memoria.
+- `datos/nube/drive.dart` es **el único fichero que sabe que Google existe**. Cambiar de proveedor
+  es escribir otro como él.
+- `estado/copia_automatica.dart` es el motor: los disparadores, la espera creciente y el estado.
+
+Ocho cosas que conviene no volver a decidir:
+
+- **No se puede usar `google_sign_in`.** Un cliente OAuth de Android va atado a la huella SHA-1 de
+  firma, y aquí el APK de release se firma con la clave de depuración, que CI regenera en cada
+  ejecución. Por eso el flujo es **PKCE + bucle local** (RFC 8252) contra un cliente de tipo
+  *aplicación de escritorio*, que no depende de la firma y funciona igual en un fork.
+- **El ámbito es `drive.file`.** La app solo ve lo que ella creó, así que la rotación **no puede**
+  borrar un fichero del usuario. Y es un ámbito no sensible: sin verificación de Google. No lo
+  subas a `drive`.
+- **Sin `--dart-define GOOGLE_CLIENT_ID` la funcionalidad no existe**: `nubeProvider` da `null` y el
+  grupo de Ajustes no se pinta. Es lo mismo que hace `VERSION` con «local». Los tests sobrescriben
+  ese provider, que es como se prueba la pantalla.
+- **El *refresh token* va al almacén seguro, nunca a la tabla `ajustes`**: esa tabla se exporta
+  entera en la copia de seguridad.
+- **Las cinco claves `copia_nube_*` no son preferencias**, son estado de este dispositivo. No las
+  lee `Ajustes.desdeMapa` sino `EstadoCopiaAutomatica`, están en `Claves.locales`, y `copia.dart`
+  las filtra **al exportar y al importar**. `borrarTodosLosDatos()` también las conserva: el botón
+  dice «rutinas, sesiones y medidas» y desconectar la nube no es eso. **Si añades una clave que sea
+  de dispositivo y no del usuario, va en `Claves.locales`.**
+- **«Le toca» se decide por frontera natural** —día, lunes o mes—, no por horas transcurridas: con
+  un «hace menos de 24 h», copiar a las 23:50 bloquearía la del día siguiente. Pasa por
+  `datos/reloj.dart`, que es lo que permite fijar la fecha en los tests.
+- **Nunca durante una sesión viva y nunca en la ruta de entrenar.** El borrador se reescribe cada
+  2 s. Un fallo de la copia es un aviso —la línea de la cabecera de Rutinas—, jamás un error en
+  medio de un entrenamiento.
+- **`ErrorNube` distingue temporal de reconectar**, y eso es lo que decide si se reintenta.
+  Reintentar un permiso revocado no lo arregla nunca y gasta batería y cuota.
+
+`docs/privacidad.md` es requisito, no formalidad: la pantalla de consentimiento de Google pide una
+URL, y «Acerca de» la enlaza. Si cambias qué datos salen del móvil, ese fichero cambia con ellos.
+
 ### Catálogo de ejercicios
 
 1.324 ejercicios de [hasaneyldrm/exercises-dataset](https://github.com/hasaneyldrm/exercises-dataset).
@@ -504,12 +556,21 @@ termina nunca: los tests de ese grupo van con `_asentar`, a base de fotogramas s
 
 ### Empaquetado
 
-`pubspec.yaml` es la única fuente de dependencias; hoy son diez, y la décima ya estaba en el
+`pubspec.yaml` es la única fuente de dependencias; hoy son trece, y tres de ellas ya estaban en el
 árbol: `intl` la arrastra `flutter_localizations`, y se declara —**sin fijar versión**— para poder
-usar `DateFormat` y `NumberFormat` directamente. Las dos últimas, `share_plus` y
-`file_picker`, son de la copia de seguridad: sin ellas la única salida sería escribir en el
-directorio de documentos y cantar la ruta, que en Android no hay quien alcance. `share_plus` se
-queda en la 12 porque la 13 exige `win32 ^6` y `file_picker` pide `win32 ^5`.
+usar `DateFormat` y `NumberFormat` directamente; `crypto` la arrastra `http` y `url_launcher` la
+arrastra `share_plus`, así que declararlas para la copia automática no añadió nada que descargar.
+`share_plus` y `file_picker` son de la copia de seguridad: sin ellas la única salida sería escribir
+en el directorio de documentos y cantar la ruta, que en Android no hay quien alcance.
+
+**La restricción de `win32` manda sobre tres paquetes.** `file_picker` pide `win32 ^5`, así que
+`share_plus` se queda en la 12 —la 13 exige `win32 ^6`— y `flutter_secure_storage` en la 9, por lo
+mismo. Solo afecta al escritorio de Windows, que aquí no se compila, pero romper eso deja `pub get`
+sin resolver. `flutter_secure_storage` es la **única** dependencia nueva de verdad de la fase 8a, y
+está para el *refresh token*: la alternativa era la tabla `ajustes`, que se exporta.
+
+**Ningún SDK de Google.** Drive se habla por REST v3 con el `http` de siempre. Ver el porqué en la
+cabecera de `lib/datos/nube/drive.dart`.
 
 El permiso de **INTERNET va en
 `android/app/src/main/AndroidManifest.xml`**: Flutter solo lo declara en los manifiestos de debug y

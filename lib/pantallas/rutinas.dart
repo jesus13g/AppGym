@@ -13,6 +13,7 @@ import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
 import 'ajustes.dart';
+import 'copia_nube.dart';
 import 'rutina.dart';
 
 class PantallaRutinas extends ConsumerWidget {
@@ -196,6 +197,10 @@ class PantallaRutinas extends ConsumerWidget {
               ],
             ),
           ),
+          // El aviso de la copia automática, que casi siempre no ocupa nada.
+          // Va aquí, en la cabecera de la primera pestaña, porque es por donde
+          // se entra a la app; y **nunca** en la ruta de entrenar.
+          const SliverToBoxAdapter(child: AvisoCopia()),
           SliverFillRemaining(
             hasScrollBody: false,
             child: resumen.when(

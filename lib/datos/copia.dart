@@ -21,11 +21,15 @@
 ///     ejercicio entra como personalizado conservando el nombre y se avisa.
 ///   - **`version`** permite migrar copias antiguas el día que el formato
 ///     cambie.
+///   - **No se exportan las claves de dispositivo** (`Claves.locales`): la
+///     cuenta conectada para la copia automática, su carpeta remota y cuándo se
+///     copió por última vez. Son de este móvil, no del usuario.
 library;
 
 import 'dart:convert';
 
 import '../l10n/textos.dart';
+import 'ajustes.dart' show Claves;
 import 'bd.dart';
 
 /// Marca del formato, para no tragarse el JSON de otra aplicación.
@@ -142,7 +146,7 @@ Future<Map<String, dynamic>> exportar(AppBD bd) async {
     'formato': formatoCopia,
     'version': versionCopia,
     'exportado': DateTime.now().toIso8601String(),
-    'ajustes': await bd.ajustesCrudos(),
+    'ajustes': ajustesPortables(await bd.ajustesCrudos()),
     'rutinas': salida,
     'medidas': [
       for (final m in await bd.todasLasMedidas())
@@ -191,6 +195,17 @@ String _csv(String valor) {
   if (!valor.contains(RegExp('[",\n]'))) return valor;
   return '"${valor.replaceAll('"', '""')}"';
 }
+
+/// Las preferencias sin las claves que son de este dispositivo.
+///
+/// Se aplica **al exportar y al importar**, no solo al exportar: una copia
+/// hecha antes de que existiera esta regla trae dentro las claves locales, y
+/// restaurarla en otro móvil le dejaría escrito que hay una cuenta conectada
+/// que allí no lo está.
+Map<String, String> ajustesPortables(Map<String, String> crudos) => {
+  for (final entrada in crudos.entries)
+    if (!Claves.locales.contains(entrada.key)) entrada.key: entrada.value,
+};
 
 /// El nombre sugerido para el fichero de una copia hecha hoy.
 String nombreFichero(DateTime fecha, {String extension = 'json'}) {
@@ -403,10 +418,12 @@ Future<InformeImportacion> importar(
     // Las preferencias solo se pisan al reemplazar: fusionar añade rutinas, no
     // debería cambiarle a nadie la unidad de peso por sorpresa.
     if (modo == ModoImportacion.reemplazar && datos['ajustes'] is Map) {
-      await bd.fijarAjustes({
-        for (final entrada in (datos['ajustes'] as Map).entries)
-          '${entrada.key}': '${entrada.value}',
-      });
+      await bd.fijarAjustes(
+        ajustesPortables({
+          for (final entrada in (datos['ajustes'] as Map).entries)
+            '${entrada.key}': '${entrada.value}',
+        }),
+      );
     }
   });
 

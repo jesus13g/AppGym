@@ -8,6 +8,7 @@ import 'package:appgym/datos/ajustes.dart';
 import 'package:appgym/datos/bd.dart';
 import 'package:appgym/datos/geometria.dart';
 import 'package:appgym/datos/musculos.dart';
+import 'package:appgym/datos/nube/nube.dart';
 import 'package:appgym/datos/reloj.dart' as reloj;
 import 'package:appgym/estado/descanso.dart';
 import 'package:appgym/l10n/textos.dart';
@@ -38,6 +39,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'ayuda.dart';
+import 'nube_falsa.dart';
 
 /// Los formatos en español, para las aserciones que comparan una fecha ya
 /// escrita. Es el mismo idioma que fija `_app`.
@@ -2433,6 +2435,163 @@ void main() {
       await _asentar(tester);
       expect(find.text('Working out'), findsOneWidget);
       expect(find.text('Finish'), findsOneWidget);
+    });
+  });
+
+  // ── Copia automática ───────────────────────────────────────────────────────
+
+  group('copia automática', () {
+    late AppBD bd;
+    late NubeFalsa nube;
+
+    /// La pantalla con una nube de mentira enchufada. Sin este `override` el
+    /// grupo no se pinta, que es justamente lo que hace una compilación sin
+    /// credenciales.
+    Widget conNube(Widget pantalla, {Locale idioma = const Locale('es')}) =>
+        _app(
+          bd,
+          pantalla,
+          idioma: idioma,
+          overrides: [nubeProvider.overrideWithValue(nube)],
+        );
+
+    setUp(() async {
+      bd = AppBD(NativeDatabase.memory());
+      nube = NubeFalsa();
+      await bd.insertarRutina('Empuje');
+    });
+
+    tearDown(() async => bd.close());
+
+    testWidgets('sin credenciales el grupo no aparece siquiera', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      // `_app` no sobrescribe `nubeProvider`, así que vale el de verdad, que
+      // sin `--dart-define` es null.
+      await tester.pumpWidget(_app(bd, const PantallaAjustes()));
+      await tester.pumpAndSettle();
+
+      // Y el grupo «Datos», que es su vecino, sigue estando: si el de la copia
+      // se pintara, se toparía con él al bajar.
+      await tester.scrollUntilVisible(find.text('DATOS'), 300);
+      await tester.pumpAndSettle();
+      expect(find.text('DATOS'), findsOneWidget);
+      expect(find.text('COPIA AUTOMÁTICA'), findsNothing);
+    });
+
+    testWidgets('sin conectar ofrece conectar, y conectar copia', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(conNube(const PantallaAjustes()));
+      await tester.pumpAndSettle();
+
+      final conectar = find.text('Conectar con Nube de prueba');
+      await tester.scrollUntilVisible(conectar, 300);
+      await tester.pumpAndSettle();
+
+      await tester.tap(conectar);
+      // Con `pumpAndSettle` no: mientras la copia sube hay un
+      // `CupertinoActivityIndicator` girando, y esperar a que no queden
+      // fotogramas no terminaría nunca. Es el mismo motivo que en la sesión
+      // viva.
+      await _asentar(tester, veces: 20);
+
+      expect(nube.conexiones, 1);
+      expect(nube.subidas, 1, reason: 'quien lo enciende quiere ver que va');
+      expect(find.text('yo@ejemplo.com'), findsOneWidget);
+      // Conectar sin frecuencia dejaría una cuenta que no copia nada.
+      expect(find.text('Semanal'), findsOneWidget);
+    });
+
+    testWidgets('el grupo se llama «copia automática», nunca sincronizar', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(conNube(const PantallaAjustes()));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('COPIA AUTOMÁTICA'), 300);
+      await tester.pumpAndSettle();
+
+      expect(find.text('COPIA AUTOMÁTICA'), findsOneWidget);
+      expect(find.textContaining('incroniz'), findsNothing);
+    });
+
+    testWidgets('en inglés también', (tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(
+        conNube(const PantallaAjustes(), idioma: const Locale('en')),
+      );
+      await tester.pumpAndSettle();
+
+      final cabecera = find.text('AUTOMATIC BACKUP');
+      await tester.scrollUntilVisible(cabecera, 300);
+      await tester.pumpAndSettle();
+      expect(cabecera, findsOneWidget);
+      expect(find.text('Connect to Nube de prueba'), findsOneWidget);
+    });
+
+    testWidgets('un fallo se cuenta al pie y no rompe la pantalla', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      nube.falloAlConectar = const ErrorNube.temporal('sin cobertura');
+      await tester.pumpWidget(conNube(const PantallaAjustes()));
+      await tester.pumpAndSettle();
+
+      final conectar = find.text('Conectar con Nube de prueba');
+      await tester.scrollUntilVisible(conectar, 300);
+      await tester.pumpAndSettle();
+      await tester.tap(conectar);
+      await _asentar(tester, veces: 20);
+
+      expect(find.text('sin cobertura'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('con la copia al día no hay aviso en Rutinas', (tester) async {
+      _comoUnMovil(tester);
+      await bd.fijarAjustes({
+        Claves.copiaNubeCuenta: 'yo@ejemplo.com',
+        Claves.copiaNubeFrecuencia: 'semanal',
+        Claves.copiaNubeUltima: DateTime.now().toIso8601String(),
+      });
+
+      await tester.pumpWidget(conNube(const PantallaRutinas()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('La copia automática no está al día'), findsNothing);
+    });
+
+    testWidgets('un fallo guardado sí saca el aviso', (tester) async {
+      _comoUnMovil(tester);
+      await bd.fijarAjustes({
+        Claves.copiaNubeCuenta: 'yo@ejemplo.com',
+        Claves.copiaNubeFrecuencia: 'semanal',
+        Claves.copiaNubeError: 'sin cobertura',
+      });
+
+      await tester.pumpWidget(conNube(const PantallaRutinas()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('La copia automática no está al día'), findsOneWidget);
+    });
+
+    testWidgets('el aviso lleva a Ajustes', (tester) async {
+      _comoUnMovil(tester);
+      await bd.fijarAjustes({
+        Claves.copiaNubeCuenta: 'yo@ejemplo.com',
+        Claves.copiaNubeFrecuencia: 'semanal',
+        Claves.copiaNubeError: 'sin cobertura',
+      });
+
+      await tester.pumpWidget(conNube(const PantallaRutinas()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('La copia automática no está al día'));
+      await tester.pumpAndSettle();
+      expect(find.text('Ajustes'), findsWidgets);
     });
   });
 }

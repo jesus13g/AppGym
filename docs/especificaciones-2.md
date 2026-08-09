@@ -1917,7 +1917,7 @@ ejercicio que J2 daba por existente había que construirla.
 
 Es la fase más barata de las tres y la que más se nota al usar la app.
 
-### Fase 8a — Copia automática a la nube del usuario
+### Fase 8a — Copia automática a la nube del usuario ✅
 
 **El escalón intermedio de K**, y probablemente suficiente para mucha gente: la exportación
 de B10, automatizada y subida a la nube del propio usuario (Drive, Archivos, la carpeta que
@@ -1932,6 +1932,68 @@ tenga sincronizada), con una frecuencia configurable.
 Se entrega antes que 8b y **puede quedarse ahí indefinidamente** si la decisión de
 [O](#o-decisiones-pendientes) sobre el backend se cierra en contra. Ese es el motivo de que
 sea una fase propia y no un paso de la siguiente.
+
+**Hecha**, con Google Drive como destino y sin tocar el esquema: `schemaVersion` sigue en 7
+y `versionCopia` en 3. El reparto quedó como preveía la costura de [K10](#k10-la-costura-de-test):
+`datos/copia_automatica.dart` es puro y decide *cuándo*, `datos/nube/nube.dart` es la
+interfaz de seis métodos, `datos/nube/drive.dart` el único fichero que sabe que Google
+existe, y `estado/copia_automatica.dart` el motor con los disparadores. 51 tests nuevos, la
+suite en 441.
+
+#### Las ocho desviaciones de la fase 8a
+
+1. **`google_sign_in` no se podía usar, y eso cambió el flujo entero.** Un cliente OAuth de
+   tipo *Android* va atado al `applicationId` **y a la huella SHA-1 del certificado de
+   firma**, y este proyecto firma el APK de release con la clave de depuración
+   (`android/app/build.gradle.kts`), que un runner de GitHub genera nueva en cada
+   ejecución: la huella cambiaría en cada release y el inicio de sesión no funcionaría
+   nunca. Tampoco en un fork ni en una compilación local. Se usa en su lugar el flujo de
+   código con **PKCE y redirección al bucle local** (RFC 8252) contra un cliente de tipo
+   *Aplicación de escritorio*, que es el único que Google sigue admitiendo con
+   `http://127.0.0.1:<puerto>` y **no depende de la firma**. La app levanta un `HttpServer`
+   efímero, abre el navegador y recoge el código de la redirección.
+2. **No entra ningún SDK de Google.** Drive se habla por REST v3 con el `http` que ya
+   estaba declarado. De las tres dependencias añadidas, `crypto` (el reto S256) y
+   `url_launcher` (abrir el navegador) **ya estaban en el árbol** como transitivas, así que
+   la única nueva de verdad es `flutter_secure_storage`, para el *refresh token*. Es la
+   opción que [O6](#o-decisiones-pendientes) recomendaba.
+3. **El ámbito es `drive.file`, no `drive`.** La app solo ve y modifica lo que ella misma
+   creó. Además de ser privilegio mínimo, hace **imposible** que la rotación borre un
+   fichero del usuario —la lista sobre la que decide no puede contener otra cosa— y es un
+   ámbito *no sensible*, así que la pantalla de consentimiento no necesita verificación de
+   Google ni evaluación de seguridad.
+4. **Las cinco claves de estado no son preferencias, y por eso no las lee `Ajustes`.**
+   Viven en la tabla `ajustes` porque ahí ya hay una tabla clave/valor, pero las interpreta
+   `EstadoCopiaAutomatica` y están en el conjunto nuevo `Claves.locales`, que `copia.dart`
+   filtra **al exportar y al importar**. Restaurar una copia en un móvil nuevo no puede
+   traerse la cuenta conectada del viejo. Entró en ese conjunto también `version_indice`,
+   que ya era estado de dispositivo y se estaba exportando por descuido.
+5. **`borrarTodosLosDatos()` conserva ahora las claves locales.** No estaba previsto y es
+   un fallo que había: esa función vacía la tabla `ajustes` entera, así que tanto «borrar
+   todos los datos» como importar con «reemplazar» habrían **desconectado la copia
+   automática sin pedirlo**, dejando además la cuenta olvidada en la tabla con su token
+   todavía en el almacén seguro. El botón dice «rutinas, sesiones y medidas», y ahora eso
+   es lo que borra.
+6. **«Le toca» se decide por frontera natural, no por horas transcurridas.** Con un «hace
+   menos de 24 h», una copia a las 23:50 bloquearía la del día siguiente y bastaría
+   entrenar dos noches seguidas para saltarse una. Se compara el día, el lunes —con el
+   `metricas.lunesDe` que ya existía, y por su mismo motivo— o el mes.
+7. **No hay `compute()` para serializar.** Estaba previsto llevarlo a un isolate como hace
+   `semilla.dart` con el megabyte del catálogo, pero una copia de años de entrenamiento
+   ronda el megabyte y `jsonEncode` la resuelve en milisegundos: arrancar el isolate cuesta
+   más que lo que ahorra. Se serializa sin indentar, que es la mitad de bytes que subir.
+8. **El adaptador de Drive se prueba entero sin red.** Era lo que parecía imposible. Con
+   `MockClient` van el canje del código, la renovación del token, el `invalid_grant` y el
+   cuerpo *multipart*; y **el bucle local se prueba de verdad**, levantando el `HttpServer`
+   y haciendo de navegador con un `GET` a la redirección. Lo único que queda fuera es
+   `launchUrl` y los servidores de Google.
+
+**Lo que hay que hacer fuera del código** para que funcione en las releases oficiales: un
+proyecto en Google Cloud con la Drive API activada, una pantalla de consentimiento en
+producción que enlace `docs/privacidad.md`, un cliente OAuth de tipo *Aplicación de
+escritorio*, y sus dos valores como secretos `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`.
+Sin ellos la copia automática queda **desactivada y no visible**, y todo lo demás —incluida
+CI— sigue igual.
 
 ### Fase 8b — Sincronización: el motor
 
@@ -2022,6 +2084,8 @@ las demás se pueden cerrar durante.
    **Recomendación:** entregar 8a igualmente —es útil por sí sola y barata—, y decidir 8b/8c
    después de usarla un par de meses. Si con la copia automática el problema desaparece, la
    respuesta ya está.
+   **8a entregada.** La segunda mitad de la pregunta sigue abierta a propósito: es ahora
+   cuando se puede contestar con la funcionalidad puesta en vez de en abstracto.
 
 2. **¿Qué proveedor, si se hace K completo?** ([K2](#k2-elección-de-backend))
    **Recomendación:** Supabase, por el encaje relacional y la RLS, con todo detrás de

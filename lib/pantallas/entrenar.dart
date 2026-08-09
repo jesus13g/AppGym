@@ -25,6 +25,7 @@ import '../datos/borrador.dart';
 import '../datos/formato.dart';
 import '../datos/progresion.dart' as progresion;
 import '../datos/reloj.dart' as reloj;
+import '../estado/copia_automatica.dart';
 import '../estado/descanso.dart';
 import '../estado/providers.dart';
 import '../l10n/textos.dart';
@@ -425,6 +426,14 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
     invalidarEntrenamientos(ref, widget.idRutina);
     ref.invalidate(sesionActivaProvider);
     _descanso?.saltar();
+
+    // La copia automática, si toca. Es el cambio que de verdad importa y el
+    // momento en que el usuario acaba de salir del gimnasio. No se espera: si
+    // falla, no se entera nadie aquí — el aviso está en la cabecera de
+    // Rutinas, nunca en la ruta de entrenar.
+    unawaited(
+      ref.read(motorCopiaProvider.notifier).intentar(Disparador.guardado),
+    );
 
     final navegador = Navigator.of(context);
     navegador.pop();
