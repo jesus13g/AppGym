@@ -14,10 +14,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/ajustes.dart';
-import '../datos/formato.dart' as formato;
 import '../datos/media.dart' as media;
 import '../datos/progresion.dart' show rangosRepeticiones;
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -57,6 +57,7 @@ class PantallaAjustes extends ConsumerWidget {
       mensaje: mensaje,
       opciones: opciones,
       actual: actual,
+      etiquetaCancelar: context.t.comunCancelar,
     );
     if (elegido == null) return;
     await _fijar(ref, clave, elegido.$1);
@@ -70,8 +71,8 @@ class PantallaAjustes extends ConsumerWidget {
       backgroundColor: context.fondo,
       navigationBar: ui.barra(
         context,
-        titulo: 'Ajustes',
-        tituloAnterior: 'Rutinas',
+        titulo: context.t.ajustesTitulo,
+        tituloAnterior: context.t.raizRutinas,
       ),
       child: SafeArea(
         child: ListView(
@@ -91,107 +92,105 @@ class PantallaAjustes extends ConsumerWidget {
 
   // ── Unidades ───────────────────────────────────────────────────────────────
 
-  Widget _unidades(
-    BuildContext context,
-    WidgetRef ref,
-    Ajustes ajustes,
-  ) => ui.Grupo(
-    cabecera: 'Unidades',
-    pie:
-        'El peso se guarda siempre en kilogramos: cambiar a libras solo '
-        'cambia cómo se lee, y volver deja los valores originales intactos.',
-    filas: [
-      _segmentos<Unidad>(
-        context,
-        etiqueta: 'Unidad de peso',
-        valor: ajustes.unidad,
-        opciones: const {Unidad.kg: 'kg', Unidad.lb: 'lb'},
-        onValor: (valor) => _fijar(ref, Claves.unidad, valor),
-      ),
-      _fila(
-        context,
-        titulo: 'Paso del peso',
-        valor: '${formato.numero(ajustes.pasoPeso)} ${ajustes.unidad.sufijo}',
-        onTap: () => _elegir<double>(
-          context,
-          ref,
-          clave: Claves.pasoPeso,
-          titulo: 'Paso del peso',
-          mensaje: 'Cuánto sube o baja cada toque en el registro.',
-          actual: ajustes.pasoPeso,
-          opciones: [
-            for (final paso in pasosPeso)
-              (paso, '${formato.numero(paso)} ${ajustes.unidad.sufijo}'),
-          ],
-        ),
-      ),
-    ],
-  );
+  Widget _unidades(BuildContext context, WidgetRef ref, Ajustes ajustes) =>
+      ui.Grupo(
+        cabecera: context.t.ajustesUnidades,
+        pie: context.t.ajustesUnidadesPie,
+        filas: [
+          _segmentos<Unidad>(
+            context,
+            etiqueta: context.t.ajustesUnidadPeso,
+            valor: ajustes.unidad,
+            opciones: const {Unidad.kg: 'kg', Unidad.lb: 'lb'},
+            onValor: (valor) => _fijar(ref, Claves.unidad, valor),
+          ),
+          _fila(
+            context,
+            titulo: context.t.ajustesPasoPeso,
+            valor: context.t.ajustesPasoPesoValor(
+              formatoDe(context, ref).numero(ajustes.pasoPeso),
+              ajustes.unidad.sufijo,
+            ),
+            onTap: () => _elegir<double>(
+              context,
+              ref,
+              clave: Claves.pasoPeso,
+              titulo: context.t.ajustesPasoPeso,
+              mensaje: context.t.ajustesPasoPesoMensaje,
+              actual: ajustes.pasoPeso,
+              opciones: [
+                for (final paso in pasosPeso)
+                  (
+                    paso,
+                    context.t.ajustesPasoPesoValor(
+                      formatoDe(context, ref).numero(paso),
+                      ajustes.unidad.sufijo,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      );
 
   // ── Entrenamiento ──────────────────────────────────────────────────────────
 
   Widget _entrenamiento(BuildContext context, WidgetRef ref, Ajustes ajustes) =>
       ui.Grupo(
-        cabecera: 'Entrenamiento',
-        pie:
-            'Las series y repeticiones por defecto solo se usan la primera vez '
-            'que entrenas un ejercicio; a partir de ahí se precarga lo que '
-            'hiciste la última vez.',
+        cabecera: context.t.ajustesEntrenamiento,
+        pie: context.t.ajustesEntrenamientoPie,
         filas: [
           _fila(
             context,
-            titulo: 'Descanso por defecto',
-            valor: formato.descanso(ajustes.descansoSeg),
+            titulo: context.t.ajustesDescansoDefecto,
+            valor: formatoDe(context, ref).descanso(ajustes.descansoSeg),
             onTap: () => _elegir<int>(
               context,
               ref,
               clave: Claves.descanso,
-              titulo: 'Descanso por defecto',
-              mensaje:
-                  'Cada ejercicio puede llevar el suyo, desde su tarjeta en el '
-                  'registro.',
+              titulo: context.t.ajustesDescansoDefecto,
+              mensaje: context.t.ajustesDescansoMensaje,
               actual: ajustes.descansoSeg,
               opciones: [
                 for (final segundos in descansos)
-                  (segundos, formato.descanso(segundos)),
+                  (segundos, formatoDe(context, ref).descanso(segundos)),
               ],
             ),
           ),
           _interruptor(
             context,
-            titulo: 'Sonido al terminar',
+            titulo: context.t.ajustesSonido,
             valor: ajustes.sonidoDescanso,
             onValor: (valor) => _fijar(ref, Claves.sonidoDescanso, valor),
           ),
           _fila(
             context,
-            titulo: 'Series por defecto',
+            titulo: context.t.ajustesSeriesDefecto,
             valor: '${ajustes.seriesPorDefecto}',
             onTap: () => _elegir<int>(
               context,
               ref,
               clave: Claves.series,
-              titulo: 'Series por defecto',
+              titulo: context.t.ajustesSeriesDefecto,
               actual: ajustes.seriesPorDefecto,
               opciones: [
-                for (var n = 1; n <= 10; n++)
-                  (n, formato.plural(n, 'serie', 'series')),
+                for (var n = 1; n <= 10; n++) (n, context.t.comunSeries(n)),
               ],
             ),
           ),
           _fila(
             context,
-            titulo: 'Repeticiones por defecto',
+            titulo: context.t.ajustesRepeticionesDefecto,
             valor: '${ajustes.repeticionesPorDefecto}',
             onTap: () => _elegir<int>(
               context,
               ref,
               clave: Claves.repeticiones,
-              titulo: 'Repeticiones por defecto',
+              titulo: context.t.ajustesRepeticionesDefecto,
               actual: ajustes.repeticionesPorDefecto,
               opciones: [
                 for (var n = 1; n <= 30; n++)
-                  (n, formato.plural(n, 'repetición', 'repeticiones')),
+                  (n, context.t.comunRepeticiones(n)),
               ],
             ),
           ),
@@ -206,13 +205,17 @@ class PantallaAjustes extends ConsumerWidget {
   Widget _esfuerzo(BuildContext context, WidgetRef ref, Ajustes ajustes) =>
       _segmentos<String>(
         context,
-        etiqueta: 'Anotar el esfuerzo',
+        etiqueta: context.t.ajustesEsfuerzo,
         valor: switch (ajustes) {
           _ when !ajustes.esfuerzoActivo => 'no',
           _ when ajustes.escala == EscalaEsfuerzo.rir => 'rir',
           _ => 'rpe',
         },
-        opciones: const {'no': 'No', 'rpe': 'RPE', 'rir': 'RIR'},
+        opciones: {
+          'no': context.t.ajustesEsfuerzoNo,
+          'rpe': 'RPE',
+          'rir': 'RIR',
+        },
         onValor: (valor) async {
           await ref.read(bdProvider).fijarAjustes({
             Claves.esfuerzoActivo: valor == 'no' ? '0' : '1',
@@ -229,38 +232,34 @@ class PantallaAjustes extends ConsumerWidget {
     WidgetRef ref,
     Ajustes ajustes,
   ) => ui.Grupo(
-    cabecera: 'Objetivos',
-    pie:
-        'El objetivo semanal es contra lo que se mide la racha en Progreso. '
-        'Brzycki estima algo más bajo que Epley en series largas; con pocas '
-        'repeticiones apenas se distinguen.',
+    cabecera: context.t.ajustesObjetivos,
+    pie: context.t.ajustesObjetivosPie,
     filas: [
       _fila(
         context,
-        titulo: 'Sesiones por semana',
+        titulo: context.t.ajustesSesionesSemana,
         valor: '${ajustes.sesionesPorSemana}',
         onTap: () => _elegir<int>(
           context,
           ref,
           clave: Claves.sesionesPorSemana,
-          titulo: 'Sesiones por semana',
+          titulo: context.t.ajustesSesionesSemana,
           actual: ajustes.sesionesPorSemana,
           opciones: [
-            for (var n = 1; n <= 7; n++)
-              (n, formato.plural(n, 'sesión', 'sesiones')),
+            for (var n = 1; n <= 7; n++) (n, context.t.comunSesiones(n)),
           ],
         ),
       ),
       _segmentos<Formula>(
         context,
-        etiqueta: 'Fórmula de 1RM',
+        etiqueta: context.t.ajustesFormula,
         valor: ajustes.formula,
         opciones: const {Formula.epley: 'Epley', Formula.brzycki: 'Brzycki'},
         onValor: (valor) => _fijar(ref, Claves.formula1RM, valor),
       ),
       _interruptor(
         context,
-        titulo: 'Sugerir progresiones',
+        titulo: context.t.ajustesProgresionActiva,
         valor: ajustes.progresionActiva,
         onValor: (valor) => _fijar(ref, Claves.progresionActiva, valor),
       ),
@@ -268,18 +267,18 @@ class PantallaAjustes extends ConsumerWidget {
       // lista que cambia de alto bajo el dedo desorienta más de lo que ahorra.
       _fila(
         context,
-        titulo: 'Rango de repeticiones',
-        valor: '${ajustes.repMinGlobal} – ${ajustes.repMaxGlobal}',
+        titulo: context.t.comunRangoRepeticiones,
+        valor: context.t.comunRango(ajustes.repMinGlobal, ajustes.repMaxGlobal),
         onTap: () => _elegirRango(context, ref, ajustes),
       ),
       _segmentos<Perfil>(
         context,
-        etiqueta: 'Perfil',
+        etiqueta: context.t.ajustesPerfil,
         valor: ajustes.perfilProgresion,
-        opciones: const {
-          Perfil.conservador: 'Conservador',
-          Perfil.estandar: 'Estándar',
-          Perfil.agresivo: 'Agresivo',
+        opciones: {
+          Perfil.conservador: context.t.ajustesPerfilConservador,
+          Perfil.estandar: context.t.ajustesPerfilEstandar,
+          Perfil.agresivo: context.t.ajustesPerfilAgresivo,
         },
         onValor: (valor) => _fijar(ref, Claves.perfilProgresion, valor),
       ),
@@ -294,14 +293,13 @@ class PantallaAjustes extends ConsumerWidget {
   ) async {
     final elegido = await ui.elegirEnHoja<(int, int)>(
       context,
-      titulo: 'Rango de repeticiones',
-      mensaje:
-          'Dentro de este rango se sube de repeticiones; al completarlo, de '
-          'peso. Cada ejercicio puede llevar el suyo.',
+      titulo: context.t.comunRangoRepeticiones,
+      etiquetaCancelar: context.t.comunCancelar,
+      mensaje: context.t.ajustesRangoMensaje,
       actual: (ajustes.repMinGlobal, ajustes.repMaxGlobal),
       opciones: [
         for (final rango in rangosRepeticiones)
-          (rango, '${rango.$1} – ${rango.$2}'),
+          (rango, context.t.comunRango(rango.$1, rango.$2)),
       ],
     );
     if (elegido == null) return;
@@ -317,22 +315,47 @@ class PantallaAjustes extends ConsumerWidget {
 
   Widget _apariencia(BuildContext context, WidgetRef ref, Ajustes ajustes) =>
       ui.Grupo(
-        cabecera: 'Apariencia',
-        pie: 'Con «Sistema», la app sigue el modo claro u oscuro del móvil.',
+        cabecera: context.t.ajustesApariencia,
+        pie: context.t.ajustesAparienciaPie,
         filas: [
           _segmentos<Tema>(
             context,
-            etiqueta: 'Tema',
+            etiqueta: context.t.ajustesTema,
             valor: ajustes.tema,
-            opciones: const {
-              Tema.sistema: 'Sistema',
-              Tema.claro: 'Claro',
-              Tema.oscuro: 'Oscuro',
+            opciones: {
+              Tema.sistema: context.t.ajustesTemaSistema,
+              Tema.claro: context.t.ajustesTemaClaro,
+              Tema.oscuro: context.t.ajustesTemaOscuro,
             },
             onValor: (valor) => _fijar(ref, Claves.tema, valor),
           ),
+          _fila(
+            context,
+            titulo: context.t.ajustesIdioma,
+            valor: _idioma(context, ajustes.idioma),
+            onTap: () => _elegir<Idioma>(
+              context,
+              ref,
+              clave: Claves.idioma,
+              titulo: context.t.ajustesIdioma,
+              mensaje: context.t.ajustesIdiomaMensaje,
+              actual: ajustes.idioma,
+              opciones: [
+                for (final idioma in Idioma.values)
+                  (idioma, _idioma(context, idioma)),
+              ],
+            ),
+          ),
         ],
       );
+
+  /// Cada idioma se escribe **en el suyo**, que es la convención universal y
+  /// evita el absurdo de buscar «Inglés» estando la app en inglés.
+  String _idioma(BuildContext context, Idioma idioma) => switch (idioma) {
+    Idioma.auto => context.t.ajustesIdiomaAuto,
+    Idioma.es => 'Español',
+    Idioma.en => 'English',
+  };
 
   // ── Acerca de ──────────────────────────────────────────────────────────────
 
@@ -340,18 +363,16 @@ class PantallaAjustes extends ConsumerWidget {
     final catalogo = ref.watch(arranqueProvider).value?.length;
 
     return ui.Grupo(
-      cabecera: 'Acerca de',
-      pie:
-          'Las imágenes y animaciones son ${media.atribucion} y se usan a '
-          '180×180 con la atribución visible, según sus condiciones de uso. '
-          'Los datos del catálogo vienen de hasaneyldrm/exercises-dataset, con '
-          'licencia MIT.',
+      cabecera: context.t.ajustesAcercaDe,
+      pie: context.t.ajustesLicencias(media.atribucion),
       filas: [
-        _fila(context, titulo: 'Versión', valor: versionApp),
+        _fila(context, titulo: context.t.ajustesVersion, valor: versionApp),
         _fila(
           context,
-          titulo: 'Catálogo',
-          valor: catalogo == null ? '…' : '$catalogo ejercicios',
+          titulo: context.t.ajustesCatalogo,
+          valor: catalogo == null
+              ? '…'
+              : context.t.ajustesCatalogoValor(catalogo),
         ),
       ],
     );

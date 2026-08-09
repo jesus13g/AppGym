@@ -22,11 +22,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
 import '../datos/borrador.dart';
-import '../datos/formato.dart' as formato;
+import '../datos/formato.dart';
 import '../datos/progresion.dart' as progresion;
 import '../datos/reloj.dart' as reloj;
 import '../estado/descanso.dart';
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -169,9 +170,9 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
   bool get _vivo => widget.modo == Modo.vivo;
 
   String get _titulo => switch (widget.modo) {
-    _ when _editando => 'Editar entrenamiento',
-    Modo.vivo => 'Entrenando',
-    Modo.formulario => 'Registrar sesión',
+    _ when _editando => context.t.entrenarEditar,
+    Modo.vivo => context.t.entrenarVivo,
+    Modo.formulario => context.t.entrenarFormulario,
   };
 
   @override
@@ -361,6 +362,8 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
       context,
       inicial: _fecha,
       maxima: ahora,
+      etiquetaCancelar: context.t.comunCancelar,
+      etiquetaListo: context.t.comunListo,
     );
     if (elegida == null || !mounted) return;
 
@@ -412,7 +415,9 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
       setState(() => _guardando = false);
       ui.aviso(
         context,
-        _vivo ? 'Marca al menos una serie' : 'Añade al menos una serie',
+        _vivo
+            ? context.t.entrenarSinSeriesVivo
+            : context.t.entrenarSinSeriesFormulario,
       );
       return;
     }
@@ -434,14 +439,13 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
   Future<void> _salirDeVivo() async {
     final elegido = await ui.elegirEnHoja<bool>(
       context,
-      titulo: 'Dejar el entrenamiento',
-      mensaje:
-          'Si lo dejas para luego, al abrir la app te ofrecerá continuarlo '
-          'donde lo dejaste.',
-      opciones: const [
-        (true, 'Seguir luego'),
-        (false, 'Descartar el entrenamiento'),
+      titulo: context.t.entrenarDejarTitulo,
+      mensaje: context.t.entrenarDejarMensaje,
+      opciones: [
+        (true, context.t.entrenarSeguirLuego),
+        (false, context.t.entrenarDescartarSesion),
       ],
+      etiquetaCancelar: context.t.comunCancelar,
     );
     if (elegido == null || !mounted) return;
 
@@ -461,7 +465,7 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
   @override
   Widget build(BuildContext context) {
     final rutina = ref.watch(rutinaProvider(widget.idRutina)).value;
-    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
+    final f = formatoDe(context, ref);
     final descanso = ref.watch(descansoProvider);
     final ejercicios = _ejercicios;
 
@@ -473,9 +477,9 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
           titulo: _titulo,
           izquierda: _botonSalir(context),
         ),
-        child: const ui.EstadoVacio(
+        child: ui.EstadoVacio(
           icono: CupertinoIcons.exclamationmark_triangle,
-          titulo: 'Esta rutina no tiene ejercicios',
+          titulo: context.t.resultadosSinEjercicios,
         ),
       );
     }
@@ -491,7 +495,7 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
           minimumSize: Size.zero,
           onPressed: _guardando ? null : _guardar,
           child: Text(
-            _vivo ? 'Terminar' : 'Guardar',
+            _vivo ? context.t.entrenarTerminar : context.t.comunGuardar,
             style: ui.estilo(
               context,
               weight: t.semibold,
@@ -507,7 +511,7 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
                 Expanded(
                   child: SafeArea(
                     bottom: false,
-                    child: _lista(context, ejercicios, rutina, ajustes),
+                    child: _lista(context, ejercicios, rutina, f),
                   ),
                 ),
                 if (descanso != null)
@@ -518,6 +522,7 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
                     onMas: () => _descanso?.ajustar(ajusteDescanso),
                     onMenos: () => _descanso?.ajustar(-ajusteDescanso),
                     onSaltar: () => _descanso?.saltar(),
+                    etiquetaSaltar: context.t.comunSaltar,
                   ),
               ],
             ),
@@ -557,7 +562,7 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
     BuildContext context,
     List<EjercicioConFicha> ejercicios,
     Rutina? rutina,
-    Ajustes ajustes,
+    Formato f,
   ) => ListView(
     children: [
       _cabecera(context, rutina),
@@ -568,11 +573,11 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
             ejercicio: ejercicio,
             ultimas: _ultimas[ejercicio.id] ?? const [],
             series: _series[ejercicio.id] ?? const [],
-            ajustes: ajustes,
+            formato: f,
             vivo: _vivo,
-            descansoSeg: _descansoDe(ejercicio, ajustes),
+            descansoSeg: _descansoDe(ejercicio, f.ajustes),
             descansoPropio: ejercicio.ejercicio.descansoSeg != null,
-            sugerencia: _sugerenciaDe(ejercicio, ajustes),
+            sugerencia: _sugerenciaDe(ejercicio, f.ajustes),
             onAplicarSugerencia: (s) => _aplicarSugerencia(ejercicio.id, s),
             onDescartarSugerencia: () => _descartarSugerencia(ejercicio.id),
             onSeries: (valor) => _cambiarSeries(ejercicio.id, valor),
@@ -582,16 +587,14 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
           ),
         ),
       ui.Grupo(
-        cabecera: 'Notas',
-        pie:
-            'Lo que explique este entrenamiento dentro de tres semanas: '
-            'molestias, cinturón, mal día.',
+        cabecera: context.t.sesionNotas,
+        pie: context.t.entrenarNotasPie,
         filas: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: t.m, vertical: t.s),
             child: CupertinoTextField.borderless(
               controller: _nota,
-              placeholder: 'Nota de la sesión',
+              placeholder: context.t.entrenarNotaMarcador,
               maxLines: null,
               minLines: 2,
               style: ui.estilo(context),
@@ -603,7 +606,9 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
       Padding(
         padding: const EdgeInsets.all(t.l),
         child: ui.BotonPrincipal(
-          _vivo ? 'Terminar entrenamiento' : 'Guardar entrenamiento',
+          _vivo
+              ? context.t.entrenarTerminarLargo
+              : context.t.entrenarGuardarLargo,
           icono: CupertinoIcons.check_mark,
           onPressed: _guardando ? null : _guardar,
         ),
@@ -633,8 +638,11 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
           const SizedBox(height: 2),
           if (_vivo)
             Text(
-              '$hechas / $total series · '
-              '${formato.duracion(_transcurrido.inSeconds)}',
+              context.t.entrenarCronometro(
+                hechas,
+                total,
+                formatoDe(context, ref).duracion(_transcurrido.inSeconds),
+              ),
               style: ui.estilo(
                 context,
                 size: t.subhead,
@@ -650,7 +658,7 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    formato.fechaLarga(_fecha),
+                    formatoDe(context, ref).fechaLarga(_fecha),
                     style: ui.estilo(
                       context,
                       size: t.subhead,
@@ -675,7 +683,7 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
     padding: EdgeInsets.zero,
     minimumSize: Size.zero,
     onPressed: _vivo ? _salirDeVivo : () => Navigator.of(context).pop(),
-    child: Text(_vivo ? 'Dejarlo' : 'Cancelar'),
+    child: Text(_vivo ? context.t.entrenarDejarlo : context.t.comunCancelar),
   );
 }
 
@@ -690,7 +698,7 @@ class TarjetaEjercicio extends StatelessWidget {
     required this.ultimas,
     required this.series,
     required this.onSeries,
-    this.ajustes = const Ajustes(),
+    required this.formato,
     this.vivo = false,
     this.descansoSeg = 90,
     this.descansoPropio = false,
@@ -710,8 +718,9 @@ class TarjetaEjercicio extends StatelessWidget {
   final List<SerieEnCurso> series;
   final ValueChanged<List<SerieEnCurso>> onSeries;
 
-  /// De aquí salen la unidad, el paso del peso y si se pide el esfuerzo.
-  final Ajustes ajustes;
+  /// De aquí salen el idioma, la unidad, el paso del peso y si se pide el
+  /// esfuerzo.
+  final Formato formato;
 
   /// En sesión viva cada fila lleva su check y la tarjeta, su descanso.
   final bool vivo;
@@ -741,7 +750,10 @@ class TarjetaEjercicio extends StatelessWidget {
   /// Añadir copia la última serie, que es el gesto más frecuente.
   void _anadir() {
     final ultima = series.isEmpty
-        ? ValoresSerie(repeticiones: ajustes.repeticionesPorDefecto, peso: 20)
+        ? ValoresSerie(
+            repeticiones: formato.ajustes.repeticionesPorDefecto,
+            peso: 20,
+          )
         : series.last.valores;
     onSeries(List.of(series)..add((valores: ultima, hecha: false)));
   }
@@ -750,10 +762,12 @@ class TarjetaEjercicio extends StatelessWidget {
     final serie = series[indice].valores;
     final texto = await ui.dialogoTexto(
       context,
-      titulo: 'Nota de la serie ${indice + 1}',
-      marcador: 'Fallo en la última, con ayuda…',
+      titulo: context.t.entrenarNotaSerie(indice + 1),
+      marcador: context.t.entrenarNotaSerieMarcador,
       valor: serie.nota ?? '',
       permitirVacio: true,
+      etiquetaAceptar: context.t.comunGuardar,
+      etiquetaCancelar: context.t.comunCancelar,
     );
     if (texto == null) return;
 
@@ -770,7 +784,7 @@ class TarjetaEjercicio extends StatelessWidget {
     await showCupertinoModalPopup<void>(
       context: context,
       builder: (hoja) => CupertinoActionSheet(
-        title: Text('Serie ${indice + 1}'),
+        title: Text(hoja.t.entrenarSerieNumero(indice + 1)),
         actions: [
           CupertinoActionSheetAction(
             onPressed: () {
@@ -782,8 +796,8 @@ class TarjetaEjercicio extends StatelessWidget {
             },
             child: Text(
               serie.calentamiento
-                  ? 'Quitar el calentamiento'
-                  : 'Marcar como calentamiento',
+                  ? hoja.t.entrenarQuitarCalentamiento
+                  : hoja.t.entrenarMarcarCalentamiento,
             ),
           ),
           CupertinoActionSheetAction(
@@ -791,7 +805,11 @@ class TarjetaEjercicio extends StatelessWidget {
               Navigator.pop(hoja);
               _nota(context, indice);
             },
-            child: Text(serie.nota == null ? 'Añadir nota' : 'Editar la nota'),
+            child: Text(
+              serie.nota == null
+                  ? hoja.t.entrenarAnadirNota
+                  : hoja.t.entrenarEditarNota,
+            ),
           ),
           CupertinoActionSheetAction(
             isDestructiveAction: true,
@@ -799,24 +817,26 @@ class TarjetaEjercicio extends StatelessWidget {
               Navigator.pop(hoja);
               _borrar(indice);
             },
-            child: const Text('Eliminar serie'),
+            child: Text(hoja.t.entrenarEliminarSerie),
           ),
         ],
         cancelButton: CupertinoActionSheetAction(
           onPressed: () => Navigator.pop(hoja),
-          child: const Text('Cancelar'),
+          child: Text(hoja.t.comunCancelar),
         ),
       ),
     );
   }
 
   String get _referencia {
-    if (ultimas.isEmpty) return 'Primera vez con este ejercicio';
+    if (ultimas.isEmpty) return formato.textos.entrenarPrimeraVez;
     final volumen = ultimas
         .where((s) => !s.calentamiento)
         .fold<double>(0, (suma, s) => suma + s.peso * s.repeticiones);
-    return 'Último: ${formato.plural(ultimas.length, 'serie', 'series')} · '
-        '${formato.peso(volumen, ajustes)}';
+    return formato.textos.entrenarUltimaVez(
+      formato.textos.comunSeries(ultimas.length),
+      formato.peso(volumen),
+    );
   }
 
   @override
@@ -833,7 +853,7 @@ class TarjetaEjercicio extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: t.l, vertical: t.m),
           child: Row(
             children: [
-              ui.Miniatura(formato.imagenEjercicio(ejercicio), tamano: 40),
+              ui.Miniatura(imagenEjercicio(ejercicio), tamano: 40),
               const SizedBox(width: t.m),
               Expanded(
                 child: Column(
@@ -869,7 +889,7 @@ class TarjetaEjercicio extends StatelessWidget {
         if (sugerencia case final propuesta?) ...[
           LineaSugerencia(
             sugerencia: propuesta,
-            ajustes: ajustes,
+            formato: formato,
             onAplicar: onAplicarSugerencia == null
                 ? null
                 : () => onAplicarSugerencia!(propuesta),
@@ -881,7 +901,7 @@ class TarjetaEjercicio extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: t.m),
             child: Text(
-              'Sin series: este ejercicio no se guardará',
+              context.t.entrenarSinSeriesTarjeta,
               style: ui.estilo(
                 context,
                 size: t.footnote,
@@ -902,7 +922,7 @@ class TarjetaEjercicio extends StatelessWidget {
                   numero: indice + 1,
                   serie: serie.valores,
                   hecha: serie.hecha,
-                  ajustes: ajustes,
+                  formato: formato,
                   vivo: vivo,
                   onSerie: (valores) => _cambiar(indice, valores),
                   onMenu: () => _menu(context, indice),
@@ -920,7 +940,7 @@ class TarjetaEjercicio extends StatelessWidget {
               Icon(CupertinoIcons.add, size: 16, color: context.acento),
               const SizedBox(width: t.xs),
               Text(
-                'Añadir serie',
+                context.t.entrenarAnadirSerie,
                 style: ui.estilo(
                   context,
                   size: t.subhead,
@@ -972,7 +992,7 @@ class _FilaSerie extends StatelessWidget {
     required this.numero,
     required this.serie,
     required this.hecha,
-    required this.ajustes,
+    required this.formato,
     required this.vivo,
     required this.onSerie,
     required this.onMenu,
@@ -982,7 +1002,7 @@ class _FilaSerie extends StatelessWidget {
   final int numero;
   final ValoresSerie serie;
   final bool hecha;
-  final Ajustes ajustes;
+  final Formato formato;
   final bool vivo;
   final ValueChanged<ValoresSerie> onSerie;
   final VoidCallback onMenu;
@@ -998,10 +1018,10 @@ class _FilaSerie extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _principal(context),
-          if (ajustes.esfuerzoActivo)
+          if (formato.ajustes.esfuerzoActivo)
             _Esfuerzo(
               valor: serie.rpe,
-              escala: ajustes.escala,
+              formato: formato,
               onValor: (valor) => onSerie(
                 valor == null
                     ? serie.copiar(sinRpe: true)
@@ -1048,7 +1068,7 @@ class _FilaSerie extends StatelessWidget {
       Expanded(
         flex: 2,
         child: ui.SelectorEnLinea(
-          semantica: 'Repeticiones',
+          semantica: context.t.entrenarRepeticiones,
           valor: serie.repeticiones.toDouble(),
           minimo: 1,
           maximo: 50,
@@ -1059,16 +1079,17 @@ class _FilaSerie extends StatelessWidget {
       Expanded(
         flex: 3,
         child: ui.SelectorEnLinea(
-          semantica: 'Peso',
+          semantica: context.t.comunPeso,
           // El selector trabaja en la unidad activa y devuelve kilos: es lo
           // único que sabe de libras en toda la pantalla.
-          valor: ajustes.paraSelector(serie.peso),
+          valor: formato.ajustes.paraSelector(serie.peso),
           minimo: 0,
-          maximo: ajustes.pesoMaximo,
-          paso: ajustes.pasoPeso,
-          unidad: ajustes.unidad.sufijo,
-          decimales: ajustes.decimalesPaso,
-          onChanged: (v) => onSerie(serie.copiar(peso: ajustes.aKilos(v))),
+          maximo: formato.ajustes.pesoMaximo,
+          paso: formato.ajustes.pasoPeso,
+          unidad: formato.ajustes.unidad.sufijo,
+          decimales: formato.ajustes.decimalesPaso,
+          onChanged: (v) =>
+              onSerie(serie.copiar(peso: formato.ajustes.aKilos(v))),
         ),
       ),
       CupertinoButton(
@@ -1089,15 +1110,17 @@ class _FilaSerie extends StatelessWidget {
 class _Esfuerzo extends StatelessWidget {
   const _Esfuerzo({
     required this.valor,
-    required this.escala,
+    required this.formato,
     required this.onValor,
   });
 
   /// Siempre en escala RPE, aunque se muestre como RIR.
   final double? valor;
 
-  final EscalaEsfuerzo escala;
+  final Formato formato;
   final ValueChanged<double?> onValor;
+
+  EscalaEsfuerzo get escala => formato.ajustes.escala;
 
   static const _valores = [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0];
 

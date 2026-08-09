@@ -10,8 +10,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
-import '../datos/formato.dart' as formato;
+import '../datos/formato.dart';
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -45,15 +46,15 @@ class _PantallaMedidasState extends ConsumerState<PantallaMedidas> {
   @override
   Widget build(BuildContext context) {
     final serie = ref.watch(serieMedidaProvider(_tipo)).value ?? const [];
-    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
-    final (etiqueta, _) = etiquetaMedida(_tipo);
+    final f = formatoDe(context, ref);
+    final (etiqueta, _) = etiquetaMedida(context.t, _tipo);
 
     return CupertinoPageScaffold(
       backgroundColor: context.fondo,
       navigationBar: ui.barra(
         context,
         titulo: etiqueta,
-        tituloAnterior: 'Progreso',
+        tituloAnterior: context.t.comunProgreso,
         derecha: CupertinoButton(
           padding: EdgeInsets.zero,
           minimumSize: Size.zero,
@@ -76,7 +77,8 @@ class _PantallaMedidasState extends ConsumerState<PantallaMedidas> {
                   itemCount: tiposMedida.length,
                   separatorBuilder: (_, _) => const SizedBox(width: t.s),
                   itemBuilder: (context, indice) {
-                    final (clave, nombre, _) = tiposMedida[indice];
+                    final (clave, _) = tiposMedida[indice];
+                    final (nombre, _) = etiquetaMedida(context.t, clave);
                     final activo = clave == _tipo;
                     return GestureDetector(
                       onTap: () => setState(() => _tipo = clave),
@@ -95,11 +97,10 @@ class _PantallaMedidasState extends ConsumerState<PantallaMedidas> {
                 padding: const EdgeInsets.only(top: t.xxl),
                 child: ui.EstadoVacio(
                   icono: CupertinoIcons.chart_bar_alt_fill,
-                  titulo: 'Sin registros de $etiqueta',
-                  subtitulo:
-                      'Anota el primer valor y aquí verás cómo evoluciona.',
+                  titulo: context.t.medidasSinRegistros(etiqueta),
+                  subtitulo: context.t.medidasVacioDetalle,
                   accion: ui.BotonPrincipal(
-                    'Registrar',
+                    context.t.medidasRegistrar,
                     icono: CupertinoIcons.add,
                     onPressed: () => registrarMedida(context, ref, _tipo),
                   ),
@@ -119,7 +120,7 @@ class _PantallaMedidasState extends ConsumerState<PantallaMedidas> {
                   color: context.tarjeta,
                   borderRadius: BorderRadius.circular(t.radioL),
                 ),
-                child: _Grafico(serie: serie, tipo: _tipo, ajustes: ajustes),
+                child: _Grafico(serie: serie, tipo: _tipo, formato: f),
               ),
               if (_tipo == 'peso')
                 Padding(
@@ -129,8 +130,7 @@ class _PantallaMedidasState extends ConsumerState<PantallaMedidas> {
                     top: t.s,
                   ),
                   child: Text(
-                    'La línea continua es la media de $ventanaMedia días; los '
-                    'puntos, cada pesada.',
+                    context.t.medidasNotaMedia(ventanaMedia),
                     textAlign: TextAlign.center,
                     style: ui.estilo(
                       context,
@@ -140,8 +140,8 @@ class _PantallaMedidasState extends ConsumerState<PantallaMedidas> {
                   ),
                 ),
               ui.Grupo(
-                cabecera: 'Histórico',
-                pie: 'Desliza para eliminar un registro.',
+                cabecera: context.t.comunHistorico,
+                pie: context.t.medidasPieHistorico,
                 filas: [
                   for (final medida in serie.reversed)
                     ui.DeslizarParaBorrar(
@@ -150,11 +150,11 @@ class _PantallaMedidasState extends ConsumerState<PantallaMedidas> {
                       child: CupertinoListTile(
                         backgroundColor: context.tarjeta,
                         title: Text(
-                          formato.fechaLarga(medida.fecha),
+                          f.fechaLarga(medida.fecha),
                           style: ui.estilo(context),
                         ),
                         additionalInfo: Text(
-                          valorMedida(medida.valor, _tipo, ajustes),
+                          valorMedida(medida.valor, _tipo, f),
                           style: ui.estilo(context, weight: t.semibold),
                         ),
                         onTap: () => registrarMedida(
@@ -187,10 +187,10 @@ class _PantallaMedidasState extends ConsumerState<PantallaMedidas> {
 /// El peso corporal es lo único que va en kilos y, por tanto, lo único que se
 /// convierte a libras. Los perímetros son centímetros y la grasa, por ciento:
 /// esos no dependen de la unidad de las cargas.
-String valorMedida(double valor, String tipo, Ajustes ajustes) {
-  if (tipo == 'peso') return formato.peso(valor, ajustes);
-  final (_, unidad) = etiquetaMedida(tipo);
-  return '${formato.numero((valor * 10).round() / 10)} $unidad';
+String valorMedida(double valor, String tipo, Formato f) {
+  if (tipo == 'peso') return f.peso(valor);
+  final (_, unidad) = etiquetaMedida(f.textos, tipo);
+  return '${f.numero((valor * 10).round() / 10)} $unidad';
 }
 
 /// Pide un valor y lo guarda. Repetir el mismo día sustituye al anterior.
@@ -201,8 +201,9 @@ Future<void> registrarMedida(
   DateTime? fecha,
   double? valor,
 }) async {
-  final ajustes = ref.read(ajustesProvider).value ?? const Ajustes();
-  final (etiqueta, unidad) = etiquetaMedida(tipo);
+  final f = leerFormato(context, ref);
+  final ajustes = f.ajustes;
+  final (etiqueta, unidad) = etiquetaMedida(f.textos, tipo);
   // Se pide en la unidad que el usuario ve; se guarda siempre en kilos.
   final enPantalla = valor == null
       ? null
@@ -212,10 +213,10 @@ Future<void> registrarMedida(
     context,
     titulo: etiqueta,
     marcador: tipo == 'peso' ? ajustes.unidad.sufijo : unidad,
-    valor: enPantalla == null
-        ? ''
-        : formato.numero((enPantalla * 10).round() / 10),
-    mensaje: 'Un valor por día: si ya anotaste hoy, este lo sustituye.',
+    valor: enPantalla == null ? '' : f.numero((enPantalla * 10).round() / 10),
+    mensaje: context.t.medidasUnoPorDia,
+    etiquetaAceptar: context.t.comunGuardar,
+    etiquetaCancelar: context.t.comunCancelar,
   );
   if (texto == null || !context.mounted) return;
 
@@ -223,7 +224,7 @@ Future<void> registrarMedida(
   // el punto.
   final numero = double.tryParse(texto.replaceAll(',', '.'));
   if (numero == null || numero <= 0) {
-    ui.aviso(context, 'Escribe un número, por ejemplo 78,4');
+    ui.aviso(context, context.t.medidasNumeroInvalido);
     return;
   }
 
@@ -261,17 +262,17 @@ class _Grafico extends StatelessWidget {
   const _Grafico({
     required this.serie,
     required this.tipo,
-    required this.ajustes,
+    required this.formato,
   });
 
   final List<Medida> serie;
   final String tipo;
-  final Ajustes ajustes;
+  final Formato formato;
 
   /// Los valores en la unidad que se está mostrando.
   List<double> get _valores => [
     for (final m in serie)
-      tipo == 'peso' ? ajustes.desdeKilos(m.valor) : m.valor,
+      tipo == 'peso' ? formato.ajustes.desdeKilos(m.valor) : m.valor,
   ];
 
   @override

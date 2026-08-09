@@ -9,6 +9,7 @@ import 'package:flutter/cupertino.dart';
 
 import '../datos/media.dart' as media;
 import '../datos/semilla.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -54,7 +55,7 @@ class _PantallaSetupState extends State<PantallaSetup> {
     if (_descargando) return;
     setState(() {
       _descargando = true;
-      _detalle = '0 de $_pendientes archivos';
+      _detalle = context.t.setupProgreso(0, _pendientes);
     });
 
     final resultado = await media.descargarTodo(
@@ -66,8 +67,8 @@ class _PantallaSetupState extends State<PantallaSetup> {
           _hechos = hechos;
           _fallos = fallos;
           _detalle =
-              '$hechos de $total archivos'
-              '${fallos > 0 ? ' · $fallos fallidos' : ''}';
+              context.t.setupProgreso(hechos, total) +
+              (fallos > 0 ? context.t.setupFallidos(fallos) : '');
         });
       },
     );
@@ -75,9 +76,7 @@ class _PantallaSetupState extends State<PantallaSetup> {
     if (!mounted) return;
     if (resultado.fallos > 0) {
       setState(() {
-        _detalle =
-            '${resultado.fallos} archivos no se pudieron descargar. '
-            'Se cargarán desde internet cuando hagan falta.';
+        _detalle = context.t.setupFallosFinal(resultado.fallos);
       });
     }
     _entrar();
@@ -89,9 +88,9 @@ class _PantallaSetupState extends State<PantallaSetup> {
       // No hay nada que descargar: la media ya estaba en disco.
       return ui.EstadoVacio(
         icono: CupertinoIcons.check_mark_circled,
-        titulo: 'Todo listo',
-        subtitulo: 'El catálogo de ejercicios ya está descargado.',
-        accion: ui.BotonPrincipal('Empezar', onPressed: _entrar),
+        titulo: context.t.setupTodoListo,
+        subtitulo: context.t.setupTodoListoDetalle,
+        accion: ui.BotonPrincipal(context.t.setupEmpezar, onPressed: _entrar),
       );
     }
 
@@ -121,7 +120,7 @@ class _PantallaSetupState extends State<PantallaSetup> {
               ),
               const SizedBox(height: t.l),
               Text(
-                '1.324 ejercicios listos',
+                context.t.setupCatalogoListo,
                 textAlign: TextAlign.center,
                 style: ui.estilo(context, size: t.title1, weight: t.bold),
               ),
@@ -129,8 +128,7 @@ class _PantallaSetupState extends State<PantallaSetup> {
               SizedBox(
                 width: 300,
                 child: Text(
-                  'AppGym incluye un catálogo con instrucciones en español, '
-                  'músculos implicados y una animación de cada movimiento.',
+                  context.t.setupDetalle,
                   textAlign: TextAlign.center,
                   style: ui.estilo(
                     context,
@@ -152,11 +150,11 @@ class _PantallaSetupState extends State<PantallaSetup> {
                         size: 24,
                       ),
                       title: Text(
-                        'Imágenes y animaciones',
+                        context.t.setupMedia,
                         style: ui.estilo(context),
                       ),
                       subtitle: Text(
-                        '$_pendientes archivos · unos $megas MB',
+                        context.t.setupTamano(_pendientes, megas),
                         style: ui.estilo(
                           context,
                           size: t.footnote,
@@ -196,7 +194,9 @@ class _PantallaSetupState extends State<PantallaSetup> {
               SizedBox(
                 width: 300,
                 child: ui.BotonPrincipal(
-                  _descargando ? 'Descargando…' : 'Descargar ahora',
+                  _descargando
+                      ? context.t.setupDescargando
+                      : context.t.setupDescargar,
                   icono: CupertinoIcons.cloud_download,
                   onPressed: _descargando ? null : _descargar,
                 ),
@@ -204,15 +204,14 @@ class _PantallaSetupState extends State<PantallaSetup> {
               CupertinoButton(
                 onPressed: _omitir,
                 child: Text(
-                  'Ahora no',
+                  context.t.setupAhoraNo,
                   style: ui.estilo(context, color: context.textoSec),
                 ),
               ),
               SizedBox(
                 width: 300,
                 child: Text(
-                  'Si lo omites, la app funciona igual y las imágenes se '
-                  'cargarán desde internet cuando las necesites.',
+                  context.t.setupOmitirDetalle,
                   textAlign: TextAlign.center,
                   style: ui.estilo(
                     context,

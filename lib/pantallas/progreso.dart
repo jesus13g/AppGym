@@ -9,11 +9,12 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
-import '../datos/formato.dart' as formato;
+import '../datos/formato.dart';
 import '../datos/metricas.dart' as metricas;
 import '../datos/progresion.dart' as progresion;
 import '../datos/reloj.dart' as reloj;
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -42,7 +43,7 @@ class _PantallaProgresoState extends ConsumerState<PantallaProgreso> {
     child: CustomScrollView(
       slivers: [
         CupertinoSliverNavigationBar(
-          largeTitle: const Text('Progreso'),
+          largeTitle: Text(context.t.comunProgreso),
           backgroundColor: context.barra,
         ),
         SliverToBoxAdapter(
@@ -56,18 +57,18 @@ class _PantallaProgresoState extends ConsumerState<PantallaProgreso> {
                     setState(() => _pestana = valor ?? 0),
                 // Tres opciones caben; con una cuarta el texto empezaría a
                 // apretarse en un móvil estrecho.
-                children: const {
+                children: {
                   0: Padding(
-                    padding: EdgeInsets.symmetric(vertical: t.xs),
-                    child: Text('Resumen'),
+                    padding: const EdgeInsets.symmetric(vertical: t.xs),
+                    child: Text(context.t.progresoResumen),
                   ),
                   1: Padding(
-                    padding: EdgeInsets.symmetric(vertical: t.xs),
-                    child: Text('Calendario'),
+                    padding: const EdgeInsets.symmetric(vertical: t.xs),
+                    child: Text(context.t.progresoCalendario),
                   ),
                   2: Padding(
-                    padding: EdgeInsets.symmetric(vertical: t.xs),
-                    child: Text('Cuerpo'),
+                    padding: const EdgeInsets.symmetric(vertical: t.xs),
+                    child: Text(context.t.progresoCuerpo),
                   ),
                 },
               ),
@@ -104,7 +105,7 @@ class _Resumen extends ConsumerWidget {
           const Padding(padding: EdgeInsets.all(t.xxl), child: ui.Cargando()),
       error: (e, _) => ui.EstadoVacio(
         icono: CupertinoIcons.exclamationmark_triangle,
-        titulo: 'No se pudo cargar el progreso',
+        titulo: context.t.evolucionError,
         subtitulo: '$e',
       ),
       data: (rutinas) {
@@ -113,14 +114,12 @@ class _Resumen extends ConsumerWidget {
             if (r.ultimaFecha != null) r,
         ];
         if (conDatos.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.only(top: t.xxl),
+          return Padding(
+            padding: const EdgeInsets.only(top: t.xxl),
             child: ui.EstadoVacio(
               icono: CupertinoIcons.chart_bar,
-              titulo: 'Todavía no hay datos',
-              subtitulo:
-                  'Registra tu primer entrenamiento desde una rutina y '
-                  'aquí verás cómo progresas en cada ejercicio.',
+              titulo: context.t.progresoVacio,
+              subtitulo: context.t.progresoVacioDetalle,
             ),
           );
         }
@@ -130,10 +129,8 @@ class _Resumen extends ConsumerWidget {
             const _Semana(),
             const _Estancados(),
             ui.Grupo(
-              cabecera: 'Rutinas entrenadas',
-              pie:
-                  'Entra en una rutina para ver la evolución del peso en cada '
-                  'ejercicio.',
+              cabecera: context.t.progresoRutinasEntrenadas,
+              pie: context.t.progresoRutinasPie,
               filas: [
                 for (final r in conDatos)
                   CupertinoListTile(
@@ -144,7 +141,7 @@ class _Resumen extends ConsumerWidget {
                     ),
                     title: Text(r.nombre, style: ui.estilo(context)),
                     subtitle: Text(
-                      formato.hace(r.ultimaFecha),
+                      formatoDe(context, ref).hace(r.ultimaFecha),
                       style: ui.estilo(
                         context,
                         size: t.footnote,
@@ -187,13 +184,11 @@ class _Estancados extends ConsumerWidget {
             color: context.destructivo,
           ),
           title: Text(
-            lista.length == 1
-                ? '1 ejercicio estancado'
-                : '${lista.length} ejercicios estancados',
+            context.t.progresoEstancados(lista.length),
             style: ui.estilo(context),
           ),
           subtitle: Text(
-            'Sin mejorar peso, repeticiones ni volumen',
+            context.t.progresoEstancadosDetalle,
             style: ui.estilo(
               context,
               size: t.footnote,
@@ -201,7 +196,7 @@ class _Estancados extends ConsumerWidget {
             ),
           ),
           trailing: const CupertinoListTileChevron(),
-          onTap: () => _hoja(context, lista),
+          onTap: () => _hoja(context, ref, lista),
         ),
       ],
     );
@@ -209,40 +204,44 @@ class _Estancados extends ConsumerWidget {
 
   Future<void> _hoja(
     BuildContext context,
+    WidgetRef ref,
     List<progresion.EjercicioEstancado> lista,
   ) async {
-    final elegido = await showCupertinoModalPopup<progresion.EjercicioEstancado>(
-      context: context,
-      builder: (hoja) => CupertinoActionSheet(
-        title: const Text('Ejercicios estancados'),
-        message: const Text(avisoDescarga),
-        actions: [
-          for (final e in lista)
-            CupertinoActionSheetAction(
-              onPressed: () => Navigator.pop(hoja, e),
-              child: Column(
-                children: [
-                  Text(e.nombre),
-                  Text(
-                    '${formato.plural(e.sesionesSinMejorar, 'sesión', 'sesiones')} '
-                    '· última ${formato.fechaCorta(e.ultimaFecha)}',
-                    style: ui.estilo(
-                      hoja,
-                      size: t.footnote,
-                      color: hoja.textoSec,
-                    ),
+    final elegido =
+        await showCupertinoModalPopup<progresion.EjercicioEstancado>(
+          context: context,
+          builder: (hoja) => CupertinoActionSheet(
+            title: Text(hoja.t.progresoEstancadosTitulo),
+            message: Text(avisoDescarga(hoja.t)),
+            actions: [
+              for (final e in lista)
+                CupertinoActionSheetAction(
+                  onPressed: () => Navigator.pop(hoja, e),
+                  child: Column(
+                    children: [
+                      Text(e.nombre),
+                      Text(
+                        hoja.t.progresoEstancadoLinea(
+                          hoja.t.comunSesiones(e.sesionesSinMejorar),
+                          leerFormato(hoja, ref).fechaCorta(e.ultimaFecha),
+                        ),
+                        style: ui.estilo(
+                          hoja,
+                          size: t.footnote,
+                          color: hoja.textoSec,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+            ],
+            cancelButton: CupertinoActionSheetAction(
+              isDefaultAction: true,
+              onPressed: () => Navigator.pop(hoja),
+              child: Text(hoja.t.comunCerrar),
             ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          isDefaultAction: true,
-          onPressed: () => Navigator.pop(hoja),
-          child: const Text('Cerrar'),
-        ),
-      ),
-    );
+          ),
+        );
 
     if (elegido == null || !context.mounted) return;
     await abrirResultadoEjercicio(
@@ -275,9 +274,9 @@ class _Semana extends ConsumerWidget {
     final sesiones = ref.watch(sesionesRecientesProvider).value ?? const [];
     if (sesiones.isEmpty) return const SizedBox.shrink();
 
-    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
+    final f = formatoDe(context, ref);
     final colores = ref.watch(coloresRutinasProvider).value ?? const {};
-    final objetivo = ajustes.sesionesPorSemana;
+    final objetivo = f.ajustes.sesionesPorSemana;
 
     // El «hoy» sale del reloj de la app y no de `DateTime.now()`, que es lo que
     // permite a los tests fijar la semana en vez de depender de cuándo corran.
@@ -300,7 +299,7 @@ class _Semana extends ConsumerWidget {
     ).difference(DateTime(ultima.year, ultima.month, ultima.day)).inDays;
 
     return ui.Grupo(
-      cabecera: 'Esta semana',
+      cabecera: context.t.progresoEstaSemana,
       filas: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: t.m, vertical: t.m),
@@ -311,13 +310,16 @@ class _Semana extends ConsumerWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      '${estaSemana.sesiones} de $objetivo',
+                      context.t.progresoSesionesDeObjetivo(
+                        estaSemana.sesiones,
+                        objetivo,
+                      ),
                       style: ui.estilo(context, size: t.title2, weight: t.bold),
                     ),
                   ),
                   Flexible(
                     child: Text(
-                      formato.peso(estaSemana.volumen, ajustes),
+                      f.peso(estaSemana.volumen),
                       textAlign: TextAlign.right,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -350,8 +352,7 @@ class _Semana extends ConsumerWidget {
                     const SizedBox(width: t.xs),
                     Flexible(
                       child: Text(
-                        '${formato.plural(racha, 'semana', 'semanas')} '
-                        'seguidas cumpliendo el objetivo',
+                        context.t.progresoRacha(context.t.comunSemanas(racha)),
                         style: ui.estilo(context, size: t.footnote),
                       ),
                     ),
@@ -361,8 +362,9 @@ class _Semana extends ConsumerWidget {
               if (diasSinEntrenar > _diasAviso) ...[
                 const SizedBox(height: t.m),
                 Text(
-                  'Hace ${formato.plural(diasSinEntrenar, 'día', 'días')} de '
-                  'tu último entrenamiento',
+                  context.t.progresoSinEntrenarDesde(
+                    context.t.comunDias(diasSinEntrenar),
+                  ),
                   style: ui.estilo(
                     context,
                     size: t.footnote,
@@ -373,7 +375,12 @@ class _Semana extends ConsumerWidget {
             ],
           ),
         ),
-        _UltimosDias(sesiones: sesiones, colores: colores, hoy: hoy),
+        _UltimosDias(
+          sesiones: sesiones,
+          colores: colores,
+          formato: f,
+          hoy: hoy,
+        ),
       ],
     );
   }
@@ -400,16 +407,19 @@ class _Comparativa extends StatelessWidget {
       children: [
         Expanded(
           child: _Variacion(
-            texto:
-                '${conSigno(sesiones)} '
-                '${sesiones.abs() == 1 ? 'sesión' : 'sesiones'}',
+            texto: context.t.progresoVariacionSesiones(
+              conSigno(sesiones),
+              sesiones.abs(),
+            ),
             signo: sesiones,
           ),
         ),
         if (volumen != null)
           Expanded(
             child: _Variacion(
-              texto: '${conSigno((volumen * 100).round())} % de volumen',
+              texto: context.t.progresoVariacionVolumen(
+                conSigno((volumen * 100).round()),
+              ),
               signo: volumen,
             ),
           ),
@@ -445,17 +455,19 @@ class _Variacion extends StatelessWidget {
 
 /// Siete puntos, uno por día de la semana en curso, con el color de la rutina.
 ///
-/// De lunes a domingo, coherente con `formato.diasSemana` y con la semana que
-/// mide la racha.
+/// De lunes a domingo, coherente con `Formato.inicialesSemana` y con la semana
+/// que mide la racha.
 class _UltimosDias extends StatelessWidget {
   const _UltimosDias({
     required this.sesiones,
     required this.colores,
+    required this.formato,
     required this.hoy,
   });
 
   final List<SesionConVolumen> sesiones;
   final Map<int, (String, String)> colores;
+  final Formato formato;
   final DateTime hoy;
 
   @override
@@ -485,7 +497,7 @@ class _UltimosDias extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          for (final (indice, etiqueta) in formato.diasSemana.indexed)
+          for (final (indice, etiqueta) in formato.inicialesSemana.indexed)
             Builder(
               builder: (_) {
                 final cuando = lunes.add(Duration(days: indice));
@@ -541,7 +553,7 @@ class _Cuerpo extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
+    final f = formatoDe(context, ref);
     final ultimoPeso = ref.watch(ultimaMedidaProvider('peso')).value;
     final dias = ultimoPeso == null
         ? null
@@ -555,20 +567,24 @@ class _Cuerpo extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: t.l, vertical: t.s),
             child: ui.BotonPrincipal(
               ultimoPeso == null
-                  ? 'Registrar tu peso'
-                  : 'Actualizar tu peso (${formato.hace(ultimoPeso.fecha).toLowerCase()})',
+                  ? context.t.progresoRegistrarPeso
+                  : context.t.progresoActualizarPeso(
+                      f.hace(ultimoPeso.fecha).toLowerCase(),
+                    ),
               icono: CupertinoIcons.plus_circle,
               onPressed: () => registrarMedida(context, ref, 'peso'),
             ),
           ),
         ui.Grupo(
-          cabecera: 'Medidas',
-          pie:
-              'El peso corporal es el contexto de las cargas: subir en press '
-              'perdiendo peso no es lo mismo que subir ganándolo.',
+          cabecera: context.t.progresoMedidas,
+          pie: context.t.progresoMedidasPie,
           filas: [
-            for (final (clave, nombre, _) in tiposMedida)
-              _FilaMedida(clave: clave, nombre: nombre, ajustes: ajustes),
+            for (final (clave, _) in tiposMedida)
+              _FilaMedida(
+                clave: clave,
+                nombre: etiquetaMedida(context.t, clave).$1,
+                formato: f,
+              ),
           ],
         ),
       ],
@@ -580,12 +596,12 @@ class _FilaMedida extends ConsumerWidget {
   const _FilaMedida({
     required this.clave,
     required this.nombre,
-    required this.ajustes,
+    required this.formato,
   });
 
   final String clave;
   final String nombre;
-  final Ajustes ajustes;
+  final Formato formato;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -595,13 +611,15 @@ class _FilaMedida extends ConsumerWidget {
       backgroundColor: context.tarjeta,
       title: Text(nombre, style: ui.estilo(context)),
       subtitle: Text(
-        ultima == null ? 'Sin registros' : formato.hace(ultima.fecha),
+        ultima == null
+            ? context.t.comunSinRegistros
+            : formato.hace(ultima.fecha),
         style: ui.estilo(context, size: t.footnote, color: context.textoSec),
       ),
       additionalInfo: ultima == null
           ? null
           : Text(
-              valorMedida(ultima.valor, clave, ajustes),
+              valorMedida(ultima.valor, clave, formato),
               style: ui.estilo(context, weight: t.semibold),
             ),
       trailing: const CupertinoListTileChevron(),
@@ -675,7 +693,7 @@ class _Calendario extends ConsumerWidget {
                     ),
                     Expanded(
                       child: Text(
-                        '${formato.mes(mes.month)} ${mes.year}',
+                        formatoDe(context, ref).mesYAno(mes),
                         textAlign: TextAlign.center,
                         style: ui.estilo(
                           context,
@@ -703,7 +721,10 @@ class _Calendario extends ConsumerWidget {
                   mainAxisSpacing: t.xs,
                   crossAxisSpacing: t.xs,
                   children: [
-                    for (final etiqueta in formato.diasSemana)
+                    for (final etiqueta in formatoDe(
+                      context,
+                      ref,
+                    ).inicialesSemana)
                       Center(
                         child: Text(
                           etiqueta,
@@ -742,7 +763,7 @@ class _Calendario extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: t.l),
             child: Text(
-              'Ningún entrenamiento este mes',
+              context.t.progresoMesVacio,
               style: ui.estilo(
                 context,
                 size: t.footnote,
@@ -795,7 +816,7 @@ Future<void> _abrirDia(
   required List<SesionDelDia> sesiones,
   required Map<int, (String, String)> colores,
 }) async {
-  final ajustes = ref.read(ajustesProvider).value ?? const Ajustes();
+  final f = leerFormato(context, ref);
 
   if (sesiones.isEmpty) {
     await _registrarEnDia(context, ref, dia);
@@ -805,8 +826,8 @@ Future<void> _abrirDia(
   final elegida = await showCupertinoModalPopup<int>(
     context: context,
     builder: (hoja) => CupertinoActionSheet(
-      title: Text(formato.fechaLarga(dia)),
-      message: Text(formato.plural(sesiones.length, 'sesión', 'sesiones')),
+      title: Text(f.fechaLarga(dia)),
+      message: Text(context.t.comunSesiones(sesiones.length)),
       actions: [
         for (final s in sesiones)
           CupertinoActionSheetAction(
@@ -822,7 +843,8 @@ Future<void> _abrirDia(
                     const SizedBox(width: t.s),
                     Flexible(
                       child: Text(
-                        colores[s.idRutina]?.$1 ?? 'Sesión',
+                        colores[s.idRutina]?.$1 ??
+                            hoja.t.progresoSesionSinRutina,
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -831,11 +853,11 @@ Future<void> _abrirDia(
                 const SizedBox(height: t.xs),
                 Text(
                   [
-                    formato.hora(s.fecha),
+                    f.hora(s.fecha),
                     if (s.duracionSeg case final segundos?)
-                      formato.duracion(segundos),
-                    formato.plural(s.nEjercicios, 'ejercicio', 'ejercicios'),
-                    formato.peso(s.volumen, ajustes),
+                      f.duracion(segundos),
+                    context.t.comunEjercicios(s.nEjercicios),
+                    f.peso(s.volumen),
                   ].join(' · '),
                   textAlign: TextAlign.center,
                   style: ui.estilo(
@@ -851,7 +873,7 @@ Future<void> _abrirDia(
       cancelButton: CupertinoActionSheetAction(
         isDefaultAction: true,
         onPressed: () => Navigator.pop(hoja),
-        child: const Text('Cancelar'),
+        child: Text(hoja.t.comunCancelar),
       ),
     ),
   );
@@ -871,15 +893,16 @@ Future<void> _registrarEnDia(
 ) async {
   final rutinas = ref.read(resumenRutinasProvider).value ?? const [];
   if (rutinas.isEmpty) {
-    ui.aviso(context, 'Crea antes una rutina');
+    ui.aviso(context, context.t.comunCreaAntesRutina);
     return;
   }
 
   final confirmado = await ui.elegirEnHoja<int>(
     context,
-    titulo: formato.fechaLarga(dia),
-    mensaje: 'Registrar un entrenamiento en este día',
+    titulo: leerFormato(context, ref).fechaLarga(dia),
+    mensaje: context.t.progresoRegistrarEnDia,
     opciones: [for (final r in rutinas) (r.id, r.nombre)],
+    etiquetaCancelar: context.t.comunCancelar,
   );
   if (confirmado == null || !context.mounted) return;
 

@@ -9,9 +9,9 @@ library;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../datos/formato.dart' as formato;
 import '../datos/media.dart' as media;
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -39,10 +39,10 @@ class _RaizState extends ConsumerState<Raiz> {
     return CupertinoPageScaffold(
       backgroundColor: context.fondo,
       child: arranque.when(
-        loading: () => const ui.Cargando(mensaje: 'Preparando el catálogo…'),
+        loading: () => ui.Cargando(mensaje: context.t.raizPreparando),
         error: (e, _) => ui.EstadoVacio(
           icono: CupertinoIcons.exclamationmark_triangle,
-          titulo: 'No se pudo cargar el catálogo',
+          titulo: context.t.raizErrorCatalogo,
           subtitulo: '$e',
         ),
         data: (catalogo) {
@@ -100,12 +100,14 @@ class _PestanasState extends ConsumerState<Pestanas> {
     final continuar = await showCupertinoDialog<bool>(
       context: context,
       builder: (dialogo) => CupertinoAlertDialog(
-        title: const Text('Tienes un entrenamiento empezado'),
+        title: Text(context.t.raizContinuarTitulo),
         content: Padding(
           padding: const EdgeInsets.only(top: t.s),
           child: Text(
-            '«${rutina.nombre}», empezado '
-            '${formato.desde(borrador.inicio)}.',
+            context.t.raizContinuarMensaje(
+              rutina.nombre,
+              leerFormato(context, ref).desde(borrador.inicio),
+            ),
             textAlign: TextAlign.center,
           ),
         ),
@@ -113,12 +115,12 @@ class _PestanasState extends ConsumerState<Pestanas> {
           CupertinoDialogAction(
             isDestructiveAction: true,
             onPressed: () => Navigator.pop(dialogo, false),
-            child: const Text('Descartar'),
+            child: Text(context.t.raizDescartar),
           ),
           CupertinoDialogAction(
             isDefaultAction: true,
             onPressed: () => Navigator.pop(dialogo, true),
-            child: const Text('Continuar'),
+            child: Text(context.t.raizContinuar),
           ),
         ],
       ),
@@ -141,18 +143,18 @@ class _PestanasState extends ConsumerState<Pestanas> {
       activeColor: context.acento,
       inactiveColor: context.textoSec,
       border: Border(top: BorderSide(color: context.separador, width: 0.5)),
-      items: const [
+      items: [
         BottomNavigationBarItem(
-          icon: Icon(CupertinoIcons.list_bullet),
-          label: 'Rutinas',
+          icon: const Icon(CupertinoIcons.list_bullet),
+          label: context.t.raizRutinas,
         ),
         BottomNavigationBarItem(
-          icon: Icon(CupertinoIcons.search),
-          label: 'Ejercicios',
+          icon: const Icon(CupertinoIcons.search),
+          label: context.t.comunEjerciciosCabecera,
         ),
         BottomNavigationBarItem(
-          icon: Icon(CupertinoIcons.chart_bar_alt_fill),
-          label: 'Progreso',
+          icon: const Icon(CupertinoIcons.chart_bar_alt_fill),
+          label: context.t.comunProgreso,
         ),
       ],
     ),

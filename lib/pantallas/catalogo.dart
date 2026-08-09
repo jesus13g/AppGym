@@ -10,16 +10,18 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
-import '../datos/formato.dart' as formato;
+import '../datos/formato.dart';
 import '../datos/i18n.dart' as i18n;
 import '../datos/musculos.dart';
 import '../datos/media.dart' as media;
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
 import 'anadir_a_rutina.dart';
 import 'ficha.dart';
+import 'musculatura.dart' show nombreRegion;
 
 /// Resultados por tanda. Nunca se pintan los 1.324 de golpe.
 const _pagina = 40;
@@ -27,19 +29,39 @@ const _pagina = 40;
 /// Reposo antes de lanzar la consulta, para no buscar en cada tecla.
 const _esperaBusqueda = Duration(milliseconds: 250);
 
-const _zonas = <(String?, String)>[
-  (null, 'Todas'),
-  ('chest', 'Pecho'),
-  ('back', 'Espalda'),
-  ('upper legs', 'Piernas'),
-  ('lower legs', 'Gemelos'),
-  ('shoulders', 'Hombros'),
-  ('upper arms', 'Brazos'),
-  ('lower arms', 'Antebrazos'),
-  ('waist', 'Core'),
-  ('cardio', 'Cardio'),
-  ('neck', 'Cuello'),
+/// Los filtros rápidos, por su valor de `bodyPart` en el dataset.
+///
+/// La constante se queda solo con lo que no depende del idioma —la clave, que
+/// además está escrita en la columna `bodyPart` del catálogo—; la etiqueta se
+/// resuelve donde hay contexto, en [_etiquetaZona]. Son deliberadamente más
+/// cortas que las de `i18n.zonaCuerpo`: aquí caben diez píldoras en una fila.
+const _zonas = <String?>[
+  null,
+  'chest',
+  'back',
+  'upper legs',
+  'lower legs',
+  'shoulders',
+  'upper arms',
+  'lower arms',
+  'waist',
+  'cardio',
+  'neck',
 ];
+
+String _etiquetaZona(Textos t, String? zona) => switch (zona) {
+  'chest' => t.catalogoZonaPecho,
+  'back' => t.catalogoZonaEspalda,
+  'upper legs' => t.catalogoZonaPiernas,
+  'lower legs' => t.catalogoZonaGemelos,
+  'shoulders' => t.catalogoZonaHombros,
+  'upper arms' => t.catalogoZonaBrazos,
+  'lower arms' => t.catalogoZonaAntebrazos,
+  'waist' => t.catalogoZonaCore,
+  'cardio' => t.catalogoZonaCardio,
+  'neck' => t.catalogoZonaCuello,
+  _ => t.comunTodas,
+};
 
 /// Abre el modal de alta de ejercicios sobre una rutina.
 Future<void> abrirAnadirEjercicio(BuildContext context, int idRutina) =>
@@ -171,7 +193,7 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
 
   Future<void> _anadir(FichaCatalogo ficha) async {
     if (_yaEnRutina.contains(ficha.id)) {
-      ui.aviso(context, 'Ya está en la rutina');
+      ui.aviso(context, context.t.catalogoYaEnRutina);
       return;
     }
     final bien = await ref
@@ -184,21 +206,22 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
     if (!mounted) return;
 
     if (!bien) {
-      ui.aviso(context, 'No se pudo añadir el ejercicio');
+      ui.aviso(context, context.t.catalogoErrorAnadir);
       return;
     }
     setState(() => _yaEnRutina = {..._yaEnRutina, ficha.id});
     invalidarRutina(ref, widget.idRutina!);
-    ui.aviso(context, '«${ficha.nombre}» añadido');
+    ui.aviso(context, context.t.catalogoAnadido(ficha.nombre));
   }
 
   Future<void> _crearPersonalizado() async {
     final nombre = await ui.dialogoTexto(
       context,
-      titulo: 'Ejercicio personalizado',
-      marcador: 'Nombre del ejercicio',
-      mensaje: 'Para lo que no esté en el catálogo.',
-      etiquetaAceptar: 'Añadir',
+      titulo: context.t.comunEjercicioPersonalizado,
+      marcador: context.t.catalogoPersonalizadoMarcador,
+      mensaje: context.t.catalogoPersonalizadoMensaje,
+      etiquetaAceptar: context.t.comunAnadir,
+      etiquetaCancelar: context.t.comunCancelar,
     );
     if (nombre == null || !mounted) return;
 
@@ -208,7 +231,7 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
     if (!mounted) return;
 
     if (!bien) {
-      ui.aviso(context, 'Ya tienes un ejercicio con ese nombre');
+      ui.aviso(context, context.t.catalogoPersonalizadoRepetido);
       return;
     }
     invalidarRutina(ref, widget.idRutina!);
@@ -222,22 +245,22 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
     final elegido = await showCupertinoModalPopup<(String?,)>(
       context: context,
       builder: (hoja) => CupertinoActionSheet(
-        title: const Text('Equipamiento'),
+        title: Text(hoja.t.catalogoFiltroEquipamiento),
         actions: [
           CupertinoActionSheetAction(
             onPressed: () => Navigator.pop(hoja, (null,)),
-            child: const Text('Todos'),
+            child: Text(hoja.t.comunTodos),
           ),
           for (final valor in disponibles)
             CupertinoActionSheetAction(
               onPressed: () => Navigator.pop(hoja, (valor,)),
-              child: Text(i18n.equipamiento(valor)),
+              child: Text(formatoDe(context, ref).equipamiento(valor)),
             ),
         ],
         cancelButton: CupertinoActionSheetAction(
           isDefaultAction: true,
           onPressed: () => Navigator.pop(hoja),
-          child: const Text('Cancelar'),
+          child: Text(hoja.t.comunCancelar),
         ),
       ),
     );
@@ -257,13 +280,20 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
 
     final elegido = await ui.elegirEnHoja<String?>(
       context,
-      titulo: 'Músculo objetivo',
+      titulo: context.t.catalogoMusculoObjetivo,
       actual: _objetivo,
       opciones: [
-        (null, 'Todos'),
+        (null, context.t.comunTodos),
         for (final (valor, cuantos) in disponibles)
-          (valor, '${i18n.musculo(valor)} · $cuantos'),
+          (
+            valor,
+            context.t.catalogoOpcionConCuenta(
+              formatoDe(context, ref).musculo(valor),
+              cuantos,
+            ),
+          ),
       ],
+      etiquetaCancelar: context.t.comunCancelar,
     );
     if (elegido == null || !mounted) return;
 
@@ -283,9 +313,9 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
   @override
   Widget build(BuildContext context) {
     final titulo = switch ((_esModal, widget.region)) {
-      (true, _) => 'Añadir ejercicio',
-      (false, final region?) => regiones[region]!.nombre,
-      _ => 'Ejercicios',
+      (true, _) => context.t.catalogoTituloModal,
+      (false, final region?) => nombreRegion(context.t, region),
+      _ => context.t.comunEjerciciosCabecera,
     };
 
     return CupertinoPageScaffold(
@@ -298,7 +328,7 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
                 padding: EdgeInsets.zero,
                 minimumSize: Size.zero,
                 onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancelar'),
+                child: Text(context.t.comunCancelar),
               )
             : null,
         derecha: _esModal
@@ -307,7 +337,7 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
                 minimumSize: Size.zero,
                 onPressed: _crearPersonalizado,
                 child: Text(
-                  'Personalizado',
+                  context.t.catalogoPersonalizado,
                   style: ui.estilo(
                     context,
                     size: t.subhead,
@@ -327,11 +357,12 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
               ),
               child: CupertinoSearchTextField(
                 controller: _campo,
-                placeholder: 'Buscar ejercicio, músculo o material',
+                placeholder: context.t.catalogoBuscar,
                 onChanged: _buscar,
               ),
             ),
             _Filtros(
+              formato: formatoDe(context, ref),
               zona: _zona,
               equipo: _equipo,
               objetivo: _objetivo,
@@ -357,19 +388,18 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
 
   String get _contador {
     if (_resultados.isEmpty) return '';
-    if (_hayMas) return '${_resultados.length}+ ejercicios';
-    return formato.plural(_resultados.length, 'ejercicio', 'ejercicios');
+    if (_hayMas) return context.t.catalogoHayMas(_resultados.length);
+    return context.t.comunEjercicios(_resultados.length);
   }
 
   Widget _lista() {
     if (_resultados.isEmpty) {
       return _cargando
           ? const ui.Cargando()
-          : const ui.EstadoVacio(
+          : ui.EstadoVacio(
               icono: CupertinoIcons.search,
-              titulo: 'Sin resultados',
-              subtitulo:
-                  'Prueba con otro término o quita alguno de los filtros.',
+              titulo: context.t.catalogoSinResultados,
+              subtitulo: context.t.catalogoSinResultadosDetalle,
             );
     }
 
@@ -408,7 +438,7 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
       leadingSize: 48,
       title: Text(ficha.nombre, style: ui.estilo(context)),
       subtitle: Text(
-        formato.subtituloCatalogo(ficha),
+        formatoDe(context, ref).subtituloCatalogo(ficha),
         style: ui.estilo(context, size: t.footnote, color: context.textoSec),
       ),
       trailing: Row(
@@ -478,9 +508,12 @@ class _PantallaCatalogoState extends ConsumerState<PantallaCatalogo> {
         ),
       ),
       leadingSize: 48,
-      title: Text('Crear ejercicio personalizado', style: ui.estilo(context)),
+      title: Text(
+        context.t.catalogoCrearPersonalizado,
+        style: ui.estilo(context),
+      ),
       subtitle: Text(
-        'Si no encuentras lo que buscas',
+        context.t.catalogoCrearPersonalizadoDetalle,
         style: ui.estilo(context, size: t.footnote, color: context.textoSec),
       ),
       trailing: const CupertinoListTileChevron(),
@@ -506,9 +539,9 @@ class _Destacados extends ConsumerWidget {
     return Column(
       children: [
         if (favoritos.isNotEmpty)
-          _seccion(context, ref, 'Favoritos', favoritos),
+          _seccion(context, ref, context.t.catalogoFavoritos, favoritos),
         if (vistos.isNotEmpty)
-          _seccion(context, ref, 'Vistos recientemente', vistos),
+          _seccion(context, ref, context.t.catalogoVistos, vistos),
         Padding(
           padding: const EdgeInsets.only(
             left: t.l,
@@ -517,7 +550,7 @@ class _Destacados extends ConsumerWidget {
             bottom: t.xs,
           ),
           child: Text(
-            'TODOS LOS EJERCICIOS',
+            context.t.catalogoTodosLosEjercicios,
             style: ui.estilo(
               context,
               size: t.footnote,
@@ -544,7 +577,7 @@ class _Destacados extends ConsumerWidget {
           leadingSize: 40,
           title: Text(ficha.nombre, style: ui.estilo(context)),
           subtitle: Text(
-            formato.subtituloCatalogo(ficha),
+            formatoDe(context, ref).subtituloCatalogo(ficha),
             style: ui.estilo(
               context,
               size: t.footnote,
@@ -569,6 +602,7 @@ class _Destacados extends ConsumerWidget {
 
 class _Filtros extends StatelessWidget {
   const _Filtros({
+    required this.formato,
     required this.zona,
     required this.equipo,
     required this.objetivo,
@@ -580,6 +614,7 @@ class _Filtros extends StatelessWidget {
     required this.onQuitarRegion,
   });
 
+  final Formato formato;
   final String? zona;
   final String? equipo;
   final String? objetivo;
@@ -603,12 +638,12 @@ class _Filtros extends StatelessWidget {
             itemCount: _zonas.length,
             separatorBuilder: (_, _) => const SizedBox(width: t.s),
             itemBuilder: (context, indice) {
-              final (valor, etiqueta) = _zonas[indice];
+              final valor = _zonas[indice];
               final activo = zona == valor;
               return GestureDetector(
                 onTap: () => onZona(valor),
                 child: ui.Pildora(
-                  etiqueta,
+                  _etiquetaZona(context.t, valor),
                   color: activo ? CupertinoColors.white : context.texto,
                   relleno: activo ? context.acento : context.relleno,
                 ),
@@ -621,7 +656,9 @@ class _Filtros extends StatelessWidget {
           children: [
             _desplegable(
               context,
-              equipo == null ? 'Equipamiento' : i18n.equipamiento(equipo),
+              equipo == null
+                  ? context.t.catalogoFiltroEquipamiento
+                  : formato.equipamiento(equipo),
               onEquipo,
             ),
             const SizedBox(width: t.l),
@@ -631,7 +668,9 @@ class _Filtros extends StatelessWidget {
               GestureDetector(
                 onTap: onQuitarRegion,
                 child: ui.Pildora(
-                  '${regiones[region]!.nombre}  ✕',
+                  context.t.catalogoQuitarRegion(
+                    nombreRegion(context.t, region),
+                  ),
                   color: CupertinoColors.white,
                   relleno: context.acento,
                 ),
@@ -639,7 +678,9 @@ class _Filtros extends StatelessWidget {
             else
               _desplegable(
                 context,
-                objetivo == null ? 'Músculo' : i18n.musculo(objetivo),
+                objetivo == null
+                    ? context.t.catalogoFiltroMusculo
+                    : formato.musculo(objetivo),
                 onObjetivo,
               ),
             const Spacer(),

@@ -73,6 +73,23 @@ enum Perfil {
 /// Brillo de la interfaz.
 enum Tema { sistema, claro, oscuro }
 
+/// Idioma de la interfaz.
+///
+/// `auto` (código nulo) significa seguir al del sistema: `CupertinoApp` recibe
+/// `locale: null` y Flutter resuelve contra `idiomasSoportados`, cayendo al
+/// **primero** de la lista —el español— si el móvil está en un idioma que no
+/// tenemos.
+enum Idioma {
+  auto(null),
+  es('es'),
+  en('en');
+
+  const Idioma(this.codigo);
+
+  /// El código ISO, o `null` para seguir al sistema.
+  final String? codigo;
+}
+
 /// Claves de la tabla `ajustes`.
 ///
 /// Son texto porque acaban en una columna de texto; cambiarlas equivale a
@@ -93,6 +110,11 @@ abstract final class Claves {
   static const repMin = 'rep_min';
   static const repMax = 'rep_max';
   static const perfilProgresion = 'perfil_progresion';
+  static const idioma = 'idioma';
+
+  /// Versión del índice de búsqueda del catálogo. No es una preferencia del
+  /// usuario: vive aquí porque es el sitio donde ya hay una tabla clave/valor.
+  static const versionIndice = 'version_indice';
 }
 
 /// Pasos de peso que se ofrecen, en la unidad activa.
@@ -119,6 +141,7 @@ class Ajustes {
     this.repMinGlobal = 8,
     this.repMaxGlobal = 12,
     this.perfilProgresion = Perfil.estandar,
+    this.idioma = Idioma.auto,
   });
 
   /// Interpreta las filas de la tabla. Lo que falte o no se entienda se queda
@@ -200,6 +223,13 @@ class Ajustes {
         'agresivo' => Perfil.agresivo,
         _ => Perfil.estandar,
       },
+      // Un código que no conocemos —o basura— vuelve a «seguir al sistema», que
+      // es lo que hacía la app antes de que existiera esta preferencia.
+      idioma: switch (valores[Claves.idioma]) {
+        'es' => Idioma.es,
+        'en' => Idioma.en,
+        _ => Idioma.auto,
+      },
     );
   }
 
@@ -245,6 +275,11 @@ class Ajustes {
 
   final Perfil perfilProgresion;
 
+  /// Idioma de la interfaz. Entra en la copia de seguridad como el resto de
+  /// las preferencias, que es lo que hace que dos móviles del mismo usuario se
+  /// vean igual.
+  final Idioma idioma;
+
   /// Cómo se escribe cada ajuste en la tabla. Es la vuelta de [desdeMapa].
   static String texto(Object valor) => switch (valor) {
     final bool v => v ? '1' : '0',
@@ -260,6 +295,9 @@ class Ajustes {
     Perfil.conservador => 'conservador',
     Perfil.estandar => 'estandar',
     Perfil.agresivo => 'agresivo',
+    Idioma.auto => 'auto',
+    Idioma.es => 'es',
+    Idioma.en => 'en',
     _ => '$valor',
   };
 

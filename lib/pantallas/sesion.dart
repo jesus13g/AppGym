@@ -8,8 +8,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
-import '../datos/formato.dart' as formato;
+import '../datos/formato.dart';
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -34,10 +35,10 @@ class PantallaSesion extends ConsumerWidget {
   ) async {
     final confirmado = await ui.dialogoConfirmar(
       context,
-      titulo: '¿Eliminar la sesión?',
-      mensaje:
-          'Se borrarán sus series y dejará de contar en el calendario y en '
-          'las estadísticas. No se puede deshacer.',
+      titulo: context.t.comunEliminarSesionTitulo,
+      mensaje: context.t.comunEliminarSesionMensaje,
+      etiquetaAceptar: context.t.comunEliminar,
+      etiquetaCancelar: context.t.comunCancelar,
     );
     if (!confirmado || !context.mounted) return;
 
@@ -49,21 +50,21 @@ class PantallaSesion extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sesion = ref.watch(sesionProvider(idEntrenamiento));
-    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
+    final f = formatoDe(context, ref);
 
     return CupertinoPageScaffold(
       backgroundColor: context.fondo,
       navigationBar: ui.barra(
         context,
-        titulo: 'Sesión',
-        tituloAnterior: 'Sesiones',
+        titulo: context.t.sesionTitulo,
+        tituloAnterior: context.t.historialTitulo,
         derecha: switch (sesion.value) {
           final datos? => CupertinoButton(
             padding: EdgeInsets.zero,
             minimumSize: Size.zero,
             onPressed: () =>
                 abrirEditarEntrenamiento(context, datos.idRutina, datos.id),
-            child: const Text('Editar'),
+            child: Text(context.t.sesionEditar),
           ),
           _ => null,
         },
@@ -73,17 +74,17 @@ class PantallaSesion extends ConsumerWidget {
           loading: () => const ui.Cargando(),
           error: (e, _) => ui.EstadoVacio(
             icono: CupertinoIcons.exclamationmark_triangle,
-            titulo: 'No se pudo cargar la sesión',
+            titulo: context.t.sesionError,
             subtitulo: '$e',
           ),
           data: (datos) => datos == null
-              ? const ui.EstadoVacio(
+              ? ui.EstadoVacio(
                   icono: CupertinoIcons.exclamationmark_triangle,
-                  titulo: 'Esta sesión ya no existe',
+                  titulo: context.t.sesionNoExiste,
                 )
               : _Contenido(
                   sesion: datos,
-                  ajustes: ajustes,
+                  formato: f,
                   onEliminar: () => _eliminar(context, ref, datos),
                 ),
         ),
@@ -95,14 +96,14 @@ class PantallaSesion extends ConsumerWidget {
 class _Contenido extends StatelessWidget {
   const _Contenido({
     required this.sesion,
-    required this.ajustes,
+    required this.formato,
     required this.onEliminar,
   });
 
   final SesionCompleta sesion;
 
   /// De aquí salen la unidad del peso y la escala del esfuerzo.
-  final Ajustes ajustes;
+  final Formato formato;
 
   final VoidCallback onEliminar;
 
@@ -141,14 +142,17 @@ class _Contenido extends StatelessWidget {
               ),
               Expanded(child: _Dato('$nSeries', 'Series')),
               Expanded(
-                child: _Dato(formato.peso(sesion.volumen, ajustes), 'Volumen'),
+                child: _Dato(
+                  formato.peso(sesion.volumen),
+                  context.t.comunVolumen,
+                ),
               ),
             ],
           ),
         ),
         if (sesion.nota case final nota?)
           ui.Grupo(
-            cabecera: 'Notas',
+            cabecera: context.t.sesionNotas,
             filas: [
               Padding(
                 padding: const EdgeInsets.symmetric(
@@ -190,7 +194,7 @@ class _Contenido extends StatelessWidget {
                     final valores => Text(
                       [
                         if (valores.$1 case final rpe?)
-                          formato.esfuerzo(rpe, ajustes.escala),
+                          formato.esfuerzo(rpe, formato.ajustes.escala),
                         ?valores.$2,
                       ].join(' · '),
                       style: ui.estilo(
@@ -201,7 +205,7 @@ class _Contenido extends StatelessWidget {
                     ),
                   },
                   additionalInfo: Text(
-                    formato.peso(serie.peso, ajustes),
+                    formato.peso(serie.peso),
                     style: ui.estilo(context, color: context.textoSec),
                   ),
                 ),
@@ -210,7 +214,7 @@ class _Contenido extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.all(t.l),
           child: ui.BotonPrincipal(
-            'Eliminar sesión',
+            context.t.sesionEliminar,
             icono: CupertinoIcons.delete,
             color: context.destructivo,
             onPressed: onEliminar,

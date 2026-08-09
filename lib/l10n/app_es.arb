@@ -1,0 +1,2218 @@
+{
+  "@@locale": "es",
+  "comunGuardar": "Guardar",
+  "@comunGuardar": {
+    "description": "Botón de confirmación de un formulario o diálogo"
+  },
+  "comunCancelar": "Cancelar",
+  "@comunCancelar": {
+    "description": "Botón que descarta un diálogo o una hoja sin hacer nada"
+  },
+  "comunEliminar": "Eliminar",
+  "@comunEliminar": {
+    "description": "Botón destructivo de un diálogo de confirmación"
+  },
+  "comunListo": "Listo",
+  "@comunListo": {
+    "description": "Botón que cierra el selector de fecha aceptando el valor"
+  },
+  "comunSinEntrenar": "Sin entrenar",
+  "@comunSinEntrenar": {
+    "description": "Una rutina o un músculo que no se ha trabajado nunca"
+  },
+  "comunEjercicioPersonalizado": "Ejercicio personalizado",
+  "@comunEjercicioPersonalizado": {
+    "description": "Subtítulo de un ejercicio que el usuario creó a mano, sin ficha del catálogo"
+  },
+  "comunSeries": "{n, plural, =1{1 serie} other{{n} series}}",
+  "@comunSeries": {
+    "description": "Un recuento de series",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "comunRepeticiones": "{n, plural, =1{1 repetición} other{{n} repeticiones}}",
+  "@comunRepeticiones": {
+    "description": "Un recuento de repeticiones",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "comunEjercicios": "{n, plural, =1{1 ejercicio} other{{n} ejercicios}}",
+  "@comunEjercicios": {
+    "description": "Un recuento de ejercicios",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "comunEjerciciosPersonalizados": "{n, plural, =1{1 ejercicio personalizado} other{{n} ejercicios personalizados}}",
+  "@comunEjerciciosPersonalizados": {
+    "description": "Un recuento de ejercicios creados a mano por el usuario",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "comunSesiones": "{n, plural, =1{1 sesión} other{{n} sesiones}}",
+  "@comunSesiones": {
+    "description": "Un recuento de entrenamientos hechos",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "comunSemanas": "{n, plural, =1{1 semana} other{{n} semanas}}",
+  "@comunSemanas": {
+    "description": "Un recuento de semanas, por ejemplo la racha",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "comunDias": "{n, plural, =1{1 día} other{{n} días}}",
+  "@comunDias": {
+    "description": "Un recuento de días",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "haceDias": "{dias, plural, =0{Hoy} =1{Ayer} other{Hace {dias} días}}",
+  "@haceDias": {
+    "description": "Distancia hasta hoy, en días, al principio de una línea",
+    "placeholders": {
+      "dias": {
+        "type": "int"
+      }
+    }
+  },
+  "haceSemanas": "{semanas, plural, =1{Hace 1 semana} other{Hace {semanas} semanas}}",
+  "@haceSemanas": {
+    "description": "Distancia hasta hoy, en semanas",
+    "placeholders": {
+      "semanas": {
+        "type": "int"
+      }
+    }
+  },
+  "haceMeses": "{meses, plural, =1{Hace 1 mes} other{Hace {meses} meses}}",
+  "@haceMeses": {
+    "description": "Distancia hasta hoy, en meses",
+    "placeholders": {
+      "meses": {
+        "type": "int"
+      }
+    }
+  },
+  "desdeMomento": "hace un momento",
+  "@desdeMomento": {
+    "description": "Cuánto hace que se empezó algo, incrustado en una frase, en minúscula"
+  },
+  "desdeMinutos": "{minutos, plural, =1{hace 1 minuto} other{hace {minutos} minutos}}",
+  "@desdeMinutos": {
+    "description": "Cuánto hace, en minutos, incrustado en una frase",
+    "placeholders": {
+      "minutos": {
+        "type": "int"
+      }
+    }
+  },
+  "desdeHoras": "{horas, plural, =1{hace 1 hora} other{hace {horas} horas}}",
+  "@desdeHoras": {
+    "description": "Cuánto hace, en horas, incrustado en una frase",
+    "placeholders": {
+      "horas": {
+        "type": "int"
+      }
+    }
+  },
+  "desdeDias": "{dias, plural, =1{hace 1 día} other{hace {dias} días}}",
+  "@desdeDias": {
+    "description": "Cuánto hace, en días, incrustado en una frase",
+    "placeholders": {
+      "dias": {
+        "type": "int"
+      }
+    }
+  },
+  "comunCreaAntesRutina": "Crea antes una rutina",
+  "@comunCreaAntesRutina": {
+    "description": "Aviso cuando se intenta añadir algo y no hay ninguna rutina"
+  },
+  "comunAplicar": "Aplicar",
+  "@comunAplicar": {
+    "description": "Botón que vuelca la sugerencia en el formulario"
+  },
+  "comunSaltar": "Saltar",
+  "@comunSaltar": {
+    "description": "Botón que termina el descanso antes de tiempo"
+  },
+  "comunSinRegistros": "Sin registros",
+  "@comunSinRegistros": {
+    "description": "Una medida o un ejercicio del que todavía no hay datos"
+  },
+  "anadirATitulo": "Añadir «{nombre}»",
+  "@anadirATitulo": {
+    "description": "Título de la hoja que pregunta a qué rutina añadir un ejercicio",
+    "placeholders": {
+      "nombre": {
+        "type": "String"
+      }
+    }
+  },
+  "anadirYaEsta": "«{rutina}» ya tiene este ejercicio",
+  "@anadirYaEsta": {
+    "description": "Aviso al añadir un ejercicio repetido a una rutina",
+    "placeholders": {
+      "rutina": {
+        "type": "String"
+      }
+    }
+  },
+  "anadirHecho": "Añadido a «{rutina}»",
+  "@anadirHecho": {
+    "description": "Aviso de que el ejercicio entró en la rutina",
+    "placeholders": {
+      "rutina": {
+        "type": "String"
+      }
+    }
+  },
+  "sugerenciaTitulo": "Sugerido {propuesta}",
+  "@sugerenciaTitulo": {
+    "description": "Cabecera de la línea de sugerencia; la propuesta ya viene formateada («4×8 · 62,5 kg»)",
+    "placeholders": {
+      "propuesta": {
+        "type": "String"
+      }
+    }
+  },
+  "sugerenciaRangoCompletadoSube": "Completaste el rango en todas las series",
+  "@sugerenciaRangoCompletadoSube": {
+    "description": "Motivo: se completó el rango y toca subir el peso"
+  },
+  "sugerenciaRangoCompletadoTope": "Ya estás en el tope del rango",
+  "@sugerenciaRangoCompletadoTope": {
+    "description": "Motivo: el rango está completo pero no toca subir"
+  },
+  "sugerenciaRangoIncompleto": "Te falta llegar al tope del rango",
+  "@sugerenciaRangoIncompleto": {
+    "description": "Motivo: aún quedan repeticiones por ganar"
+  },
+  "sugerenciaEsfuerzoAlto": "El esfuerzo fue alto: mejor consolidar este peso",
+  "@sugerenciaEsfuerzoAlto": {
+    "description": "Motivo: el RPE anotado desaconseja subir"
+  },
+  "sugerenciaEsfuerzoBajo": "Completaste el rango y sobró margen",
+  "@sugerenciaEsfuerzoBajo": {
+    "description": "Motivo: rango completo y esfuerzo bajo"
+  },
+  "sugerenciaRepeticionesCaidas": "Las repeticiones cayeron por debajo del rango",
+  "@sugerenciaRepeticionesCaidas": {
+    "description": "Motivo: la última sesión bajó del suelo del rango"
+  },
+  "sugerenciaEstancado": "Van varias sesiones sin mejorar",
+  "@sugerenciaEstancado": {
+    "description": "Motivo: no hay mejora en varias sesiones"
+  },
+  "sugerenciaDescarga": "Tres sesiones sin mejorar: bajar y reconstruir suele desatascarlo",
+  "@sugerenciaDescarga": {
+    "description": "Motivo: se propone una descarga"
+  },
+  "sugerenciaAvisoDescarga": "Es una sugerencia a partir de tres sesiones de datos, no un consejo de entrenamiento: el descanso, la comida o una lesión explican un estancamiento mejor que el peso de la barra.",
+  "@sugerenciaAvisoDescarga": {
+    "description": "Nota al pie de la descarga, sobre lo que la app no puede saber"
+  },
+  "comunProgreso": "Progreso",
+  "@comunProgreso": {
+    "description": "Nombre de la pestaña de progreso; también el título de la pantalla anterior"
+  },
+  "comunEjerciciosCabecera": "Ejercicios",
+  "@comunEjerciciosCabecera": {
+    "description": "Cabecera de un grupo de ejercicios, y nombre de la pestaña del catálogo"
+  },
+  "comunHistorico": "Histórico",
+  "@comunHistorico": {
+    "description": "Cabecera del grupo con los registros anteriores"
+  },
+  "medidasSinRegistros": "Sin registros de {medida}",
+  "@medidasSinRegistros": {
+    "description": "Estado vacío de una medida corporal",
+    "placeholders": {
+      "medida": {
+        "type": "String"
+      }
+    }
+  },
+  "medidasVacioDetalle": "Anota el primer valor y aquí verás cómo evoluciona.",
+  "@medidasVacioDetalle": {
+    "description": "Subtítulo del estado vacío de medidas"
+  },
+  "medidasRegistrar": "Registrar",
+  "@medidasRegistrar": {
+    "description": "Botón que abre el diálogo para anotar una medida"
+  },
+  "medidasNotaMedia": "La línea continua es la media de {dias} días; los puntos, cada pesada.",
+  "@medidasNotaMedia": {
+    "description": "Explicación del gráfico de peso corporal",
+    "placeholders": {
+      "dias": {
+        "type": "int"
+      }
+    }
+  },
+  "medidasPieHistorico": "Desliza para eliminar un registro.",
+  "@medidasPieHistorico": {
+    "description": "Pie del histórico de medidas"
+  },
+  "medidasUnoPorDia": "Un valor por día: si ya anotaste hoy, este lo sustituye.",
+  "@medidasUnoPorDia": {
+    "description": "Mensaje del diálogo que pide una medida"
+  },
+  "medidasNumeroInvalido": "Escribe un número, por ejemplo 78,4",
+  "@medidasNumeroInvalido": {
+    "description": "Aviso cuando lo tecleado no es un número"
+  },
+  "resultadosTitulo": "Resultados",
+  "@resultadosTitulo": {
+    "description": "Título de la pantalla de progreso de una rutina cuando aún no se sabe su nombre"
+  },
+  "resultadosRutinaBorrada": "Esta rutina ya no existe",
+  "@resultadosRutinaBorrada": {
+    "description": "Estado vacío cuando la rutina se borró mientras se miraba"
+  },
+  "resultadosErrorEjercicios": "No se pudieron cargar los ejercicios",
+  "@resultadosErrorEjercicios": {
+    "description": "Estado de error de la lista de ejercicios"
+  },
+  "resultadosSinEjercicios": "Esta rutina no tiene ejercicios",
+  "@resultadosSinEjercicios": {
+    "description": "Estado vacío del progreso de una rutina"
+  },
+  "resultadosResumenEjercicio": "{sesiones} · último {ultimo} · máx {maximo}",
+  "@resultadosResumenEjercicio": {
+    "description": "Subtítulo de un ejercicio en el progreso de la rutina; los tres trozos vienen ya formateados",
+    "placeholders": {
+      "sesiones": {
+        "type": "String"
+      },
+      "ultimo": {
+        "type": "String"
+      },
+      "maximo": {
+        "type": "String"
+      }
+    }
+  },
+  "historialTitulo": "Sesiones",
+  "@historialTitulo": {
+    "description": "Título de la pantalla con el historial de una rutina"
+  },
+  "historialError": "No se pudo cargar el historial",
+  "@historialError": {
+    "description": "Estado de error del historial"
+  },
+  "historialVacio": "Todavía no hay sesiones",
+  "@historialVacio": {
+    "description": "Estado vacío del historial"
+  },
+  "historialVacioDetalle": "Registra un entrenamiento de esta rutina y aquí podrás repasarlo, corregirlo o eliminarlo.",
+  "@historialVacioDetalle": {
+    "description": "Subtítulo del estado vacío del historial"
+  },
+  "historialPie": "Desliza una sesión para eliminarla.",
+  "@historialPie": {
+    "description": "Pie del grupo de sesiones"
+  },
+  "comunEliminarSesionTitulo": "¿Eliminar la sesión?",
+  "@comunEliminarSesionTitulo": {
+    "description": "Título del diálogo de borrado de una sesión"
+  },
+  "comunEliminarSesionMensaje": "Se borrarán sus series y dejará de contar en el calendario y en las estadísticas. No se puede deshacer.",
+  "@comunEliminarSesionMensaje": {
+    "description": "Mensaje del diálogo de borrado de una sesión"
+  },
+  "historialResumen": "{ejercicios} · {series} · {volumen}",
+  "@historialResumen": {
+    "description": "Subtítulo de una sesión del historial; los tres trozos vienen ya formateados",
+    "placeholders": {
+      "ejercicios": {
+        "type": "String"
+      },
+      "series": {
+        "type": "String"
+      },
+      "volumen": {
+        "type": "String"
+      }
+    }
+  },
+  "sesionTitulo": "Sesión",
+  "@sesionTitulo": {
+    "description": "Título de la pantalla de una sesión guardada"
+  },
+  "sesionEditar": "Editar",
+  "@sesionEditar": {
+    "description": "Botón que abre la sesión en el formulario de registro"
+  },
+  "sesionError": "No se pudo cargar la sesión",
+  "@sesionError": {
+    "description": "Estado de error de una sesión"
+  },
+  "sesionNoExiste": "Esta sesión ya no existe",
+  "@sesionNoExiste": {
+    "description": "Estado vacío cuando la sesión se borró mientras se miraba"
+  },
+  "sesionNotas": "Notas",
+  "@sesionNotas": {
+    "description": "Cabecera del grupo con la nota de la sesión"
+  },
+  "sesionEliminar": "Eliminar sesión",
+  "@sesionEliminar": {
+    "description": "Botón destructivo al pie de una sesión"
+  },
+  "comunVolumen": "Volumen",
+  "@comunVolumen": {
+    "description": "Etiqueta de la cifra de volumen levantado"
+  },
+  "comunDuracion": "Duración",
+  "@comunDuracion": {
+    "description": "Etiqueta de la cifra de duración de la sesión"
+  },
+  "resumenTitulo": "Entrenamiento terminado",
+  "@resumenTitulo": {
+    "description": "Título del resumen que aparece al guardar"
+  },
+  "resumenGuardada": "¡Sesión guardada!",
+  "@resumenGuardada": {
+    "description": "Enhorabuena del resumen de cierre"
+  },
+  "resumenRecords": "Récords",
+  "@resumenRecords": {
+    "description": "Cabecera del grupo de récords batidos"
+  },
+  "resumenRecordsPie": "Comparado con lo que habías levantado antes de hoy en esta misma rutina.",
+  "@resumenRecordsPie": {
+    "description": "Pie del grupo de récords"
+  },
+  "resumenLoHecho": "Lo que has hecho",
+  "@resumenLoHecho": {
+    "description": "Cabecera del grupo con los ejercicios de la sesión"
+  },
+  "resumenPrimeraVez": "primera vez",
+  "@resumenPrimeraVez": {
+    "description": "Se escribe donde iría el récord anterior cuando no lo había"
+  },
+  "resumenAntes": "antes {valor}",
+  "@resumenAntes": {
+    "description": "Con qué se compara el récord batido",
+    "placeholders": {
+      "valor": {
+        "type": "String"
+      }
+    }
+  },
+  "resumenRecordPeso": "Peso ({contra})",
+  "@resumenRecordPeso": {
+    "description": "Récord de peso máximo y con qué se compara",
+    "placeholders": {
+      "contra": {
+        "type": "String"
+      }
+    }
+  },
+  "resumenRecord1RM": "1RM ({contra})",
+  "@resumenRecord1RM": {
+    "description": "Récord de 1RM estimado y con qué se compara",
+    "placeholders": {
+      "contra": {
+        "type": "String"
+      }
+    }
+  },
+  "resumenRecordVolumen": "Volumen ({contra})",
+  "@resumenRecordVolumen": {
+    "description": "Récord de volumen y con qué se compara",
+    "placeholders": {
+      "contra": {
+        "type": "String"
+      }
+    }
+  },
+  "fichaTitulo": "Ejercicio",
+  "@fichaTitulo": {
+    "description": "Título de la ficha mientras no se sabe el nombre"
+  },
+  "fichaError": "No se pudo cargar el ejercicio",
+  "@fichaError": {
+    "description": "Estado de error de la ficha"
+  },
+  "fichaNoEncontrado": "Ejercicio no encontrado",
+  "@fichaNoEncontrado": {
+    "description": "Estado vacío cuando el id no está en el catálogo"
+  },
+  "fichaAnadirARutina": "Añadir a una rutina",
+  "@fichaAnadirARutina": {
+    "description": "Botón principal de la ficha"
+  },
+  "fichaDetalles": "Detalles",
+  "@fichaDetalles": {
+    "description": "Cabecera del grupo con las categorías del ejercicio"
+  },
+  "fichaMusculoPrincipal": "Músculo principal",
+  "@fichaMusculoPrincipal": {
+    "description": "Etiqueta de la categoría `target`"
+  },
+  "fichaGrupoMuscular": "Grupo muscular",
+  "@fichaGrupoMuscular": {
+    "description": "Etiqueta de la categoría `muscleGroup`"
+  },
+  "fichaEquipamiento": "Equipamiento",
+  "@fichaEquipamiento": {
+    "description": "Etiqueta de la categoría `equipment`"
+  },
+  "fichaMusculosSecundarios": "Músculos secundarios",
+  "@fichaMusculosSecundarios": {
+    "description": "Etiqueta de la lista de músculos secundarios"
+  },
+  "fichaComoSeHace": "Cómo se hace",
+  "@fichaComoSeHace": {
+    "description": "Cabecera del grupo de instrucciones"
+  },
+  "fichaSinInstrucciones": "Sin instrucciones disponibles",
+  "@fichaSinInstrucciones": {
+    "description": "Cuando la ficha no trae pasos"
+  },
+  "fichaAtribucion": "Animación e imagen: {fuente}",
+  "@fichaAtribucion": {
+    "description": "Atribución de la media, obligatoria por licencia",
+    "placeholders": {
+      "fuente": {
+        "type": "String"
+      }
+    }
+  },
+  "fichaYaEstaEn": "Ya está en: {rutinas}",
+  "@fichaYaEstaEn": {
+    "description": "Lista de rutinas que ya contienen el ejercicio",
+    "placeholders": {
+      "rutinas": {
+        "type": "String"
+      }
+    }
+  },
+  "raizPreparando": "Preparando el catálogo…",
+  "@raizPreparando": {
+    "description": "Mensaje mientras se siembra el catálogo"
+  },
+  "raizErrorCatalogo": "No se pudo cargar el catálogo",
+  "@raizErrorCatalogo": {
+    "description": "Estado de error del arranque"
+  },
+  "raizContinuarTitulo": "Tienes un entrenamiento empezado",
+  "@raizContinuarTitulo": {
+    "description": "Título del diálogo que ofrece retomar la sesión"
+  },
+  "raizContinuarMensaje": "«{rutina}», empezado {cuando}.",
+  "@raizContinuarMensaje": {
+    "description": "Cuerpo del diálogo de retomar; `cuando` viene ya formateado",
+    "placeholders": {
+      "rutina": {
+        "type": "String"
+      },
+      "cuando": {
+        "type": "String"
+      }
+    }
+  },
+  "raizDescartar": "Descartar",
+  "@raizDescartar": {
+    "description": "Botón que tira la sesión a medias"
+  },
+  "raizContinuar": "Continuar",
+  "@raizContinuar": {
+    "description": "Botón que retoma la sesión a medias"
+  },
+  "raizRutinas": "Rutinas",
+  "@raizRutinas": {
+    "description": "Nombre de la pestaña de rutinas"
+  },
+  "setupCatalogoListo": "1.324 ejercicios listos",
+  "@setupCatalogoListo": {
+    "description": "Titular del onboarding"
+  },
+  "setupDetalle": "AppGym incluye un catálogo con instrucciones, músculos implicados y una animación de cada movimiento.",
+  "@setupDetalle": {
+    "description": "Subtítulo del onboarding"
+  },
+  "setupMedia": "Imágenes y animaciones",
+  "@setupMedia": {
+    "description": "Fila que describe lo que se va a descargar"
+  },
+  "setupTamano": "{archivos} archivos · unos {megas} MB",
+  "@setupTamano": {
+    "description": "Cuántos archivos pesa la descarga",
+    "placeholders": {
+      "archivos": {
+        "type": "int"
+      },
+      "megas": {
+        "type": "int"
+      }
+    }
+  },
+  "setupProgreso": "{hechos} de {total} archivos",
+  "@setupProgreso": {
+    "description": "Progreso de la descarga",
+    "placeholders": {
+      "hechos": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "setupFallidos": " · {fallos} fallidos",
+  "@setupFallidos": {
+    "description": "Cola del progreso cuando hay descargas fallidas",
+    "placeholders": {
+      "fallos": {
+        "type": "int"
+      }
+    }
+  },
+  "setupFallosFinal": "{fallos} archivos no se pudieron descargar. Se cargarán desde internet cuando hagan falta.",
+  "@setupFallosFinal": {
+    "description": "Resultado de una descarga incompleta",
+    "placeholders": {
+      "fallos": {
+        "type": "int"
+      }
+    }
+  },
+  "setupTodoListo": "Todo listo",
+  "@setupTodoListo": {
+    "description": "Estado cuando ya no queda nada por descargar"
+  },
+  "setupTodoListoDetalle": "El catálogo de ejercicios ya está descargado.",
+  "@setupTodoListoDetalle": {
+    "description": "Subtítulo del estado anterior"
+  },
+  "setupEmpezar": "Empezar",
+  "@setupEmpezar": {
+    "description": "Botón que entra en la app"
+  },
+  "setupDescargando": "Descargando…",
+  "@setupDescargando": {
+    "description": "Botón mientras la descarga corre"
+  },
+  "setupDescargar": "Descargar ahora",
+  "@setupDescargar": {
+    "description": "Botón que arranca la descarga"
+  },
+  "setupAhoraNo": "Ahora no",
+  "@setupAhoraNo": {
+    "description": "Botón que omite la descarga"
+  },
+  "setupOmitirDetalle": "Si lo omites, la app funciona igual y las imágenes se cargarán desde internet cuando las necesites.",
+  "@setupOmitirDetalle": {
+    "description": "Explicación de qué pasa si se omite la descarga"
+  },
+  "comunDescanso": "Descanso",
+  "@comunDescanso": {
+    "description": "Etiqueta del descanso entre series"
+  },
+  "comunComoElGlobal": "Como el global",
+  "@comunComoElGlobal": {
+    "description": "Un ajuste del ejercicio que sigue al valor general de Ajustes"
+  },
+  "comunComoElGlobalCon": "Como el global ({valor})",
+  "@comunComoElGlobalCon": {
+    "description": "Lo mismo, enseñando el valor que se hereda",
+    "placeholders": {
+      "valor": {
+        "type": "String"
+      }
+    }
+  },
+  "comunRangoRepeticiones": "Rango de repeticiones",
+  "@comunRangoRepeticiones": {
+    "description": "Etiqueta del rango de repeticiones de la doble progresión"
+  },
+  "opcionesProgresion": "Progresión",
+  "@opcionesProgresion": {
+    "description": "Cabecera del grupo con la configuración de progresión del ejercicio"
+  },
+  "opcionesEstrategia": "Estrategia",
+  "@opcionesEstrategia": {
+    "description": "Etiqueta de la estrategia de progresión"
+  },
+  "opcionesEscalon": "Escalón de peso",
+  "@opcionesEscalon": {
+    "description": "Etiqueta de cuánto sube el peso al completar el rango"
+  },
+  "opcionesDesactivada": "Este ejercicio no recibe sugerencias.",
+  "@opcionesDesactivada": {
+    "description": "Pie cuando la progresión del ejercicio está apagada"
+  },
+  "opcionesRangoObservado": "En las últimas sesiones has hecho más bien {min}–{max} repeticiones; toca el rango para ajustarlo.",
+  "@opcionesRangoObservado": {
+    "description": "Pie que compara el rango configurado con el que se observa",
+    "placeholders": {
+      "min": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "opcionesEstrategiaDesactivada": "Desactivada",
+  "@opcionesEstrategiaDesactivada": {
+    "description": "Estrategia: sin sugerencias para este ejercicio"
+  },
+  "opcionesEstrategiaDoble": "Doble progresión",
+  "@opcionesEstrategiaDoble": {
+    "description": "Estrategia: repeticiones dentro del rango y luego peso"
+  },
+  "opcionesEstrategiaSoloRepeticiones": "Solo repeticiones",
+  "@opcionesEstrategiaSoloRepeticiones": {
+    "description": "Estrategia: sin subir peso, como en el peso corporal"
+  },
+  "opcionesDescansoMensaje": "Los descansos de una sentadilla y de un curl no son iguales; aquí se separa uno del otro.",
+  "@opcionesDescansoMensaje": {
+    "description": "Mensaje de la hoja de descanso del ejercicio"
+  },
+  "opcionesEstrategiaMensaje": "La doble progresión sube repeticiones dentro del rango y, al completarlo, el peso. En peso corporal no hay peso que subir.",
+  "@opcionesEstrategiaMensaje": {
+    "description": "Mensaje de la hoja de estrategia"
+  },
+  "opcionesRangoMensaje": "8–12 va bien en accesorios y se queda corto en un peso muerto pesado o en gemelos.",
+  "@opcionesRangoMensaje": {
+    "description": "Mensaje de la hoja de rango de repeticiones"
+  },
+  "opcionesEscalonMensaje": "Cuánto sube la sugerencia al completar el rango.",
+  "@opcionesEscalonMensaje": {
+    "description": "Mensaje de la hoja del escalón de peso"
+  },
+  "comunCrear": "Crear",
+  "@comunCrear": {
+    "description": "Botón que confirma la creación de una rutina"
+  },
+  "comunRutinaConEjercicios": "{nombre} · {ejercicios}",
+  "@comunRutinaConEjercicios": {
+    "description": "Una rutina y su recuento de ejercicios, en una línea",
+    "placeholders": {
+      "nombre": {
+        "type": "String"
+      },
+      "ejercicios": {
+        "type": "String"
+      }
+    }
+  },
+  "rutinasNueva": "Nueva rutina",
+  "@rutinasNueva": {
+    "description": "Título de la hoja y del diálogo de crear rutina"
+  },
+  "rutinasPlantillasMensaje": "Las plantillas se pueden editar después: son un punto de partida, no un carril.",
+  "@rutinasPlantillasMensaje": {
+    "description": "Mensaje de la hoja que ofrece plantillas"
+  },
+  "rutinasEnBlanco": "En blanco",
+  "@rutinasEnBlanco": {
+    "description": "Opción de crear una rutina vacía"
+  },
+  "rutinasNombreMarcador": "Nombre de la rutina",
+  "@rutinasNombreMarcador": {
+    "description": "Marcador del campo de nombre"
+  },
+  "rutinasNombreMensaje": "Por ejemplo: Empuje, Pierna, Full body…",
+  "@rutinasNombreMensaje": {
+    "description": "Mensaje del diálogo de nueva rutina"
+  },
+  "rutinasPlantillaTodasExisten": "Ya tienes rutinas con esos nombres",
+  "@rutinasPlantillaTodasExisten": {
+    "description": "Aviso cuando la plantilla no crea nada"
+  },
+  "rutinasPlantillaAlgunasExisten": "Algunas rutinas ya existían y no se han duplicado",
+  "@rutinasPlantillaAlgunasExisten": {
+    "description": "Aviso cuando la plantilla crea solo una parte"
+  },
+  "rutinasNombreRepetido": "Ya tienes una rutina llamada «{nombre}»",
+  "@rutinasNombreRepetido": {
+    "description": "Aviso al repetir el nombre de una rutina",
+    "placeholders": {
+      "nombre": {
+        "type": "String"
+      }
+    }
+  },
+  "rutinasError": "No se pudieron cargar las rutinas",
+  "@rutinasError": {
+    "description": "Estado de error de la lista de rutinas"
+  },
+  "rutinasVacio": "Aún no tienes rutinas",
+  "@rutinasVacio": {
+    "description": "Estado vacío de la lista de rutinas"
+  },
+  "rutinasVacioDetalle": "Crea tu primera rutina para empezar a organizar tus ejercicios y registrar tus entrenamientos.",
+  "@rutinasVacioDetalle": {
+    "description": "Subtítulo del estado vacío"
+  },
+  "rutinasCrearRutina": "Crear rutina",
+  "@rutinasCrearRutina": {
+    "description": "Botón del estado vacío"
+  },
+  "rutinasPie": "Desliza una rutina hacia la izquierda para eliminarla.",
+  "@rutinasPie": {
+    "description": "Pie del grupo de rutinas"
+  },
+  "rutinasEliminarTitulo": "¿Eliminar «{nombre}»?",
+  "@rutinasEliminarTitulo": {
+    "description": "Título del diálogo de borrar una rutina",
+    "placeholders": {
+      "nombre": {
+        "type": "String"
+      }
+    }
+  },
+  "rutinasEliminarMensaje": "Se borrarán también sus ejercicios y todo su histórico de entrenamientos. Esta acción no se puede deshacer.",
+  "@rutinasEliminarMensaje": {
+    "description": "Mensaje del diálogo de borrar una rutina"
+  },
+  "rutinaTitulo": "Rutina",
+  "@rutinaTitulo": {
+    "description": "Título de la pantalla mientras no se sabe el nombre"
+  },
+  "rutinaRenombrar": "Renombrar",
+  "@rutinaRenombrar": {
+    "description": "Acción de la hoja de opciones de la rutina"
+  },
+  "rutinaRenombrarTitulo": "Renombrar rutina",
+  "@rutinaRenombrarTitulo": {
+    "description": "Título del diálogo de renombrar"
+  },
+  "rutinaNombreRepetido": "Ya existe una rutina llamada «{nombre}»",
+  "@rutinaNombreRepetido": {
+    "description": "Aviso al renombrar o duplicar con un nombre en uso",
+    "placeholders": {
+      "nombre": {
+        "type": "String"
+      }
+    }
+  },
+  "rutinaDuplicar": "Duplicar rutina",
+  "@rutinaDuplicar": {
+    "description": "Acción de la hoja de opciones, y título del diálogo"
+  },
+  "rutinaDuplicarBoton": "Duplicar",
+  "@rutinaDuplicarBoton": {
+    "description": "Botón que confirma la copia"
+  },
+  "rutinaCopiaMarcador": "Nombre de la copia",
+  "@rutinaCopiaMarcador": {
+    "description": "Marcador del campo al duplicar"
+  },
+  "rutinaCopiaMensaje": "Se copian los ejercicios y su orden. Las sesiones no: la rutina nueva empieza sin histórico.",
+  "@rutinaCopiaMensaje": {
+    "description": "Mensaje del diálogo de duplicar"
+  },
+  "rutinaCopiaSufijo": "{nombre} (copia)",
+  "@rutinaCopiaSufijo": {
+    "description": "Nombre propuesto al duplicar una rutina",
+    "placeholders": {
+      "nombre": {
+        "type": "String"
+      }
+    }
+  },
+  "rutinaSinDestino": "No hay otra rutina a la que moverlo",
+  "@rutinaSinDestino": {
+    "description": "Aviso al mover un ejercicio con una sola rutina"
+  },
+  "rutinaMoverTitulo": "Mover «{nombre}»",
+  "@rutinaMoverTitulo": {
+    "description": "Título de la hoja de mover un ejercicio",
+    "placeholders": {
+      "nombre": {
+        "type": "String"
+      }
+    }
+  },
+  "rutinaMoverMensaje": "Se lleva su histórico: las series ya registradas siguen colgando de las sesiones en las que se hicieron.",
+  "@rutinaMoverMensaje": {
+    "description": "Mensaje de la hoja de mover"
+  },
+  "rutinaMoverRepetido": "Esa rutina ya tiene «{nombre}»",
+  "@rutinaMoverRepetido": {
+    "description": "Aviso al mover a una rutina que ya lo tiene",
+    "placeholders": {
+      "nombre": {
+        "type": "String"
+      }
+    }
+  },
+  "rutinaVaciaDetalle": "Esta rutina todavía está vacía. Añade ejercicios para poder registrar un entrenamiento.",
+  "@rutinaVaciaDetalle": {
+    "description": "Pie del grupo cuando la rutina no tiene ejercicios"
+  },
+  "rutinaAnadirEjercicios": "Añadir ejercicios",
+  "@rutinaAnadirEjercicios": {
+    "description": "Fila que abre el catálogo desde la rutina"
+  },
+  "rutinaAnadirDetalle": "Elige del catálogo de 1.324 ejercicios",
+  "@rutinaAnadirDetalle": {
+    "description": "Subtítulo de la fila anterior"
+  },
+  "rutinaQuitarTitulo": "¿Quitar «{nombre}»?",
+  "@rutinaQuitarTitulo": {
+    "description": "Título del diálogo de quitar un ejercicio de la rutina",
+    "placeholders": {
+      "nombre": {
+        "type": "String"
+      }
+    }
+  },
+  "rutinaQuitarMensaje": "Se eliminarán también las series registradas de este ejercicio en esta rutina.",
+  "@rutinaQuitarMensaje": {
+    "description": "Mensaje del diálogo de quitar un ejercicio"
+  },
+  "rutinaEmpezar": "Empezar entrenamiento",
+  "@rutinaEmpezar": {
+    "description": "Botón principal de la rutina"
+  },
+  "rutinaRegistrarAnterior": "Registrar una sesión anterior",
+  "@rutinaRegistrarAnterior": {
+    "description": "Enlace al formulario de siempre"
+  },
+  "rutinaSesiones": "Sesiones",
+  "@rutinaSesiones": {
+    "description": "Etiqueta de la cifra de entrenamientos hechos"
+  },
+  "rutinaUltima": "Última",
+  "@rutinaUltima": {
+    "description": "Etiqueta de la cifra de cuándo se entrenó por última vez"
+  },
+  "comunTodas": "Todas",
+  "@comunTodas": {
+    "description": "Filtro sin restricción, en femenino (zonas del cuerpo)"
+  },
+  "comunTodos": "Todos",
+  "@comunTodos": {
+    "description": "Filtro sin restricción, en masculino (equipamiento, músculos)"
+  },
+  "catalogoZonaPecho": "Pecho",
+  "@catalogoZonaPecho": {
+    "description": "Filtro rápido del catálogo"
+  },
+  "catalogoZonaEspalda": "Espalda",
+  "@catalogoZonaEspalda": {
+    "description": "Filtro rápido del catálogo"
+  },
+  "catalogoZonaPiernas": "Piernas",
+  "@catalogoZonaPiernas": {
+    "description": "Filtro rápido del catálogo"
+  },
+  "catalogoZonaGemelos": "Gemelos",
+  "@catalogoZonaGemelos": {
+    "description": "Filtro rápido del catálogo"
+  },
+  "catalogoZonaHombros": "Hombros",
+  "@catalogoZonaHombros": {
+    "description": "Filtro rápido del catálogo"
+  },
+  "catalogoZonaBrazos": "Brazos",
+  "@catalogoZonaBrazos": {
+    "description": "Filtro rápido del catálogo"
+  },
+  "catalogoZonaAntebrazos": "Antebrazos",
+  "@catalogoZonaAntebrazos": {
+    "description": "Filtro rápido del catálogo"
+  },
+  "catalogoZonaCore": "Core",
+  "@catalogoZonaCore": {
+    "description": "Filtro rápido del catálogo"
+  },
+  "catalogoZonaCardio": "Cardio",
+  "@catalogoZonaCardio": {
+    "description": "Filtro rápido del catálogo"
+  },
+  "catalogoZonaCuello": "Cuello",
+  "@catalogoZonaCuello": {
+    "description": "Filtro rápido del catálogo"
+  },
+  "catalogoYaEnRutina": "Ya está en la rutina",
+  "@catalogoYaEnRutina": {
+    "description": "Aviso al añadir un ejercicio que ya está"
+  },
+  "catalogoErrorAnadir": "No se pudo añadir el ejercicio",
+  "@catalogoErrorAnadir": {
+    "description": "Aviso cuando la inserción falla"
+  },
+  "catalogoAnadido": "«{nombre}» añadido",
+  "@catalogoAnadido": {
+    "description": "Aviso de que el ejercicio entró en la rutina",
+    "placeholders": {
+      "nombre": {
+        "type": "String"
+      }
+    }
+  },
+  "catalogoPersonalizadoMarcador": "Nombre del ejercicio",
+  "@catalogoPersonalizadoMarcador": {
+    "description": "Marcador del campo de ejercicio personalizado"
+  },
+  "catalogoPersonalizadoMensaje": "Para lo que no esté en el catálogo.",
+  "@catalogoPersonalizadoMensaje": {
+    "description": "Mensaje del diálogo de ejercicio personalizado"
+  },
+  "catalogoPersonalizadoRepetido": "Ya tienes un ejercicio con ese nombre",
+  "@catalogoPersonalizadoRepetido": {
+    "description": "Aviso de nombre repetido dentro de la rutina"
+  },
+  "comunAnadir": "Añadir",
+  "@comunAnadir": {
+    "description": "Botón que confirma añadir algo"
+  },
+  "catalogoMusculoObjetivo": "Músculo objetivo",
+  "@catalogoMusculoObjetivo": {
+    "description": "Título de la hoja de filtro por músculo"
+  },
+  "catalogoFiltroMusculo": "Músculo",
+  "@catalogoFiltroMusculo": {
+    "description": "Desplegable de filtro por músculo, sin elegir"
+  },
+  "catalogoFiltroEquipamiento": "Equipamiento",
+  "@catalogoFiltroEquipamiento": {
+    "description": "Desplegable de filtro por equipamiento, sin elegir"
+  },
+  "catalogoOpcionConCuenta": "{etiqueta} · {cuantos}",
+  "@catalogoOpcionConCuenta": {
+    "description": "Una opción de filtro con cuántos ejercicios tiene",
+    "placeholders": {
+      "etiqueta": {
+        "type": "String"
+      },
+      "cuantos": {
+        "type": "int"
+      }
+    }
+  },
+  "catalogoTituloModal": "Añadir ejercicio",
+  "@catalogoTituloModal": {
+    "description": "Título del catálogo cuando se abre como modal desde una rutina"
+  },
+  "catalogoPersonalizado": "Personalizado",
+  "@catalogoPersonalizado": {
+    "description": "Botón que crea un ejercicio a mano"
+  },
+  "catalogoBuscar": "Buscar ejercicio, músculo o material",
+  "@catalogoBuscar": {
+    "description": "Marcador del buscador"
+  },
+  "catalogoHayMas": "{cuantos}+ ejercicios",
+  "@catalogoHayMas": {
+    "description": "Contador cuando quedan más resultados por cargar",
+    "placeholders": {
+      "cuantos": {
+        "type": "int"
+      }
+    }
+  },
+  "catalogoSinResultados": "Sin resultados",
+  "@catalogoSinResultados": {
+    "description": "Estado vacío del buscador"
+  },
+  "catalogoSinResultadosDetalle": "Prueba con otro término o quita alguno de los filtros.",
+  "@catalogoSinResultadosDetalle": {
+    "description": "Subtítulo del estado vacío del buscador"
+  },
+  "catalogoCrearPersonalizado": "Crear ejercicio personalizado",
+  "@catalogoCrearPersonalizado": {
+    "description": "Fila al final de la lista de resultados"
+  },
+  "catalogoCrearPersonalizadoDetalle": "Si no encuentras lo que buscas",
+  "@catalogoCrearPersonalizadoDetalle": {
+    "description": "Subtítulo de la fila anterior"
+  },
+  "catalogoFavoritos": "Favoritos",
+  "@catalogoFavoritos": {
+    "description": "Cabecera de la sección de favoritos"
+  },
+  "catalogoVistos": "Vistos recientemente",
+  "@catalogoVistos": {
+    "description": "Cabecera de la sección de vistos"
+  },
+  "catalogoTodosLosEjercicios": "TODOS LOS EJERCICIOS",
+  "@catalogoTodosLosEjercicios": {
+    "description": "Cabecera del catálogo completo, en mayúsculas"
+  },
+  "catalogoQuitarRegion": "{region}  ✕",
+  "@catalogoQuitarRegion": {
+    "description": "Píldora del filtro por región muscular, que al tocarla se quita",
+    "placeholders": {
+      "region": {
+        "type": "String"
+      }
+    }
+  },
+  "cuerpoFrente": "Frente",
+  "@cuerpoFrente": {
+    "description": "Cara del modelo anatómico"
+  },
+  "cuerpoEspalda": "Espalda",
+  "@cuerpoEspalda": {
+    "description": "Cara del modelo anatómico"
+  },
+  "cuerpoPeriodo": "{dias} días",
+  "@cuerpoPeriodo": {
+    "description": "Píldora del periodo del mapa muscular",
+    "placeholders": {
+      "dias": {
+        "type": "int"
+      }
+    }
+  },
+  "cuerpoVacio": "Aún no hay nada que colorear",
+  "@cuerpoVacio": {
+    "description": "Estado vacío del mapa muscular"
+  },
+  "cuerpoVacioDetalle": "Cuando registres entrenamientos, el modelo se irá tiñendo según lo que trabaje cada músculo. Mientras tanto, toca cualquier músculo para ver sus ejercicios.",
+  "@cuerpoVacioDetalle": {
+    "description": "Subtítulo del estado vacío del mapa"
+  },
+  "cuerpoFueraPersonalizados": "{ejercicios} sin músculo asignado",
+  "@cuerpoFueraPersonalizados": {
+    "description": "Parte del aviso de lo que no entra en el modelo",
+    "placeholders": {
+      "ejercicios": {
+        "type": "String"
+      }
+    }
+  },
+  "cuerpoFueraCardio": "{ejercicios} de cardio",
+  "@cuerpoFueraCardio": {
+    "description": "Parte del aviso de lo que no entra en el modelo",
+    "placeholders": {
+      "ejercicios": {
+        "type": "String"
+      }
+    }
+  },
+  "cuerpoFueraCola": "{partes}: no se reparten por el modelo.",
+  "@cuerpoFueraCola": {
+    "description": "Cierre del aviso de lo que no entra en el modelo",
+    "placeholders": {
+      "partes": {
+        "type": "String"
+      }
+    }
+  },
+  "cuerpoFueraY": "{a} y {b}",
+  "@cuerpoFueraY": {
+    "description": "Une las dos partes del aviso anterior",
+    "placeholders": {
+      "a": {
+        "type": "String"
+      },
+      "b": {
+        "type": "String"
+      }
+    }
+  },
+  "cuerpoSinTrabajar": "Sin trabajar",
+  "@cuerpoSinTrabajar": {
+    "description": "Extremo frío de la leyenda del mapa"
+  },
+  "cuerpoMuyTrabajado": "Muy trabajado",
+  "@cuerpoMuyTrabajado": {
+    "description": "Extremo cálido de la leyenda del mapa"
+  },
+  "cuerpoMenosTrabajados": "Menos trabajados",
+  "@cuerpoMenosTrabajados": {
+    "description": "Cabecera de la lista de músculos abandonados"
+  },
+  "cuerpoMenosTrabajadosPie": "Cuenta desde la última vez que entrenaste cada músculo, con todo tu histórico y no solo con el periodo elegido arriba.",
+  "@cuerpoMenosTrabajadosPie": {
+    "description": "Pie de la lista de músculos abandonados"
+  },
+  "cuerpoNunca": "nunca",
+  "@cuerpoNunca": {
+    "description": "Un músculo que no se ha trabajado nunca, en minúscula dentro de una fila"
+  },
+  "cuerpoUltimosDias": "Últimos {dias} días",
+  "@cuerpoUltimosDias": {
+    "description": "Cabecera del resumen de la hoja del músculo",
+    "placeholders": {
+      "dias": {
+        "type": "int"
+      }
+    }
+  },
+  "cuerpoResumenPie": "El músculo objetivo del ejercicio cuenta entero, el grupo muscular a la mitad y los secundarios a un tercio.",
+  "@cuerpoResumenPie": {
+    "description": "Pie del resumen de la hoja del músculo"
+  },
+  "cuerpoUltimaVez": "Última vez",
+  "@cuerpoUltimaVez": {
+    "description": "Etiqueta de cuándo se trabajó el músculo por última vez"
+  },
+  "cuerpoEnTusRutinas": "En tus rutinas",
+  "@cuerpoEnTusRutinas": {
+    "description": "Etiqueta de en qué rutinas aparece el músculo"
+  },
+  "cuerpoTusEntrenamientos": "Tus entrenamientos",
+  "@cuerpoTusEntrenamientos": {
+    "description": "Cabecera de las sesiones que tocaron el músculo"
+  },
+  "cuerpoSesionResumen": "{fecha} · {series}",
+  "@cuerpoSesionResumen": {
+    "description": "Subtítulo de una sesión en la hoja del músculo",
+    "placeholders": {
+      "fecha": {
+        "type": "String"
+      },
+      "series": {
+        "type": "String"
+      }
+    }
+  },
+  "cuerpoYaEnTusRutinas": "Ya está en tus rutinas",
+  "@cuerpoYaEnTusRutinas": {
+    "description": "Subtítulo de un ejercicio sugerido que el usuario ya tiene"
+  },
+  "cuerpoVerTodos": "Ver los {total} ejercicios",
+  "@cuerpoVerTodos": {
+    "description": "Enlace al catálogo filtrado por la región",
+    "placeholders": {
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "comunSeriesEtiqueta": "Series",
+  "@comunSeriesEtiqueta": {
+    "description": "Etiqueta de la cifra de series, sin número delante"
+  },
+  "comunPeso": "Peso",
+  "@comunPeso": {
+    "description": "Etiqueta de la métrica de peso máximo"
+  },
+  "evolucionRangoMes": "1M",
+  "@evolucionRangoMes": {
+    "description": "Rango del gráfico: un mes"
+  },
+  "evolucionRangoTrimestre": "3M",
+  "@evolucionRangoTrimestre": {
+    "description": "Rango del gráfico: tres meses"
+  },
+  "evolucionRangoAno": "1A",
+  "@evolucionRangoAno": {
+    "description": "Rango del gráfico: un año"
+  },
+  "evolucionRangoTodo": "Todo",
+  "@evolucionRangoTodo": {
+    "description": "Rango del gráfico: todo el histórico"
+  },
+  "evolucionError": "No se pudo cargar el progreso",
+  "@evolucionError": {
+    "description": "Estado de error de la evolución de un ejercicio"
+  },
+  "evolucionVacio": "Sin registros todavía",
+  "@evolucionVacio": {
+    "description": "Estado vacío de la evolución de un ejercicio"
+  },
+  "evolucionVacioDetalle": "Registra un entrenamiento con este ejercicio para ver aquí su evolución.",
+  "@evolucionVacioDetalle": {
+    "description": "Subtítulo del estado vacío"
+  },
+  "evolucionPieHistorico": "El trofeo marca las sesiones que batieron algún récord.",
+  "@evolucionPieHistorico": {
+    "description": "Pie del histórico de sesiones del ejercicio"
+  },
+  "evolucionSesionResumen": "{series} · {volumen} de volumen",
+  "@evolucionSesionResumen": {
+    "description": "Subtítulo de una sesión en el histórico del ejercicio",
+    "placeholders": {
+      "series": {
+        "type": "String"
+      },
+      "volumen": {
+        "type": "String"
+      }
+    }
+  },
+  "evolucion1RM": "1RM estimado",
+  "@evolucion1RM": {
+    "description": "Etiqueta de la cifra de 1RM"
+  },
+  "evolucionPesoMaximo": "Peso máximo",
+  "@evolucionPesoMaximo": {
+    "description": "Etiqueta de la cifra de peso máximo"
+  },
+  "evolucionVolumenTotal": "Volumen total",
+  "@evolucionVolumenTotal": {
+    "description": "Etiqueta de la cifra de volumen acumulado"
+  },
+  "evolucionPocoFiable": "{valor} *",
+  "@evolucionPocoFiable": {
+    "description": "Un 1RM marcado como estimación floja",
+    "placeholders": {
+      "valor": {
+        "type": "String"
+      }
+    }
+  },
+  "evolucionNotaFiabilidad": "* Estimado a partir de series de más de {repeticiones} repeticiones, así que es poco fiable y no cuenta como récord.",
+  "@evolucionNotaFiabilidad": {
+    "description": "Nota al pie sobre las estimaciones poco fiables",
+    "placeholders": {
+      "repeticiones": {
+        "type": "int"
+      }
+    }
+  },
+  "entrenarEditar": "Editar entrenamiento",
+  "@entrenarEditar": {
+    "description": "Título al corregir una sesión ya guardada"
+  },
+  "entrenarVivo": "Entrenando",
+  "@entrenarVivo": {
+    "description": "Título de la sesión en curso"
+  },
+  "entrenarFormulario": "Registrar sesión",
+  "@entrenarFormulario": {
+    "description": "Título del formulario de siempre"
+  },
+  "entrenarSinSeriesVivo": "Marca al menos una serie",
+  "@entrenarSinSeriesVivo": {
+    "description": "Aviso al terminar una sesión viva sin nada marcado"
+  },
+  "entrenarSinSeriesFormulario": "Añade al menos una serie",
+  "@entrenarSinSeriesFormulario": {
+    "description": "Aviso al guardar un formulario vacío"
+  },
+  "entrenarDejarTitulo": "Dejar el entrenamiento",
+  "@entrenarDejarTitulo": {
+    "description": "Título de la hoja al salir de una sesión viva"
+  },
+  "entrenarDejarMensaje": "Si lo dejas para luego, al abrir la app te ofrecerá continuarlo donde lo dejaste.",
+  "@entrenarDejarMensaje": {
+    "description": "Mensaje de la hoja anterior"
+  },
+  "entrenarSeguirLuego": "Seguir luego",
+  "@entrenarSeguirLuego": {
+    "description": "Opción que conserva la sesión a medias"
+  },
+  "entrenarDescartarSesion": "Descartar el entrenamiento",
+  "@entrenarDescartarSesion": {
+    "description": "Opción que tira la sesión a medias"
+  },
+  "entrenarTerminar": "Terminar",
+  "@entrenarTerminar": {
+    "description": "Botón que cierra la sesión viva"
+  },
+  "entrenarTerminarLargo": "Terminar entrenamiento",
+  "@entrenarTerminarLargo": {
+    "description": "Botón grande que cierra la sesión viva"
+  },
+  "entrenarGuardarLargo": "Guardar entrenamiento",
+  "@entrenarGuardarLargo": {
+    "description": "Botón grande del formulario"
+  },
+  "entrenarNotasPie": "Lo que explique este entrenamiento dentro de tres semanas: molestias, cinturón, mal día.",
+  "@entrenarNotasPie": {
+    "description": "Pie del grupo de notas de la sesión"
+  },
+  "entrenarNotaMarcador": "Nota de la sesión",
+  "@entrenarNotaMarcador": {
+    "description": "Marcador del campo de nota"
+  },
+  "entrenarCronometro": "{hechas} / {total} series · {tiempo}",
+  "@entrenarCronometro": {
+    "description": "Cabecera de la sesión viva: series marcadas y cronómetro",
+    "placeholders": {
+      "hechas": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "tiempo": {
+        "type": "String"
+      }
+    }
+  },
+  "entrenarDejarlo": "Dejarlo",
+  "@entrenarDejarlo": {
+    "description": "Botón de salir de la sesión viva"
+  },
+  "entrenarNotaSerie": "Nota de la serie {numero}",
+  "@entrenarNotaSerie": {
+    "description": "Título del diálogo de nota de una serie",
+    "placeholders": {
+      "numero": {
+        "type": "int"
+      }
+    }
+  },
+  "entrenarNotaSerieMarcador": "Fallo en la última, con ayuda…",
+  "@entrenarNotaSerieMarcador": {
+    "description": "Marcador del campo de nota de una serie"
+  },
+  "entrenarSerieNumero": "Serie {numero}",
+  "@entrenarSerieNumero": {
+    "description": "Título de la hoja de opciones de una serie",
+    "placeholders": {
+      "numero": {
+        "type": "int"
+      }
+    }
+  },
+  "entrenarQuitarCalentamiento": "Quitar el calentamiento",
+  "@entrenarQuitarCalentamiento": {
+    "description": "Acción sobre una serie ya marcada como calentamiento"
+  },
+  "entrenarMarcarCalentamiento": "Marcar como calentamiento",
+  "@entrenarMarcarCalentamiento": {
+    "description": "Acción que marca la serie como calentamiento"
+  },
+  "entrenarAnadirNota": "Añadir nota",
+  "@entrenarAnadirNota": {
+    "description": "Acción sobre una serie sin nota"
+  },
+  "entrenarEditarNota": "Editar la nota",
+  "@entrenarEditarNota": {
+    "description": "Acción sobre una serie con nota"
+  },
+  "entrenarEliminarSerie": "Eliminar serie",
+  "@entrenarEliminarSerie": {
+    "description": "Acción destructiva sobre una serie"
+  },
+  "entrenarPrimeraVez": "Primera vez con este ejercicio",
+  "@entrenarPrimeraVez": {
+    "description": "Línea de referencia cuando no hay sesión anterior"
+  },
+  "entrenarUltimaVez": "Último: {series} · {volumen}",
+  "@entrenarUltimaVez": {
+    "description": "Línea de referencia con la sesión anterior",
+    "placeholders": {
+      "series": {
+        "type": "String"
+      },
+      "volumen": {
+        "type": "String"
+      }
+    }
+  },
+  "entrenarSinSeriesTarjeta": "Sin series: este ejercicio no se guardará",
+  "@entrenarSinSeriesTarjeta": {
+    "description": "Aviso en la tarjeta de un ejercicio sin series"
+  },
+  "entrenarAnadirSerie": "Añadir serie",
+  "@entrenarAnadirSerie": {
+    "description": "Botón que añade una serie a la tarjeta"
+  },
+  "entrenarRepeticiones": "Repeticiones",
+  "@entrenarRepeticiones": {
+    "description": "Etiqueta accesible del selector de repeticiones"
+  },
+  "progresoResumen": "Resumen",
+  "@progresoResumen": {
+    "description": "Sección de progreso: el resumen semanal"
+  },
+  "progresoCalendario": "Calendario",
+  "@progresoCalendario": {
+    "description": "Sección de progreso: el calendario"
+  },
+  "progresoCuerpo": "Cuerpo",
+  "@progresoCuerpo": {
+    "description": "Sección de progreso: el mapa muscular y las medidas"
+  },
+  "progresoVacio": "Todavía no hay datos",
+  "@progresoVacio": {
+    "description": "Estado vacío de la pestaña de progreso"
+  },
+  "progresoVacioDetalle": "Registra tu primer entrenamiento desde una rutina y aquí verás cómo progresas en cada ejercicio.",
+  "@progresoVacioDetalle": {
+    "description": "Subtítulo del estado vacío"
+  },
+  "progresoRutinasEntrenadas": "Rutinas entrenadas",
+  "@progresoRutinasEntrenadas": {
+    "description": "Cabecera del grupo con las rutinas que tienen sesiones"
+  },
+  "progresoRutinasPie": "Entra en una rutina para ver la evolución del peso en cada ejercicio.",
+  "@progresoRutinasPie": {
+    "description": "Pie del grupo anterior"
+  },
+  "progresoEstancados": "{n, plural, =1{1 ejercicio estancado} other{{n} ejercicios estancados}}",
+  "@progresoEstancados": {
+    "description": "Fila que avisa de los ejercicios sin mejora",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "progresoEstancadosDetalle": "Sin mejorar peso, repeticiones ni volumen",
+  "@progresoEstancadosDetalle": {
+    "description": "Subtítulo de la fila anterior"
+  },
+  "progresoEstancadosTitulo": "Ejercicios estancados",
+  "@progresoEstancadosTitulo": {
+    "description": "Título de la hoja con los ejercicios estancados"
+  },
+  "progresoEstancadoLinea": "{sesiones} · última {fecha}",
+  "@progresoEstancadoLinea": {
+    "description": "Subtítulo de un ejercicio estancado",
+    "placeholders": {
+      "sesiones": {
+        "type": "String"
+      },
+      "fecha": {
+        "type": "String"
+      }
+    }
+  },
+  "comunCerrar": "Cerrar",
+  "@comunCerrar": {
+    "description": "Botón que cierra una hoja sin elegir nada"
+  },
+  "progresoEstaSemana": "Esta semana",
+  "@progresoEstaSemana": {
+    "description": "Cabecera del resumen semanal"
+  },
+  "progresoSesionesDeObjetivo": "{hechas} de {objetivo}",
+  "@progresoSesionesDeObjetivo": {
+    "description": "Sesiones hechas contra el objetivo semanal",
+    "placeholders": {
+      "hechas": {
+        "type": "int"
+      },
+      "objetivo": {
+        "type": "int"
+      }
+    }
+  },
+  "progresoRacha": "{semanas} seguidas cumpliendo el objetivo",
+  "@progresoRacha": {
+    "description": "Racha de semanas cumpliendo el objetivo",
+    "placeholders": {
+      "semanas": {
+        "type": "String"
+      }
+    }
+  },
+  "progresoSinEntrenarDesde": "Hace {dias} de tu último entrenamiento",
+  "@progresoSinEntrenarDesde": {
+    "description": "Aviso de cuánto hace del último entrenamiento",
+    "placeholders": {
+      "dias": {
+        "type": "String"
+      }
+    }
+  },
+  "progresoVariacionSesiones": "{n, plural, =1{{signo} sesión} other{{signo} sesiones}}",
+  "@progresoVariacionSesiones": {
+    "description": "Variación de sesiones respecto a la semana anterior; `signo` trae el número ya con su signo y `n` es su valor absoluto, solo para el plural",
+    "placeholders": {
+      "signo": {
+        "type": "String"
+      },
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "progresoVariacionVolumen": "{signo} % de volumen",
+  "@progresoVariacionVolumen": {
+    "description": "Variación de volumen respecto a la semana anterior",
+    "placeholders": {
+      "signo": {
+        "type": "String"
+      }
+    }
+  },
+  "progresoRegistrarPeso": "Registrar tu peso",
+  "@progresoRegistrarPeso": {
+    "description": "Botón cuando no hay ninguna pesada"
+  },
+  "progresoActualizarPeso": "Actualizar tu peso ({cuando})",
+  "@progresoActualizarPeso": {
+    "description": "Botón cuando ya hay pesadas",
+    "placeholders": {
+      "cuando": {
+        "type": "String"
+      }
+    }
+  },
+  "progresoMedidas": "Medidas",
+  "@progresoMedidas": {
+    "description": "Cabecera del grupo de medidas corporales"
+  },
+  "progresoMedidasPie": "El peso corporal es el contexto de las cargas: subir en press perdiendo peso no es lo mismo que subir ganándolo.",
+  "@progresoMedidasPie": {
+    "description": "Pie del grupo de medidas"
+  },
+  "progresoMesVacio": "Ningún entrenamiento este mes",
+  "@progresoMesVacio": {
+    "description": "Pie del calendario cuando el mes está vacío"
+  },
+  "progresoSesionSinRutina": "Sesión",
+  "@progresoSesionSinRutina": {
+    "description": "Nombre de una sesión cuya rutina ya no existe"
+  },
+  "progresoRegistrarEnDia": "Registrar un entrenamiento en este día",
+  "@progresoRegistrarEnDia": {
+    "description": "Mensaje de la hoja al tocar un día vacío del calendario"
+  },
+  "ajustesTitulo": "Ajustes",
+  "@ajustesTitulo": {
+    "description": "Título de la pantalla de preferencias"
+  },
+  "ajustesUnidades": "Unidades",
+  "@ajustesUnidades": {
+    "description": "Cabecera del grupo de unidades"
+  },
+  "ajustesUnidadesPie": "El peso se guarda siempre en kilogramos: cambiar a libras solo cambia cómo se lee, y volver deja los valores originales intactos.",
+  "@ajustesUnidadesPie": {
+    "description": "Pie del grupo de unidades"
+  },
+  "ajustesUnidadPeso": "Unidad de peso",
+  "@ajustesUnidadPeso": {
+    "description": "Etiqueta del selector de kg o lb"
+  },
+  "ajustesPasoPeso": "Paso del peso",
+  "@ajustesPasoPeso": {
+    "description": "Etiqueta de cuánto sube cada toque del selector"
+  },
+  "ajustesPasoPesoMensaje": "Cuánto sube o baja cada toque en el registro.",
+  "@ajustesPasoPesoMensaje": {
+    "description": "Mensaje de la hoja del paso del peso"
+  },
+  "ajustesPasoPesoValor": "{numero} {unidad}",
+  "@ajustesPasoPesoValor": {
+    "description": "Un paso de peso con su unidad",
+    "placeholders": {
+      "numero": {
+        "type": "String"
+      },
+      "unidad": {
+        "type": "String"
+      }
+    }
+  },
+  "ajustesEntrenamiento": "Entrenamiento",
+  "@ajustesEntrenamiento": {
+    "description": "Cabecera del grupo de valores por defecto del registro"
+  },
+  "ajustesEntrenamientoPie": "Las series y repeticiones por defecto solo se usan la primera vez que entrenas un ejercicio; a partir de ahí se precarga lo que hiciste la última vez.",
+  "@ajustesEntrenamientoPie": {
+    "description": "Pie del grupo anterior"
+  },
+  "ajustesDescansoDefecto": "Descanso por defecto",
+  "@ajustesDescansoDefecto": {
+    "description": "Etiqueta del descanso general"
+  },
+  "ajustesDescansoMensaje": "Cada ejercicio puede llevar el suyo, desde su tarjeta en el registro.",
+  "@ajustesDescansoMensaje": {
+    "description": "Mensaje de la hoja del descanso general"
+  },
+  "ajustesSonido": "Sonido al terminar",
+  "@ajustesSonido": {
+    "description": "Interruptor del aviso del temporizador de descanso"
+  },
+  "ajustesSeriesDefecto": "Series por defecto",
+  "@ajustesSeriesDefecto": {
+    "description": "Etiqueta de las series precargadas"
+  },
+  "ajustesRepeticionesDefecto": "Repeticiones por defecto",
+  "@ajustesRepeticionesDefecto": {
+    "description": "Etiqueta de las repeticiones precargadas"
+  },
+  "ajustesEsfuerzo": "Anotar el esfuerzo",
+  "@ajustesEsfuerzo": {
+    "description": "Etiqueta del selector de escala de esfuerzo"
+  },
+  "ajustesEsfuerzoNo": "No",
+  "@ajustesEsfuerzoNo": {
+    "description": "Opción de no pedir el esfuerzo"
+  },
+  "ajustesObjetivos": "Objetivos",
+  "@ajustesObjetivos": {
+    "description": "Cabecera del grupo de objetivos y fórmula"
+  },
+  "ajustesObjetivosPie": "El objetivo semanal es contra lo que se mide la racha en Progreso. Brzycki estima algo más bajo que Epley en series largas; con pocas repeticiones apenas se distinguen.",
+  "@ajustesObjetivosPie": {
+    "description": "Pie del grupo de objetivos"
+  },
+  "ajustesSesionesSemana": "Sesiones por semana",
+  "@ajustesSesionesSemana": {
+    "description": "Etiqueta del objetivo semanal"
+  },
+  "ajustesFormula": "Fórmula de 1RM",
+  "@ajustesFormula": {
+    "description": "Etiqueta del selector de fórmula"
+  },
+  "ajustesProgresionActiva": "Sugerir progresiones",
+  "@ajustesProgresionActiva": {
+    "description": "Interruptor general de las sugerencias"
+  },
+  "ajustesPerfil": "Perfil",
+  "@ajustesPerfil": {
+    "description": "Etiqueta del selector de agresividad de la progresión"
+  },
+  "ajustesPerfilConservador": "Conservador",
+  "@ajustesPerfilConservador": {
+    "description": "Perfil de progresión"
+  },
+  "ajustesPerfilEstandar": "Estándar",
+  "@ajustesPerfilEstandar": {
+    "description": "Perfil de progresión"
+  },
+  "ajustesPerfilAgresivo": "Agresivo",
+  "@ajustesPerfilAgresivo": {
+    "description": "Perfil de progresión"
+  },
+  "ajustesRangoMensaje": "Dentro de este rango se sube de repeticiones; al completarlo, de peso. Cada ejercicio puede llevar el suyo.",
+  "@ajustesRangoMensaje": {
+    "description": "Mensaje de la hoja del rango global"
+  },
+  "comunRango": "{min} – {max}",
+  "@comunRango": {
+    "description": "Un rango de repeticiones",
+    "placeholders": {
+      "min": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "ajustesApariencia": "Apariencia",
+  "@ajustesApariencia": {
+    "description": "Cabecera del grupo de tema e idioma"
+  },
+  "ajustesAparienciaPie": "Con «Sistema», la app sigue el modo claro u oscuro del móvil.",
+  "@ajustesAparienciaPie": {
+    "description": "Pie del grupo de apariencia"
+  },
+  "ajustesTema": "Tema",
+  "@ajustesTema": {
+    "description": "Etiqueta del selector de tema"
+  },
+  "ajustesTemaSistema": "Sistema",
+  "@ajustesTemaSistema": {
+    "description": "Tema que sigue al del móvil"
+  },
+  "ajustesTemaClaro": "Claro",
+  "@ajustesTemaClaro": {
+    "description": "Tema claro"
+  },
+  "ajustesTemaOscuro": "Oscuro",
+  "@ajustesTemaOscuro": {
+    "description": "Tema oscuro"
+  },
+  "ajustesAcercaDe": "Acerca de",
+  "@ajustesAcercaDe": {
+    "description": "Cabecera del último grupo"
+  },
+  "ajustesLicencias": "Las imágenes y animaciones son {fuente} y se usan a 180×180 con la atribución visible, según sus condiciones de uso. Los datos del catálogo vienen de hasaneyldrm/exercises-dataset, con licencia MIT.",
+  "@ajustesLicencias": {
+    "description": "Pie con las licencias, obligatorio",
+    "placeholders": {
+      "fuente": {
+        "type": "String"
+      }
+    }
+  },
+  "ajustesVersion": "Versión",
+  "@ajustesVersion": {
+    "description": "Etiqueta de la versión de la app"
+  },
+  "ajustesCatalogo": "Catálogo",
+  "@ajustesCatalogo": {
+    "description": "Etiqueta del recuento de ejercicios del catálogo"
+  },
+  "ajustesCatalogoValor": "{cuantos} ejercicios",
+  "@ajustesCatalogoValor": {
+    "description": "Cuántos ejercicios hay sembrados",
+    "placeholders": {
+      "cuantos": {
+        "type": "int"
+      }
+    }
+  },
+  "copiaDatos": "Datos",
+  "@copiaDatos": {
+    "description": "Cabecera del grupo de copia de seguridad en Ajustes"
+  },
+  "copiaDatosPie": "La copia es un archivo con todo tu histórico. Guárdala fuera del móvil: desinstalar la app borra la base de datos.",
+  "@copiaDatosPie": {
+    "description": "Pie del grupo de datos"
+  },
+  "copiaExportar": "Exportar copia de seguridad",
+  "@copiaExportar": {
+    "description": "Fila que genera y comparte el JSON"
+  },
+  "copiaExportarDetalle": "Un archivo JSON con todos tus datos",
+  "@copiaExportarDetalle": {
+    "description": "Subtítulo de la fila anterior"
+  },
+  "copiaImportar": "Importar copia de seguridad",
+  "@copiaImportar": {
+    "description": "Fila que elige un fichero y lo restaura"
+  },
+  "copiaImportarDetalle": "Fusionar o reemplazar lo que tienes",
+  "@copiaImportarDetalle": {
+    "description": "Subtítulo de la fila anterior"
+  },
+  "copiaExportarCsv": "Exportar a CSV",
+  "@copiaExportarCsv": {
+    "description": "Fila que genera el CSV"
+  },
+  "copiaExportarCsvDetalle": "Una fila por serie, para una hoja de cálculo",
+  "@copiaExportarCsvDetalle": {
+    "description": "Subtítulo de la fila anterior"
+  },
+  "copiaDescargarMedia": "Descargar imágenes",
+  "@copiaDescargarMedia": {
+    "description": "Fila que baja la media del catálogo"
+  },
+  "copiaMediaCompleta": "Ya están todas en el móvil",
+  "@copiaMediaCompleta": {
+    "description": "Subtítulo cuando no queda nada por descargar"
+  },
+  "copiaMediaDetalle": "Para ver el catálogo sin conexión",
+  "@copiaMediaDetalle": {
+    "description": "Subtítulo cuando queda media por descargar"
+  },
+  "copiaBorrarTodo": "Borrar todos los datos",
+  "@copiaBorrarTodo": {
+    "description": "Fila destructiva"
+  },
+  "copiaBorrarTodoDetalle": "Rutinas, sesiones y medidas",
+  "@copiaBorrarTodoDetalle": {
+    "description": "Subtítulo de la fila anterior"
+  },
+  "copiaAsunto": "Copia de seguridad de AppGym",
+  "@copiaAsunto": {
+    "description": "Asunto del correo al compartir la copia"
+  },
+  "copiaGenerada": "Copia generada: {nombre}",
+  "@copiaGenerada": {
+    "description": "Aviso tras exportar el JSON",
+    "placeholders": {
+      "nombre": {
+        "type": "String"
+      }
+    }
+  },
+  "copiaCsvGenerado": "CSV generado: {nombre}",
+  "@copiaCsvGenerado": {
+    "description": "Aviso tras exportar el CSV",
+    "placeholders": {
+      "nombre": {
+        "type": "String"
+      }
+    }
+  },
+  "copiaElegirFichero": "Elige la copia de seguridad",
+  "@copiaElegirFichero": {
+    "description": "Título del selector de ficheros"
+  },
+  "copiaNoSeLee": "No se pudo leer el archivo.",
+  "@copiaNoSeLee": {
+    "description": "Aviso cuando el fichero elegido no se puede abrir"
+  },
+  "copiaNoEsJson": "El archivo no es un JSON válido.",
+  "@copiaNoEsJson": {
+    "description": "Aviso cuando el contenido no es JSON"
+  },
+  "copiaReemplazarTitulo": "¿Reemplazar todos los datos?",
+  "@copiaReemplazarTitulo": {
+    "description": "Título de la confirmación de importación destructiva"
+  },
+  "copiaReemplazarMensaje": "Se borrarán tus rutinas, sesiones y medidas actuales y se restaurarán las de la copia. No se puede deshacer.",
+  "@copiaReemplazarMensaje": {
+    "description": "Mensaje de la confirmación anterior"
+  },
+  "copiaReemplazar": "Reemplazar",
+  "@copiaReemplazar": {
+    "description": "Botón que confirma la importación destructiva"
+  },
+  "copiaImportado": "Importado: {resumen}",
+  "@copiaImportado": {
+    "description": "Aviso con el resumen de lo importado",
+    "placeholders": {
+      "resumen": {
+        "type": "String"
+      }
+    }
+  },
+  "copiaErrorImportar": "No se pudo importar: {error}",
+  "@copiaErrorImportar": {
+    "description": "Aviso cuando la importación falla",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "copiaModoMensaje": "Fusionar añade las rutinas que no tengas; una que ya exista entra como «(importada)» en vez de mezclarse.",
+  "@copiaModoMensaje": {
+    "description": "Mensaje de la hoja que elige el modo de importación"
+  },
+  "copiaFusionar": "Fusionar con lo que tengo",
+  "@copiaFusionar": {
+    "description": "Modo de importación"
+  },
+  "copiaReemplazarTodo": "Reemplazar todos mis datos",
+  "@copiaReemplazarTodo": {
+    "description": "Modo de importación"
+  },
+  "copiaMediaYaEstaba": "Las imágenes ya están descargadas.",
+  "@copiaMediaYaEstaba": {
+    "description": "Aviso cuando no queda media por bajar"
+  },
+  "copiaMediaProgreso": "Descargando {hechos} de {total}…",
+  "@copiaMediaProgreso": {
+    "description": "Progreso de la descarga de media",
+    "placeholders": {
+      "hechos": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "copiaMediaHecha": "Imágenes descargadas.",
+  "@copiaMediaHecha": {
+    "description": "Aviso al terminar la descarga sin fallos"
+  },
+  "copiaMediaFallos": "{fallos} archivos fallaron; se cargarán desde internet cuando hagan falta.",
+  "@copiaMediaFallos": {
+    "description": "Aviso al terminar la descarga con fallos",
+    "placeholders": {
+      "fallos": {
+        "type": "int"
+      }
+    }
+  },
+  "copiaBorrarTitulo": "¿Borrar todos los datos?",
+  "@copiaBorrarTitulo": {
+    "description": "Título de la primera confirmación de borrado"
+  },
+  "copiaBorrarMensaje": "Rutinas, ejercicios, sesiones, medidas y preferencias. El catálogo de ejercicios se conserva.",
+  "@copiaBorrarMensaje": {
+    "description": "Mensaje de la primera confirmación"
+  },
+  "copiaBorrar": "Borrar",
+  "@copiaBorrar": {
+    "description": "Botón de la primera confirmación de borrado"
+  },
+  "copiaBorrarTitulo2": "No se puede deshacer",
+  "@copiaBorrarTitulo2": {
+    "description": "Título de la segunda confirmación de borrado"
+  },
+  "copiaBorrarMensaje2": "Si no has exportado una copia de seguridad, esto es definitivo. ¿Seguro?",
+  "@copiaBorrarMensaje2": {
+    "description": "Mensaje de la segunda confirmación"
+  },
+  "copiaBorrarConfirmar": "Sí, borrar todo",
+  "@copiaBorrarConfirmar": {
+    "description": "Botón de la segunda confirmación"
+  },
+  "copiaBorrado": "Datos borrados.",
+  "@copiaBorrado": {
+    "description": "Aviso tras borrar los datos"
+  },
+  "copiaResumen": "{rutinas}, {sesiones} y {series}.",
+  "@copiaResumen": {
+    "description": "Resumen de lo importado; los tres trozos vienen ya con su plural",
+    "placeholders": {
+      "rutinas": {
+        "type": "String"
+      },
+      "sesiones": {
+        "type": "String"
+      },
+      "series": {
+        "type": "String"
+      }
+    }
+  },
+  "comunRutinas": "{n, plural, =1{1 rutina} other{{n} rutinas}}",
+  "@comunRutinas": {
+    "description": "Un recuento de rutinas",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "copiaErrorFormato": "El archivo no es una copia de seguridad de AppGym.",
+  "@copiaErrorFormato": {
+    "description": "Error de validación de la copia"
+  },
+  "copiaErrorSinVersion": "El archivo no dice de qué versión es.",
+  "@copiaErrorSinVersion": {
+    "description": "Error de validación de la copia"
+  },
+  "copiaErrorVersionNueva": "La copia es de una versión más nueva de AppGym (v{version}). Actualiza la app para poder importarla.",
+  "@copiaErrorVersionNueva": {
+    "description": "Error de validación de la copia",
+    "placeholders": {
+      "version": {
+        "type": "int"
+      }
+    }
+  },
+  "copiaErrorSinRutinas": "El archivo no contiene ninguna rutina.",
+  "@copiaErrorSinRutinas": {
+    "description": "Error de validación de la copia"
+  },
+  "copiaErrorRutinaMalFormada": "La rutina {numero} está mal formada.",
+  "@copiaErrorRutinaMalFormada": {
+    "description": "Error de validación de la copia",
+    "placeholders": {
+      "numero": {
+        "type": "int"
+      }
+    }
+  },
+  "copiaErrorRutinaSinNombre": "La rutina {numero} no tiene nombre.",
+  "@copiaErrorRutinaSinNombre": {
+    "description": "Error de validación de la copia",
+    "placeholders": {
+      "numero": {
+        "type": "int"
+      }
+    }
+  },
+  "copiaErrorCampoNoLista": "La rutina {numero} tiene un campo «{campo}» que no es una lista.",
+  "@copiaErrorCampoNoLista": {
+    "description": "Error de validación de la copia",
+    "placeholders": {
+      "numero": {
+        "type": "int"
+      },
+      "campo": {
+        "type": "String"
+      }
+    }
+  },
+  "copiaErrorMedidas": "Las medidas no son una lista.",
+  "@copiaErrorMedidas": {
+    "description": "Error de validación de la copia"
+  },
+  "copiaAvisoRenombrada": "«{propuesto}» ya existía: se importó como «{nombre}».",
+  "@copiaAvisoRenombrada": {
+    "description": "Aviso de rutina renombrada al importar",
+    "placeholders": {
+      "propuesto": {
+        "type": "String"
+      },
+      "nombre": {
+        "type": "String"
+      }
+    }
+  },
+  "copiaAvisoFechaIlegible": "Una sesión de «{rutina}» tenía una fecha ilegible.",
+  "@copiaAvisoFechaIlegible": {
+    "description": "Aviso al importar una sesión con fecha corrupta",
+    "placeholders": {
+      "rutina": {
+        "type": "String"
+      }
+    }
+  },
+  "copiaAvisoFueraDelCatalogo": "{ejercicios} ya no está en el catálogo y se importó como personalizado.",
+  "@copiaAvisoFueraDelCatalogo": {
+    "description": "Aviso de ejercicios que perdieron su ficha",
+    "placeholders": {
+      "ejercicios": {
+        "type": "String"
+      }
+    }
+  },
+  "copiaSufijoImportada": "{nombre} (importada)",
+  "@copiaSufijoImportada": {
+    "description": "Nombre de una rutina importada que chocaba con otra",
+    "placeholders": {
+      "nombre": {
+        "type": "String"
+      }
+    }
+  },
+  "copiaSufijoImportadaN": "{nombre} (importada {n})",
+  "@copiaSufijoImportadaN": {
+    "description": "Lo mismo, numerado, al importar la misma copia varias veces",
+    "placeholders": {
+      "nombre": {
+        "type": "String"
+      },
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "medidaPeso": "Peso corporal",
+  "@medidaPeso": {
+    "description": "Tipo de medida corporal"
+  },
+  "medidaGrasa": "Grasa corporal",
+  "@medidaGrasa": {
+    "description": "Tipo de medida corporal"
+  },
+  "medidaCintura": "Cintura",
+  "@medidaCintura": {
+    "description": "Tipo de medida corporal"
+  },
+  "medidaPecho": "Pecho",
+  "@medidaPecho": {
+    "description": "Tipo de medida corporal"
+  },
+  "medidaBrazo": "Brazo",
+  "@medidaBrazo": {
+    "description": "Tipo de medida corporal"
+  },
+  "medidaMuslo": "Muslo",
+  "@medidaMuslo": {
+    "description": "Tipo de medida corporal"
+  },
+  "comunSeriesPorReps": "{series}×{repeticiones}",
+  "@comunSeriesPorReps": {
+    "description": "Series por repeticiones, como «4×8»",
+    "placeholders": {
+      "series": {
+        "type": "int"
+      },
+      "repeticiones": {
+        "type": "int"
+      }
+    }
+  },
+  "comunCuentaYPeso": "{cuenta} · {peso}",
+  "@comunCuentaYPeso": {
+    "description": "Una propuesta con su peso, o unas series con su volumen",
+    "placeholders": {
+      "cuenta": {
+        "type": "String"
+      },
+      "peso": {
+        "type": "String"
+      }
+    }
+  },
+  "regionCuello": "Cuello",
+  "@regionCuello": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionTrapecio": "Trapecios",
+  "@regionTrapecio": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionDeltoides": "Hombros",
+  "@regionDeltoides": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionDeltoidesPost": "Deltoides posterior",
+  "@regionDeltoidesPost": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionPectoral": "Pecho",
+  "@regionPectoral": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionBiceps": "Bíceps",
+  "@regionBiceps": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionTriceps": "Tríceps",
+  "@regionTriceps": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionAntebrazo": "Antebrazos",
+  "@regionAntebrazo": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionDorsal": "Dorsales",
+  "@regionDorsal": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionEspaldaAlta": "Espalda alta",
+  "@regionEspaldaAlta": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionLumbar": "Lumbares",
+  "@regionLumbar": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionAbdomen": "Abdominales",
+  "@regionAbdomen": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionOblicuo": "Oblicuos",
+  "@regionOblicuo": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionGluteo": "Glúteos",
+  "@regionGluteo": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionCuadriceps": "Cuádriceps",
+  "@regionCuadriceps": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionIsquiotibial": "Isquiotibiales",
+  "@regionIsquiotibial": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionAductor": "Aductores",
+  "@regionAductor": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionAbductor": "Abductores",
+  "@regionAbductor": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionFlexorCadera": "Flexores de cadera",
+  "@regionFlexorCadera": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionGemelo": "Gemelos",
+  "@regionGemelo": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "regionTibial": "Tibial anterior",
+  "@regionTibial": {
+    "description": "Nombre de una de las 21 regiones del mapa muscular"
+  },
+  "ajustesIdioma": "Idioma",
+  "@ajustesIdioma": {
+    "description": "Etiqueta de la fila que elige el idioma de la app"
+  },
+  "ajustesIdiomaAuto": "Automático",
+  "@ajustesIdiomaAuto": {
+    "description": "Opción de idioma que sigue al del sistema"
+  },
+  "ajustesIdiomaMensaje": "Cambiar de idioma no renombra lo que ya has creado: tus rutinas conservan el nombre que les pusiste.",
+  "@ajustesIdiomaMensaje": {
+    "description": "Mensaje de la hoja de idioma"
+  }
+}

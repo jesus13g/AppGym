@@ -1,0 +1,22 @@
+# Configuración de `flutter gen-l10n`, que genera la clase `Textos` a partir de
+# los ARB de `lib/l10n/`.
+#
+# No pasa por `build_runner`: es un comando del propio SDK, así que no entra en
+# el conflicto de versiones de `analyzer` que obliga a declarar los providers a
+# mano y a poner techo a `drift` (ver CLAUDE.md).
+arb-dir: lib/l10n
+template-arb-file: app_es.arb
+output-dir: lib/l10n/generado
+output-localization-file: textos.dart
+
+# `Textos` y no `AppLocalizations`: el código de esta app está en español y ese
+# nombre se escribe mil veces.
+output-class: Textos
+
+# Con el getter no anulable, `Textos.of(context)` devuelve la clase y no
+# `Textos?`, que es lo que permite escribir `context.t.rutinas` sin `!`.
+nullable-getter: false
+
+# Avisa de las claves que están en la plantilla y faltan en otro idioma. No
+# rompe la generación —hay un test que sí lo hace—, pero se ve en CI.
+untranslated-messages-file: lib/l10n/generado/sin_traducir.json

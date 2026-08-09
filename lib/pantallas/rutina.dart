@@ -5,8 +5,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
-import '../datos/formato.dart' as formato;
+import '../datos/formato.dart';
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -19,7 +20,7 @@ import 'opciones_ejercicio.dart';
 Future<void> abrirRutina(BuildContext context, int idRutina) =>
     Navigator.of(context).push(
       CupertinoPageRoute<void>(
-        title: 'Rutinas',
+        title: context.t.raizRutinas,
         builder: (_) => PantallaRutina(idRutina: idRutina),
       ),
     );
@@ -50,9 +51,11 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
   ) async {
     final nombre = await ui.dialogoTexto(
       context,
-      titulo: 'Renombrar rutina',
-      marcador: 'Nombre de la rutina',
+      titulo: context.t.rutinaRenombrarTitulo,
+      marcador: context.t.rutinasNombreMarcador,
       valor: actual,
+      etiquetaAceptar: context.t.comunGuardar,
+      etiquetaCancelar: context.t.comunCancelar,
     );
     if (nombre == null || !context.mounted) return;
 
@@ -60,7 +63,7 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
     if (!context.mounted) return;
 
     if (!bien) {
-      ui.aviso(context, 'Ya existe una rutina llamada «$nombre»');
+      ui.aviso(context, context.t.rutinaNombreRepetido(nombre));
       return;
     }
     invalidarRutina(ref, idRutina);
@@ -75,16 +78,16 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
         actions: [
           CupertinoActionSheetAction(
             onPressed: () => Navigator.pop(hoja, 'renombrar'),
-            child: const Text('Renombrar'),
+            child: Text(hoja.t.rutinaRenombrar),
           ),
           CupertinoActionSheetAction(
             onPressed: () => Navigator.pop(hoja, 'duplicar'),
-            child: const Text('Duplicar rutina'),
+            child: Text(hoja.t.rutinaDuplicar),
           ),
         ],
         cancelButton: CupertinoActionSheetAction(
           onPressed: () => Navigator.pop(hoja),
-          child: const Text('Cancelar'),
+          child: Text(hoja.t.comunCancelar),
         ),
       ),
     );
@@ -101,13 +104,12 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
   Future<void> _duplicar(BuildContext context, String nombre) async {
     final propuesto = await ui.dialogoTexto(
       context,
-      titulo: 'Duplicar rutina',
-      marcador: 'Nombre de la copia',
-      mensaje:
-          'Se copian los ejercicios y su orden. Las sesiones no: la rutina '
-          'nueva empieza sin histórico.',
-      valor: '$nombre (copia)',
-      etiquetaAceptar: 'Duplicar',
+      titulo: context.t.rutinaDuplicar,
+      marcador: context.t.rutinaCopiaMarcador,
+      mensaje: context.t.rutinaCopiaMensaje,
+      valor: context.t.rutinaCopiaSufijo(nombre),
+      etiquetaAceptar: context.t.rutinaDuplicarBoton,
+      etiquetaCancelar: context.t.comunCancelar,
     );
     if (propuesto == null || !context.mounted) return;
 
@@ -117,7 +119,7 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
     if (!context.mounted) return;
 
     if (copia == null) {
-      ui.aviso(context, 'Ya existe una rutina llamada «$propuesto»');
+      ui.aviso(context, context.t.rutinaNombreRepetido(propuesto));
       return;
     }
     invalidarRutinas(ref);
@@ -153,18 +155,15 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
     if (!context.mounted) return;
 
     if (destinos.isEmpty) {
-      ui.aviso(context, 'No hay otra rutina a la que moverlo');
+      ui.aviso(context, context.t.rutinaSinDestino);
       return;
     }
 
     final destino = await showCupertinoModalPopup<int>(
       context: context,
       builder: (hoja) => CupertinoActionSheet(
-        title: Text('Mover «${ejercicio.nombre}»'),
-        message: const Text(
-          'Se lleva su histórico: las series ya registradas siguen '
-          'colgando de las sesiones en las que se hicieron.',
-        ),
+        title: Text(hoja.t.rutinaMoverTitulo(ejercicio.nombre)),
+        message: Text(hoja.t.rutinaMoverMensaje),
         actions: [
           for (final r in destinos)
             CupertinoActionSheetAction(
@@ -174,7 +173,7 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
         ],
         cancelButton: CupertinoActionSheetAction(
           onPressed: () => Navigator.pop(hoja),
-          child: const Text('Cancelar'),
+          child: Text(hoja.t.comunCancelar),
         ),
       ),
     );
@@ -186,7 +185,7 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
     if (!context.mounted) return;
 
     if (!bien) {
-      ui.aviso(context, 'Esa rutina ya tiene «${ejercicio.nombre}»');
+      ui.aviso(context, context.t.rutinaMoverRepetido(ejercicio.nombre));
       return;
     }
     invalidarRutina(ref, idRutina);
@@ -210,16 +209,17 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
     final rutina = ref.watch(rutinaProvider(idRutina));
     final ejercicios = ref.watch(ejerciciosRutinaProvider(idRutina));
     final estadisticas = ref.watch(estadisticasRutinaProvider(idRutina));
+    final f = formatoDe(context, ref);
 
-    final nombre = rutina.value?.nombre ?? 'Rutina';
+    final nombre = rutina.value?.nombre ?? context.t.rutinaTitulo;
 
     if (rutina.hasValue && rutina.value == null) {
       return CupertinoPageScaffold(
         backgroundColor: context.fondo,
-        navigationBar: ui.barra(context, titulo: 'Rutina'),
-        child: const ui.EstadoVacio(
+        navigationBar: ui.barra(context, titulo: context.t.rutinaTitulo),
+        child: ui.EstadoVacio(
           icono: CupertinoIcons.exclamationmark_triangle,
-          titulo: 'Esta rutina ya no existe',
+          titulo: context.t.resultadosRutinaBorrada,
         ),
       );
     }
@@ -232,7 +232,7 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
         slivers: [
           CupertinoSliverNavigationBar(
             largeTitle: Text(nombre),
-            previousPageTitle: 'Rutinas',
+            previousPageTitle: context.t.raizRutinas,
             backgroundColor: context.barra,
             trailing: _editando
                 ? CupertinoButton(
@@ -243,7 +243,7 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
                       _ordenLocal = null;
                     }),
                     child: Text(
-                      'Listo',
+                      context.t.comunListo,
                       style: ui.estilo(
                         context,
                         weight: t.semibold,
@@ -286,6 +286,7 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
           SliverToBoxAdapter(
             child: _Estadisticas(
               datos: estadisticas.value,
+              formato: f,
               nEjercicios: lista.length,
               onSesiones: () => abrirHistorial(context, idRutina),
             ),
@@ -316,10 +317,8 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
             SliverToBoxAdapter(
               child: lista.isEmpty
                   ? ui.Grupo(
-                      cabecera: 'Ejercicios',
-                      pie:
-                          'Esta rutina todavía está vacía. Añade ejercicios '
-                          'para poder registrar un entrenamiento.',
+                      cabecera: context.t.comunEjerciciosCabecera,
+                      pie: context.t.rutinaVaciaDetalle,
                       filas: [
                         CupertinoListTile(
                           backgroundColor: context.tarjeta,
@@ -329,11 +328,11 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
                             size: 26,
                           ),
                           title: Text(
-                            'Añadir ejercicios',
+                            context.t.rutinaAnadirEjercicios,
                             style: ui.estilo(context),
                           ),
                           subtitle: Text(
-                            'Elige del catálogo de 1.324 ejercicios',
+                            context.t.rutinaAnadirDetalle,
                             style: ui.estilo(
                               context,
                               size: t.footnote,
@@ -346,16 +345,16 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
                       ],
                     )
                   : ui.Grupo(
-                      cabecera: 'Ejercicios',
+                      cabecera: context.t.comunEjerciciosCabecera,
                       filas: [
                         for (final e in lista)
                           ui.DeslizarParaBorrar(
                             llave: ValueKey(e.id),
                             onBorrar: () => _borrarEjercicio(ref, e.id),
-                            titulo: '¿Quitar «${e.nombre}»?',
-                            mensaje:
-                                'Se eliminarán también las series '
-                                'registradas de este ejercicio en esta rutina.',
+                            titulo: context.t.rutinaQuitarTitulo(e.nombre),
+                            mensaje: context.t.rutinaQuitarMensaje,
+                            etiquetaEliminar: context.t.comunEliminar,
+                            etiquetaCancelar: context.t.comunCancelar,
                             // Mantener pulsado abre las opciones propias del
                             // ejercicio —descanso y progresión—, que es donde
                             // se configuran sin estar entrenando.
@@ -367,16 +366,14 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
                               ),
                               child: CupertinoListTile(
                                 backgroundColor: context.tarjeta,
-                                leading: ui.Miniatura(
-                                  formato.imagenEjercicio(e),
-                                ),
+                                leading: ui.Miniatura(imagenEjercicio(e)),
                                 leadingSize: 48,
                                 title: Text(
                                   e.nombre,
                                   style: ui.estilo(context),
                                 ),
                                 subtitle: Text(
-                                  formato.subtituloEjercicio(e),
+                                  f.subtituloEjercicio(e),
                                   style: ui.estilo(
                                     context,
                                     size: t.footnote,
@@ -402,7 +399,7 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
                 child: Column(
                   children: [
                     ui.BotonPrincipal(
-                      'Empezar entrenamiento',
+                      context.t.rutinaEmpezar,
                       icono: CupertinoIcons.play_fill,
                       onPressed: lista.isEmpty
                           ? null
@@ -416,7 +413,7 @@ class _PantallaRutinaState extends ConsumerState<PantallaRutina> {
                           ? null
                           : () => abrirRegistrarAnterior(context, idRutina),
                       child: Text(
-                        'Registrar una sesión anterior',
+                        context.t.rutinaRegistrarAnterior,
                         style: ui.estilo(
                           context,
                           size: t.subhead,
@@ -470,7 +467,7 @@ class _FilaOrden extends StatelessWidget {
               ),
             ),
           ),
-          ui.Miniatura(formato.imagenEjercicio(ejercicio), tamano: 36),
+          ui.Miniatura(imagenEjercicio(ejercicio), tamano: 36),
           const SizedBox(width: t.m),
           Expanded(
             child: Text(
@@ -499,11 +496,13 @@ class _FilaOrden extends StatelessWidget {
 class _Estadisticas extends StatelessWidget {
   const _Estadisticas({
     required this.datos,
+    required this.formato,
     required this.nEjercicios,
     required this.onSesiones,
   });
 
   final EstadisticasRutina? datos;
+  final Formato formato;
   final int nEjercicios;
 
   /// «Sesiones» lleva al historial, que es desde donde se corrigen y borran.
@@ -521,15 +520,19 @@ class _Estadisticas extends StatelessWidget {
     // móvil estrecho si las columnas se dimensionan por su contenido.
     child: Row(
       children: [
-        Expanded(child: _Dato('$nEjercicios', 'Ejercicios')),
+        Expanded(
+          child: _Dato('$nEjercicios', context.t.comunEjerciciosCabecera),
+        ),
         Expanded(
           child: _Dato(
             '${datos?.nEntrenamientos ?? 0}',
-            'Sesiones',
+            context.t.rutinaSesiones,
             onTap: (datos?.nEntrenamientos ?? 0) == 0 ? null : onSesiones,
           ),
         ),
-        Expanded(child: _Dato(formato.hace(datos?.ultima), 'Última')),
+        Expanded(
+          child: _Dato(formato.hace(datos?.ultima), context.t.rutinaUltima),
+        ),
       ],
     ),
   );

@@ -5,8 +5,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
-import '../datos/formato.dart' as formato;
+import '../datos/formato.dart';
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -15,7 +16,7 @@ import 'resultado_ejercicio.dart';
 Future<void> abrirResultadoRutina(BuildContext context, int idRutina) =>
     Navigator.of(context).push(
       CupertinoPageRoute<void>(
-        title: 'Progreso',
+        title: context.t.comunProgreso,
         builder: (_) => PantallaResultadoRutina(idRutina: idRutina),
       ),
     );
@@ -29,15 +30,15 @@ class PantallaResultadoRutina extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final rutina = ref.watch(rutinaProvider(idRutina));
     final ejercicios = ref.watch(ejerciciosRutinaProvider(idRutina));
-    final nombre = rutina.value?.nombre ?? 'Resultados';
+    final nombre = rutina.value?.nombre ?? context.t.resultadosTitulo;
 
     if (rutina.hasValue && rutina.value == null) {
       return CupertinoPageScaffold(
         backgroundColor: context.fondo,
-        navigationBar: ui.barra(context, titulo: 'Resultados'),
-        child: const ui.EstadoVacio(
+        navigationBar: ui.barra(context, titulo: context.t.resultadosTitulo),
+        child: ui.EstadoVacio(
           icono: CupertinoIcons.exclamationmark_triangle,
-          titulo: 'Esta rutina ya no existe',
+          titulo: context.t.resultadosRutinaBorrada,
         ),
       );
     }
@@ -48,7 +49,7 @@ class PantallaResultadoRutina extends ConsumerWidget {
         slivers: [
           CupertinoSliverNavigationBar(
             largeTitle: Text(nombre),
-            previousPageTitle: 'Progreso',
+            previousPageTitle: context.t.comunProgreso,
             backgroundColor: context.barra,
           ),
           SliverFillRemaining(
@@ -57,19 +58,19 @@ class PantallaResultadoRutina extends ConsumerWidget {
               loading: () => const ui.Cargando(),
               error: (e, _) => ui.EstadoVacio(
                 icono: CupertinoIcons.exclamationmark_triangle,
-                titulo: 'No se pudieron cargar los ejercicios',
+                titulo: context.t.resultadosErrorEjercicios,
                 subtitulo: '$e',
               ),
               data: (lista) => lista.isEmpty
-                  ? const ui.EstadoVacio(
+                  ? ui.EstadoVacio(
                       icono: CupertinoIcons.chart_bar,
-                      titulo: 'Esta rutina no tiene ejercicios',
+                      titulo: context.t.resultadosSinEjercicios,
                     )
                   : Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         ui.Grupo(
-                          cabecera: 'Ejercicios',
+                          cabecera: context.t.comunEjerciciosCabecera,
                           filas: [
                             for (final e in lista)
                               _Fila(idRutina: idRutina, ejercicio: e),
@@ -106,7 +107,7 @@ class _Fila extends ConsumerWidget {
           )),
         )
         .value;
-    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
+    final f = formatoDe(context, ref);
 
     final String subtitulo;
     final VoidCallback? alTocar;
@@ -115,23 +116,24 @@ class _Fila extends ConsumerWidget {
       subtitulo = '…';
       alTocar = null;
     } else if (registros.isEmpty) {
-      subtitulo = 'Sin registros';
+      subtitulo = context.t.comunSinRegistros;
       alTocar = null;
     } else {
       final ultimo = registros.last;
       final maximo = registros
           .map((r) => r.pesoMaximo)
           .reduce((a, b) => a > b ? a : b);
-      subtitulo =
-          '${formato.plural(registros.length, 'sesión', 'sesiones')} · '
-          'último ${formato.peso(ultimo.pesoMaximo, ajustes)} · '
-          'máx ${formato.peso(maximo, ajustes)}';
+      subtitulo = context.t.resultadosResumenEjercicio(
+        context.t.comunSesiones(registros.length),
+        f.peso(ultimo.pesoMaximo),
+        f.peso(maximo),
+      );
       alTocar = () => abrirResultadoEjercicio(context, idRutina, ejercicio.id);
     }
 
     return CupertinoListTile(
       backgroundColor: context.tarjeta,
-      leading: ui.Miniatura(formato.imagenEjercicio(ejercicio)),
+      leading: ui.Miniatura(imagenEjercicio(ejercicio)),
       leadingSize: 48,
       title: Text(ejercicio.nombre, style: ui.estilo(context)),
       subtitle: Text(

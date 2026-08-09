@@ -5,9 +5,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
-import '../datos/formato.dart' as formato;
+import '../datos/formato.dart';
 import '../datos/plantillas.dart';
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -23,21 +24,22 @@ class PantallaRutinas extends ConsumerWidget {
   /// catálogo, así que la lista de plantillas se ofrece antes que el diálogo
   /// del nombre y no escondida detrás de él.
   Future<void> _nueva(BuildContext context, WidgetRef ref) async {
-    final plantillas = await cargarPlantillas();
+    // El idioma sale del árbol, no de la preferencia: es el que la app está
+    // enseñando, y es el que el usuario verá escrito en sus rutinas nuevas.
+    final plantillas = await cargarPlantillas(
+      Localizations.localeOf(context).languageCode,
+    );
     if (!context.mounted) return;
 
     final elegida = await showCupertinoModalPopup<int>(
       context: context,
       builder: (hoja) => CupertinoActionSheet(
-        title: const Text('Nueva rutina'),
-        message: const Text(
-          'Las plantillas se pueden editar después: son un punto de partida, '
-          'no un carril.',
-        ),
+        title: Text(context.t.rutinasNueva),
+        message: Text(context.t.rutinasPlantillasMensaje),
         actions: [
           CupertinoActionSheetAction(
             onPressed: () => Navigator.pop(hoja, -1),
-            child: const Text('En blanco'),
+            child: Text(hoja.t.rutinasEnBlanco),
           ),
           for (final (indice, p) in plantillas.indexed)
             CupertinoActionSheetAction(
@@ -47,8 +49,10 @@ class PantallaRutinas extends ConsumerWidget {
                   Text(p.nombre),
                   const SizedBox(height: 2),
                   Text(
-                    '${p.resumen} · '
-                    '${formato.plural(p.nEjercicios, 'ejercicio', 'ejercicios')}',
+                    hoja.t.comunRutinaConEjercicios(
+                      p.resumen,
+                      hoja.t.comunEjercicios(p.nEjercicios),
+                    ),
                     textAlign: TextAlign.center,
                     style: ui.estilo(
                       hoja,
@@ -62,7 +66,7 @@ class PantallaRutinas extends ConsumerWidget {
         ],
         cancelButton: CupertinoActionSheetAction(
           onPressed: () => Navigator.pop(hoja),
-          child: const Text('Cancelar'),
+          child: Text(hoja.t.comunCancelar),
         ),
       ),
     );
@@ -93,8 +97,10 @@ class PantallaRutinas extends ConsumerWidget {
               const SizedBox(height: t.m),
               for (final r in plantilla.rutinas)
                 Text(
-                  '${r.nombre} · '
-                  '${formato.plural(r.ejercicios.length, 'ejercicio', 'ejercicios')}',
+                  dialogo.t.comunRutinaConEjercicios(
+                    r.nombre,
+                    dialogo.t.comunEjercicios(r.ejercicios.length),
+                  ),
                   textAlign: TextAlign.center,
                   style: ui.estilo(dialogo, size: t.footnote),
                 ),
@@ -104,12 +110,12 @@ class PantallaRutinas extends ConsumerWidget {
         actions: [
           CupertinoDialogAction(
             onPressed: () => Navigator.pop(dialogo, false),
-            child: const Text('Cancelar'),
+            child: Text(dialogo.t.comunCancelar),
           ),
           CupertinoDialogAction(
             isDefaultAction: true,
             onPressed: () => Navigator.pop(dialogo, true),
-            child: const Text('Crear'),
+            child: Text(dialogo.t.comunCrear),
           ),
         ],
       ),
@@ -124,11 +130,11 @@ class PantallaRutinas extends ConsumerWidget {
 
     invalidarRutinas(ref);
     if (creadas.isEmpty) {
-      ui.aviso(context, 'Ya tienes rutinas con esos nombres');
+      ui.aviso(context, context.t.rutinasPlantillaTodasExisten);
       return;
     }
     if (creadas.length < plantilla.rutinas.length) {
-      ui.aviso(context, 'Algunas rutinas ya existían y no se han duplicado');
+      ui.aviso(context, context.t.rutinasPlantillaAlgunasExisten);
     }
     await abrirRutina(context, creadas.first);
   }
@@ -136,10 +142,11 @@ class PantallaRutinas extends ConsumerWidget {
   Future<void> _crear(BuildContext context, WidgetRef ref) async {
     final nombre = await ui.dialogoTexto(
       context,
-      titulo: 'Nueva rutina',
-      marcador: 'Nombre de la rutina',
-      mensaje: 'Por ejemplo: Empuje, Pierna, Full body…',
-      etiquetaAceptar: 'Crear',
+      titulo: context.t.rutinasNueva,
+      marcador: context.t.rutinasNombreMarcador,
+      mensaje: context.t.rutinasNombreMensaje,
+      etiquetaAceptar: context.t.comunCrear,
+      etiquetaCancelar: context.t.comunCancelar,
     );
     if (nombre == null || !context.mounted) return;
 
@@ -147,7 +154,7 @@ class PantallaRutinas extends ConsumerWidget {
     if (!context.mounted) return;
 
     if (id == null) {
-      ui.aviso(context, 'Ya tienes una rutina llamada «$nombre»');
+      ui.aviso(context, context.t.rutinasNombreRepetido(nombre));
       return;
     }
     invalidarRutinas(ref);
@@ -168,7 +175,7 @@ class PantallaRutinas extends ConsumerWidget {
       child: CustomScrollView(
         slivers: [
           CupertinoSliverNavigationBar(
-            largeTitle: const Text('Rutinas'),
+            largeTitle: Text(context.t.raizRutinas),
             backgroundColor: context.barra,
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
@@ -195,24 +202,23 @@ class PantallaRutinas extends ConsumerWidget {
               loading: () => const ui.Cargando(),
               error: (e, _) => ui.EstadoVacio(
                 icono: CupertinoIcons.exclamationmark_triangle,
-                titulo: 'No se pudieron cargar las rutinas',
+                titulo: context.t.rutinasError,
                 subtitulo: '$e',
               ),
               data: (rutinas) => rutinas.isEmpty
                   ? ui.EstadoVacio(
                       icono: CupertinoIcons.square_stack_3d_up,
-                      titulo: 'Aún no tienes rutinas',
-                      subtitulo:
-                          'Crea tu primera rutina para empezar a organizar tus '
-                          'ejercicios y registrar tus entrenamientos.',
+                      titulo: context.t.rutinasVacio,
+                      subtitulo: context.t.rutinasVacioDetalle,
                       accion: ui.BotonPrincipal(
-                        'Crear rutina',
+                        context.t.rutinasCrearRutina,
                         icono: CupertinoIcons.add,
                         onPressed: () => _nueva(context, ref),
                       ),
                     )
                   : _Lista(
                       rutinas: rutinas,
+                      formato: formatoDe(context, ref),
                       onBorrar: (id) => _borrar(ref, id),
                     ),
             ),
@@ -224,9 +230,14 @@ class PantallaRutinas extends ConsumerWidget {
 }
 
 class _Lista extends StatelessWidget {
-  const _Lista({required this.rutinas, required this.onBorrar});
+  const _Lista({
+    required this.rutinas,
+    required this.formato,
+    required this.onBorrar,
+  });
 
   final List<ResumenRutina> rutinas;
+  final Formato formato;
   final void Function(int idRutina) onBorrar;
 
   @override
@@ -234,17 +245,16 @@ class _Lista extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       ui.Grupo(
-        pie: 'Desliza una rutina hacia la izquierda para eliminarla.',
+        pie: context.t.rutinasPie,
         filas: [
           for (final r in rutinas)
             ui.DeslizarParaBorrar(
               llave: ValueKey(r.id),
               onBorrar: () => onBorrar(r.id),
-              titulo: '¿Eliminar «${r.nombre}»?',
-              mensaje:
-                  'Se borrarán también sus ejercicios y todo su '
-                  'histórico de entrenamientos. Esta acción no se puede '
-                  'deshacer.',
+              titulo: context.t.rutinasEliminarTitulo(r.nombre),
+              mensaje: context.t.rutinasEliminarMensaje,
+              etiquetaEliminar: context.t.comunEliminar,
+              etiquetaCancelar: context.t.comunCancelar,
               child: CupertinoListTile(
                 backgroundColor: context.tarjeta,
                 leading: ui.PuntoColor(
@@ -254,7 +264,7 @@ class _Lista extends StatelessWidget {
                 title: Text(r.nombre, style: ui.estilo(context)),
                 subtitle: Text(
                   [
-                    formato.plural(r.nEjercicios, 'ejercicio', 'ejercicios'),
+                    context.t.comunEjercicios(r.nEjercicios),
                     formato.hace(r.ultimaFecha),
                   ].join(' · '),
                   style: ui.estilo(

@@ -168,9 +168,16 @@ Set<int> sesionesConRecord(List<ResumenSesionEjercicio> sesiones) {
 
 /// El lunes de la semana de [fecha], a medianoche.
 ///
-/// La semana va de lunes a domingo, coherente con `formato.diasSemana`. En Dart
-/// `weekday` da 1 para el lunes, así que restar `weekday - 1` días cae siempre
-/// en su lunes.
+/// La semana va de lunes a domingo, coherente con `Formato.inicialesSemana`. En
+/// Dart `weekday` da 1 para el lunes, así que restar `weekday - 1` días cae
+/// siempre en su lunes.
+///
+/// **Empieza en lunes en todos los idiomas, y eso es deliberado**, no un
+/// descuido de internacionalización: en inglés la semana del calendario empieza
+/// en domingo, pero la racha (C17) y el reparto de [porSemana] están definidos
+/// sobre semanas de lunes a domingo, y hacer que el primer día siguiera al
+/// idioma daría rachas distintas en dos móviles del mismo usuario — que es justo
+/// lo que la sincronización del bloque K no puede permitir.
 DateTime lunesDe(DateTime fecha) {
   final dia = DateTime(fecha.year, fecha.month, fecha.day);
   return dia.subtract(Duration(days: dia.weekday - 1));

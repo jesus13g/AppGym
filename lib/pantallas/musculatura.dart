@@ -15,12 +15,13 @@ import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
-import '../datos/formato.dart' as formato;
+import '../datos/formato.dart';
 import '../datos/geometria.dart';
 import '../datos/media.dart' as media;
 import '../datos/musculos.dart';
 import '../datos/reloj.dart' as reloj;
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -91,14 +92,14 @@ class _MapaMuscularState extends ConsumerState<MapaMuscular> {
             groupValue: _cara,
             onValueChanged: (valor) =>
                 setState(() => _cara = valor ?? Vista.frente),
-            children: const {
+            children: {
               Vista.frente: Padding(
-                padding: EdgeInsets.symmetric(vertical: t.xs),
-                child: Text('Frente'),
+                padding: const EdgeInsets.symmetric(vertical: t.xs),
+                child: Text(context.t.cuerpoFrente),
               ),
               Vista.espalda: Padding(
-                padding: EdgeInsets.symmetric(vertical: t.xs),
-                child: Text('Espalda'),
+                padding: const EdgeInsets.symmetric(vertical: t.xs),
+                child: Text(context.t.cuerpoEspalda),
               ),
             },
           ),
@@ -114,7 +115,7 @@ class _MapaMuscularState extends ConsumerState<MapaMuscular> {
                 GestureDetector(
                   onTap: () => setState(() => _dias = dias),
                   child: ui.Pildora(
-                    '$dias días',
+                    context.t.cuerpoPeriodo(dias),
                     color: _dias == dias
                         ? CupertinoColors.white
                         : context.texto,
@@ -158,11 +159,8 @@ class _MapaMuscularState extends ConsumerState<MapaMuscular> {
             padding: const EdgeInsets.symmetric(vertical: t.l),
             child: ui.EstadoVacio(
               icono: CupertinoIcons.person_crop_square,
-              titulo: 'Aún no hay nada que colorear',
-              subtitulo:
-                  'Cuando registres entrenamientos, el modelo se irá tiñendo '
-                  'según lo que trabaje cada músculo. Mientras tanto, toca '
-                  'cualquier músculo para ver sus ejercicios.',
+              titulo: context.t.cuerpoVacio,
+              subtitulo: context.t.cuerpoVacioDetalle,
             ),
           )
         else
@@ -174,11 +172,16 @@ class _MapaMuscularState extends ConsumerState<MapaMuscular> {
   String _avisoDeFuera(SinRepresentar fuera) {
     final partes = <String>[
       if (fuera.personalizados > 0)
-        '${formato.plural(fuera.personalizados, 'ejercicio personalizado', 'ejercicios personalizados')} sin músculo asignado',
+        context.t.cuerpoFueraPersonalizados(
+          context.t.comunEjerciciosPersonalizados(fuera.personalizados),
+        ),
       if (fuera.cardio > 0)
-        '${formato.plural(fuera.cardio, 'ejercicio', 'ejercicios')} de cardio',
+        context.t.cuerpoFueraCardio(context.t.comunEjercicios(fuera.cardio)),
     ];
-    return '${partes.join(' y ')}: no se reparten por el modelo.';
+    final juntas = partes.length == 2
+        ? context.t.cuerpoFueraY(partes.first, partes.last)
+        : partes.single;
+    return context.t.cuerpoFueraCola(juntas);
   }
 
   Future<void> _abrir(Region region) async {
@@ -386,7 +389,7 @@ class _Leyenda extends StatelessWidget {
       children: [
         Flexible(
           child: Text(
-            'Sin trabajar',
+            context.t.cuerpoSinTrabajar,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: ui.estilo(context, size: t.caption, color: context.textoSec),
@@ -407,7 +410,7 @@ class _Leyenda extends StatelessWidget {
         const SizedBox(width: t.s),
         Flexible(
           child: Text(
-            'Muy trabajado',
+            context.t.cuerpoMuyTrabajado,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.right,
@@ -437,24 +440,20 @@ class _MenosTrabajados extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ui.Grupo(
-    cabecera: 'Menos trabajados',
-    pie:
-        'Cuenta desde la última vez que entrenaste cada músculo, con todo tu '
-        'histórico y no solo con el periodo elegido arriba.',
+    cabecera: context.t.cuerpoMenosTrabajados,
+    pie: context.t.cuerpoMenosTrabajadosPie,
     filas: [
       for (final (region, dias) in menosTrabajados(trabajos, hoy: hoy))
         CupertinoListTile(
           backgroundColor: context.tarjeta,
           title: Text(
-            regiones[region]!.nombre,
+            nombreRegion(context.t, region),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: ui.estilo(context),
           ),
           additionalInfo: Text(
-            dias == null
-                ? 'nunca'
-                : 'hace ${formato.plural(dias, 'día', 'días')}',
+            dias == null ? context.t.cuerpoNunca : context.t.desdeDias(dias),
             style: ui.estilo(
               context,
               size: t.footnote,
@@ -493,9 +492,8 @@ class _HojaRegion extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final datos = regiones[region]!;
     final trabajos = ref.watch(trabajoMuscularProvider).value ?? const [];
-    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
+    final f = formatoDe(context, ref);
     final desde = reloj.ahora().subtract(Duration(days: dias));
     final trabajo = trabajoPorRegion(trabajos, desde: desde)[region];
     final sesiones = sesionesDeRegion(trabajos, region);
@@ -523,7 +521,7 @@ class _HojaRegion extends ConsumerWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      datos.nombre,
+                      nombreRegion(context.t, region),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: ui.estilo(
@@ -537,7 +535,7 @@ class _HojaRegion extends ConsumerWidget {
                     padding: EdgeInsets.zero,
                     minimumSize: Size.zero,
                     onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Listo'),
+                    child: Text(context.t.comunListo),
                   ),
                 ],
               ),
@@ -545,8 +543,8 @@ class _HojaRegion extends ConsumerWidget {
             Expanded(
               child: ListView(
                 children: [
-                  _resumen(context, trabajo, enRutinas, ajustes),
-                  _sesiones(context, sesiones),
+                  _resumen(context, trabajo, enRutinas, f),
+                  _sesiones(context, ref, sesiones),
                   _Ejercicios(region: region),
                   const SizedBox(height: t.xxl),
                 ],
@@ -562,33 +560,35 @@ class _HojaRegion extends ConsumerWidget {
     BuildContext context,
     TrabajoRegion? trabajo,
     List<String> enRutinas,
-    Ajustes ajustes,
+    Formato f,
   ) => ui.Grupo(
-    cabecera: 'Últimos $dias días',
-    pie:
-        'El músculo objetivo del ejercicio cuenta entero, el grupo muscular a '
-        'la mitad y los secundarios a un tercio.',
+    cabecera: context.t.cuerpoUltimosDias(dias),
+    pie: context.t.cuerpoResumenPie,
     filas: [
-      _fila(context, 'Series', trabajo == null ? '—' : '${trabajo.nSeries}'),
       _fila(
         context,
-        'Volumen',
-        trabajo == null ? '—' : formato.peso(trabajo.volumen, ajustes),
+        context.t.comunSeriesEtiqueta,
+        trabajo == null ? '—' : '${trabajo.nSeries}',
       ),
       _fila(
         context,
-        'Sesiones',
+        context.t.comunVolumen,
+        trabajo == null ? '—' : f.peso(trabajo.volumen),
+      ),
+      _fila(
+        context,
+        context.t.rutinaSesiones,
         trabajo == null ? '—' : '${trabajo.nSesiones}',
       ),
       _fila(
         context,
-        'Última vez',
+        context.t.cuerpoUltimaVez,
         trabajo?.ultima == null
-            ? 'Sin registros'
-            : formato.hace(trabajo!.ultima!),
+            ? context.t.comunSinRegistros
+            : f.hace(trabajo!.ultima!),
       ),
       if (enRutinas.isNotEmpty)
-        _fila(context, 'En tus rutinas', enRutinas.join(', ')),
+        _fila(context, context.t.cuerpoEnTusRutinas, enRutinas.join(', ')),
     ],
   );
 
@@ -607,10 +607,14 @@ class _HojaRegion extends ConsumerWidget {
         ),
       );
 
-  Widget _sesiones(BuildContext context, List<SesionDeRegion> sesiones) {
+  Widget _sesiones(
+    BuildContext context,
+    WidgetRef ref,
+    List<SesionDeRegion> sesiones,
+  ) {
     if (sesiones.isEmpty) return const SizedBox.shrink();
     return ui.Grupo(
-      cabecera: 'Tus entrenamientos',
+      cabecera: context.t.cuerpoTusEntrenamientos,
       filas: [
         for (final s in sesiones)
           CupertinoListTile(
@@ -622,7 +626,10 @@ class _HojaRegion extends ConsumerWidget {
               style: ui.estilo(context),
             ),
             subtitle: Text(
-              '${formato.fechaCorta(s.fecha)} · ${formato.plural(s.nSeries, 'serie', 'series')}',
+              context.t.cuerpoSesionResumen(
+                formatoDe(context, ref).fechaCorta(s.fecha),
+                context.t.comunSeries(s.nSeries),
+              ),
               style: ui.estilo(
                 context,
                 size: t.footnote,
@@ -667,7 +674,7 @@ class _Ejercicios extends ConsumerWidget {
       });
 
     return ui.Grupo(
-      cabecera: 'Ejercicios',
+      cabecera: context.t.comunEjerciciosCabecera,
       filas: [
         for (final ficha in fichas.take(8))
           CupertinoListTile(
@@ -681,8 +688,8 @@ class _Ejercicios extends ConsumerWidget {
             ),
             subtitle: Text(
               mios.contains(ficha.id)
-                  ? 'Ya está en tus rutinas'
-                  : formato.subtituloCatalogo(ficha),
+                  ? context.t.cuerpoYaEnTusRutinas
+                  : formatoDe(context, ref).subtituloCatalogo(ficha),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: ui.estilo(
@@ -715,7 +722,7 @@ class _Ejercicios extends ConsumerWidget {
         CupertinoListTile(
           backgroundColor: context.tarjeta,
           title: Text(
-            'Ver los ${catalogo.total} ejercicios',
+            context.t.cuerpoVerTodos(catalogo.total),
             style: ui.estilo(context, color: context.acento),
           ),
           trailing: const CupertinoListTileChevron(),
@@ -728,3 +735,33 @@ class _Ejercicios extends ConsumerWidget {
     );
   }
 }
+
+/// Cómo se llama cada una de las 21 regiones.
+///
+/// El `switch` es exhaustivo a propósito: añadir una región al `enum` rompe la
+/// compilación justo aquí, que es donde hay que ponerle nombre. La clave del
+/// `enum` no cambia nunca: está en `assets/musculatura.json` y en la atribución
+/// del trabajo.
+String nombreRegion(Textos t, Region region) => switch (region) {
+  Region.cuello => t.regionCuello,
+  Region.trapecio => t.regionTrapecio,
+  Region.deltoides => t.regionDeltoides,
+  Region.deltoidesPost => t.regionDeltoidesPost,
+  Region.pectoral => t.regionPectoral,
+  Region.biceps => t.regionBiceps,
+  Region.triceps => t.regionTriceps,
+  Region.antebrazo => t.regionAntebrazo,
+  Region.dorsal => t.regionDorsal,
+  Region.espaldaAlta => t.regionEspaldaAlta,
+  Region.lumbar => t.regionLumbar,
+  Region.abdomen => t.regionAbdomen,
+  Region.oblicuo => t.regionOblicuo,
+  Region.gluteo => t.regionGluteo,
+  Region.cuadriceps => t.regionCuadriceps,
+  Region.isquiotibial => t.regionIsquiotibial,
+  Region.aductor => t.regionAductor,
+  Region.abductor => t.regionAbductor,
+  Region.flexorCadera => t.regionFlexorCadera,
+  Region.gemelo => t.regionGemelo,
+  Region.tibial => t.regionTibial,
+};

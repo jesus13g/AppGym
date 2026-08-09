@@ -1,8 +1,8 @@
 # AppGym
 
 Aplicación para la gestión y revisión de rutinas de gym, con interfaz de estética iOS
-y un catálogo de **1.324 ejercicios** con instrucciones en español, músculos implicados
-y una animación de cada movimiento.
+y un catálogo de **1.324 ejercicios** con instrucciones, músculos implicados y una
+animación de cada movimiento. **En español y en inglés.**
 
 Escrita en **Flutter**. Antes lo estaba en Python con Flet; el histórico de git conserva
 aquella versión.
@@ -13,9 +13,9 @@ aquella versión.
   push/pull/legs, peso corporal, máquinas) o **duplicando** una que ya tengas. Los
   ejercicios se reordenan arrastrando y se pueden mover a otra rutina.
 - **Catálogo.** Buscador con filtros por zona del cuerpo, equipamiento y músculo
-  objetivo. Busca por nombre en inglés o por términos en español: *«mancuerna pecho»*
-  funciona igual que *«dumbbell bench press»*. Marca **favoritos**, recuerda lo último
-  que has mirado y añade a una rutina sin salir de ahí.
+  objetivo. El buscador entiende los dos idiomas a la vez, sea cual sea el activo:
+  *«mancuerna pecho»* funciona igual que *«dumbbell bench press»*. Marca **favoritos**,
+  recuerda lo último que has mirado y añade a una rutina sin salir de ahí.
 - **Entrenamientos.** Cada serie con sus repeticiones y su peso, así que una pirámide o
   un drop set se anotan tal cual. Se precargan las de la última sesión. Notas y esfuerzo
   percibido (RPE o RIR) opcionales.
@@ -31,13 +31,15 @@ aquella versión.
   catálogo para él. Debajo, peso corporal y perímetros, con media móvil de 7 días para
   ver la tendencia por debajo del ruido diario.
 - **Ajustes.** Kilos o libras, paso del peso, descanso por defecto, valores de partida,
-  objetivo semanal y tema claro / oscuro / del sistema.
+  objetivo semanal, tema claro / oscuro / del sistema e **idioma** (automático, español
+  o inglés).
 - **Copia de seguridad.** Exporta todo tu histórico a un archivo y vuelve a importarlo
   (fusionando o reemplazando). También en CSV, una fila por serie, para una hoja de
   cálculo.
 
-Por defecto la interfaz sigue el tema del sistema, y en Ajustes se puede forzar claro
-u oscuro.
+Por defecto la interfaz sigue el tema y el idioma del sistema, y en Ajustes se puede
+forzar cualquiera de los dos. El idioma se cambia sin reiniciar; los nombres de las
+rutinas que ya has creado no se tocan, porque son tuyos.
 
 ## Probarla en el móvil (Android)
 
@@ -68,6 +70,7 @@ Requiere **Flutter 3.44.8** o posterior.
 ```bash
 flutter pub get
 dart run build_runner build     # genera el código de drift; obligatorio tras clonar
+flutter gen-l10n                # genera las traducciones; obligatorio tras clonar
 flutter run
 ```
 
@@ -105,7 +108,7 @@ cuando una copia de seguridad desde *Ajustes → Datos* y guardarla fuera del m�
 
 ```
 lib/
-├── main.dart               punto de entrada, CupertinoApp y localización
+├── main.dart               punto de entrada, CupertinoApp, tema e idioma
 ├── datos/
 │   ├── bd.dart             tablas de drift y todas las consultas
 │   ├── esquemas.dart       esquemas versionados, para las migraciones
@@ -116,11 +119,12 @@ lib/
 │   ├── plantillas.dart     rutinas predefinidas
 │   ├── semilla.dart        carga del catálogo en la base de datos
 │   ├── media.dart          descarga y resolución de imágenes y GIFs
-│   ├── i18n.dart           traducciones del vocabulario del catálogo
+│   ├── i18n.dart           traducciones del vocabulario del catálogo (es · en)
 │   ├── musculos.dart       las 21 regiones del mapa y el reparto del trabajo
 │   ├── geometria.dart      los trazados del modelo anatómico y el toque
 │   ├── reloj.dart          la hora, en un punto que los tests pueden adelantar
-│   └── formato.dart        formateo de fechas, pesos y textos
+│   └── formato.dart        fechas, números y pesos del idioma activo
+├── l10n/                   los textos de la interfaz, un ARB por idioma
 ├── estado/
 │   ├── providers.dart      providers de Riverpod
 │   └── descanso.dart       temporizador de descanso
@@ -128,14 +132,17 @@ lib/
 │   ├── tokens.dart         colores, espaciados, radios y tipografía
 │   └── ui.dart             componentes que Cupertino no trae
 └── pantallas/              una pantalla por fichero
-assets/ejercicios.es.json   catálogo de ejercicios en español
-assets/plantillas.json      rutinas predefinidas
+assets/ejercicios.es.json   catálogo de ejercicios, con sus pasos en español
+assets/instrucciones.en.json
+                            los mismos pasos en inglés
+assets/plantillas.json      rutinas predefinidas, con sus nombres por idioma
 assets/musculatura.json     el modelo anatómico del mapa muscular
 tool/musculatura.py         genera el modelo anatómico y una previa para verlo
+tool/instrucciones_en.py    baja los pasos en inglés del dataset original
 drift_schemas/              un JSON por versión del esquema
 test/                       tests de datos, de widget y de migración
 docs/especificaciones.md    primera iteración, completada (bloques A–D)
-docs/especificaciones-2.md  lo previsto: idiomas, progresiones y sincronización
+docs/especificaciones-2.md  segunda iteración: idiomas y progresiones hechos, nube no
 ```
 
 ## Créditos y licencias

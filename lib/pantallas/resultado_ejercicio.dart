@@ -10,24 +10,25 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
-import '../datos/formato.dart' as formato;
+import '../datos/formato.dart';
 import '../datos/metricas.dart' as metricas;
 import '../datos/progresion.dart' as progresion;
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
 import 'sugerencia.dart';
 
 /// Lo que se pinta en el eje Y del gráfico.
+///
+/// El `enum` no lleva su etiqueta: depende del idioma, que depende del
+/// `BuildContext`. La pone [etiquetaMetrica], y el `switch` exhaustivo avisa si
+/// se añade un valor sin traducir.
 enum Metrica {
-  peso('Peso'),
-  unoRm('1RM'),
-  volumen('Volumen');
-
-  const Metrica(this.etiqueta);
-
-  final String etiqueta;
+  peso,
+  unoRm,
+  volumen;
 
   /// El valor de esta métrica en una sesión. Las tres son kilos: el volumen es
   /// kilos × repeticiones, así que también se convierte a la unidad activa.
@@ -40,14 +41,12 @@ enum Metrica {
 
 /// Cuánto histórico se pinta. Sustituye al tope fijo de doce barras.
 enum Rango {
-  mes('1M', 30),
-  trimestre('3M', 91),
-  ano('1A', 365),
-  todo('Todo', null);
+  mes(30),
+  trimestre(91),
+  ano(365),
+  todo(null);
 
-  const Rango(this.etiqueta, this.dias);
-
-  final String etiqueta;
+  const Rango(this.dias);
 
   /// `null` es «sin límite».
   final int? dias;
@@ -87,8 +86,8 @@ class PantallaResultadoEjercicio extends ConsumerWidget {
         idEjercicio: idEjercicio,
       )),
     );
-    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
-    final nombre = ejercicio.value?.nombre ?? 'Ejercicio';
+    final f = formatoDe(context, ref);
+    final nombre = ejercicio.value?.nombre ?? context.t.fichaTitulo;
 
     return CupertinoPageScaffold(
       backgroundColor: context.fondo,
@@ -97,23 +96,21 @@ class PantallaResultadoEjercicio extends ConsumerWidget {
         loading: () => const ui.Cargando(),
         error: (e, _) => ui.EstadoVacio(
           icono: CupertinoIcons.exclamationmark_triangle,
-          titulo: 'No se pudo cargar el progreso',
+          titulo: context.t.evolucionError,
           subtitulo: '$e',
         ),
         // La guarda contra la lista vacía no es cosmética: en la versión Flet,
         // abrir un ejercicio sin registros reventaba al hacer max() de una lista
         // vacía.
         data: (lista) => lista.isEmpty
-            ? const ui.EstadoVacio(
+            ? ui.EstadoVacio(
                 icono: CupertinoIcons.chart_bar,
-                titulo: 'Sin registros todavía',
-                subtitulo:
-                    'Registra un entrenamiento con este ejercicio para '
-                    'ver aquí su evolución.',
+                titulo: context.t.evolucionVacio,
+                subtitulo: context.t.evolucionVacioDetalle,
               )
             : _Contenido(
                 registros: lista,
-                ajustes: ajustes,
+                formato: f,
                 // Aquí se analiza, no se entrena: la sugerencia se enseña con su
                 // motivo y sin botón de aplicar.
                 sugerencia: ref
@@ -133,15 +130,15 @@ class PantallaResultadoEjercicio extends ConsumerWidget {
 class _Contenido extends StatefulWidget {
   const _Contenido({
     required this.registros,
-    required this.ajustes,
+    required this.formato,
     this.sugerencia,
   });
 
   final List<ResumenSesionEjercicio> registros;
 
-  /// De aquí salen la unidad en la que se escriben los pesos y la fórmula con
-  /// la que ya se estimó el 1RM.
-  final Ajustes ajustes;
+  /// De aquí salen el idioma, la unidad en la que se escriben los pesos y la
+  /// fórmula con la que ya se estimó el 1RM.
+  final Formato formato;
 
   final progresion.Sugerencia? sugerencia;
 
@@ -174,7 +171,7 @@ class _ContenidoState extends State<_Contenido> {
 
   @override
   Widget build(BuildContext context) {
-    final ajustes = widget.ajustes;
+    final f = widget.formato;
     final records = metricas.recordsEjercicio(widget.registros);
     final conRecord = metricas.sesionesConRecord(widget.registros);
     final enRango = _enRango;
@@ -183,13 +180,9 @@ class _ContenidoState extends State<_Contenido> {
     return SafeArea(
       child: ListView(
         children: [
-          _Tarjeta(
-            records: records,
-            sesiones: widget.registros,
-            ajustes: ajustes,
-          ),
+          _Tarjeta(records: records, sesiones: widget.registros, formato: f),
           if (widget.sugerencia case final propuesta?)
-            _TarjetaSugerencia(sugerencia: propuesta, ajustes: ajustes),
+            _TarjetaSugerencia(sugerencia: propuesta, formato: f),
           const SizedBox(height: t.s),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: t.l),
@@ -203,7 +196,7 @@ class _ContenidoState extends State<_Contenido> {
                   for (final m in Metrica.values)
                     m: Padding(
                       padding: const EdgeInsets.symmetric(vertical: t.xs),
-                      child: Text(m.etiqueta),
+                      child: Text(etiquetaMetrica(context.t, m)),
                     ),
                 },
               ),
@@ -227,7 +220,7 @@ class _ContenidoState extends State<_Contenido> {
               registros: enRango,
               maximo: maximo,
               metrica: _metrica,
-              ajustes: ajustes,
+              formato: f,
             ),
           ),
           const SizedBox(height: t.s),
@@ -243,7 +236,7 @@ class _ContenidoState extends State<_Contenido> {
                   for (final r in Rango.values)
                     r: Padding(
                       padding: const EdgeInsets.symmetric(vertical: t.xs),
-                      child: Text(r.etiqueta),
+                      child: Text(etiquetaRango(context.t, r)),
                     ),
                 },
               ),
@@ -251,19 +244,18 @@ class _ContenidoState extends State<_Contenido> {
           ),
           const SizedBox(height: t.l),
           ui.Grupo(
-            cabecera: 'Histórico',
-            pie: 'El trofeo marca las sesiones que batieron algún récord.',
+            cabecera: context.t.comunHistorico,
+            pie: context.t.evolucionPieHistorico,
             filas: [
               for (final r in widget.registros.reversed)
                 CupertinoListTile(
                   backgroundColor: context.tarjeta,
-                  title: Text(
-                    formato.fechaLarga(r.fecha),
-                    style: ui.estilo(context),
-                  ),
+                  title: Text(f.fechaLarga(r.fecha), style: ui.estilo(context)),
                   subtitle: Text(
-                    '${formato.plural(r.nSeries, 'serie', 'series')} · '
-                    '${formato.peso(r.volumen, ajustes)} de volumen',
+                    context.t.evolucionSesionResumen(
+                      context.t.comunSeries(r.nSeries),
+                      f.peso(r.volumen),
+                    ),
                     style: ui.estilo(
                       context,
                       size: t.footnote,
@@ -278,7 +270,7 @@ class _ContenidoState extends State<_Contenido> {
                         )
                       : null,
                   additionalInfo: Text(
-                    formato.peso(r.pesoMaximo, ajustes),
+                    f.peso(r.pesoMaximo),
                     style: ui.estilo(context, color: context.textoSec),
                   ),
                 ),
@@ -296,10 +288,10 @@ class _ContenidoState extends State<_Contenido> {
 /// Sin botón de aplicar: desde esta pantalla no se está entrenando. La descarga
 /// además lleva su nota, que es donde J4 pedía decir lo que la app no sabe.
 class _TarjetaSugerencia extends StatelessWidget {
-  const _TarjetaSugerencia({required this.sugerencia, required this.ajustes});
+  const _TarjetaSugerencia({required this.sugerencia, required this.formato});
 
   final progresion.Sugerencia sugerencia;
-  final Ajustes ajustes;
+  final Formato formato;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -312,12 +304,12 @@ class _TarjetaSugerencia extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        LineaSugerencia(sugerencia: sugerencia, ajustes: ajustes),
+        LineaSugerencia(sugerencia: sugerencia, formato: formato),
         if (sugerencia.tipo == progresion.TipoSugerencia.descarga)
           Padding(
             padding: const EdgeInsets.fromLTRB(t.l, 0, t.l, t.m),
             child: Text(
-              avisoDescarga,
+              avisoDescarga(context.t),
               style: ui.estilo(
                 context,
                 size: t.caption,
@@ -338,12 +330,12 @@ class _Tarjeta extends StatelessWidget {
   const _Tarjeta({
     required this.records,
     required this.sesiones,
-    required this.ajustes,
+    required this.formato,
   });
 
   final metricas.RecordsEjercicio records;
   final List<ResumenSesionEjercicio> sesiones;
-  final Ajustes ajustes;
+  final Formato formato;
 
   @override
   Widget build(BuildContext context) {
@@ -368,16 +360,19 @@ class _Tarjeta extends StatelessWidget {
             children: [
               Expanded(
                 child: _Dato(
-                  '${formato.peso(records.mejor1RM ?? mejorDeTodas, ajustes)}'
-                      '${fiable ? '' : ' *'}',
-                  '1RM estimado',
+                  fiable
+                      ? formato.peso(records.mejor1RM ?? mejorDeTodas)
+                      : context.t.evolucionPocoFiable(
+                          formato.peso(records.mejor1RM ?? mejorDeTodas),
+                        ),
+                  context.t.evolucion1RM,
                   atenuado: !fiable,
                 ),
               ),
               Expanded(
                 child: _Dato(
-                  formato.peso(records.pesoMaximo ?? 0, ajustes),
-                  'Peso máximo',
+                  formato.peso(records.pesoMaximo ?? 0),
+                  context.t.evolucionPesoMaximo,
                 ),
               ),
             ],
@@ -387,20 +382,22 @@ class _Tarjeta extends StatelessWidget {
             children: [
               Expanded(
                 child: _Dato(
-                  formato.peso(records.volumenTotal, ajustes),
-                  'Volumen total',
+                  formato.peso(records.volumenTotal),
+                  context.t.evolucionVolumenTotal,
                 ),
               ),
-              Expanded(child: _Dato('${sesiones.length}', 'Sesiones')),
+              Expanded(
+                child: _Dato('${sesiones.length}', context.t.rutinaSesiones),
+              ),
             ],
           ),
           if (!fiable)
             Padding(
               padding: const EdgeInsets.only(top: t.s, left: t.l, right: t.l),
               child: Text(
-                '* Estimado a partir de series de más de '
-                '${metricas.maxRepeticionesFiables} repeticiones, así que es '
-                'poco fiable y no cuenta como récord.',
+                context.t.evolucionNotaFiabilidad(
+                  metricas.maxRepeticionesFiables,
+                ),
                 textAlign: TextAlign.center,
                 style: ui.estilo(
                   context,
@@ -420,7 +417,7 @@ class _Grafico extends StatelessWidget {
     required this.registros,
     required this.maximo,
     required this.metrica,
-    required this.ajustes,
+    required this.formato,
   });
 
   final List<ResumenSesionEjercicio> registros;
@@ -429,13 +426,13 @@ class _Grafico extends StatelessWidget {
   final double maximo;
 
   final Metrica metrica;
-  final Ajustes ajustes;
+  final Formato formato;
 
   @override
   Widget build(BuildContext context) => BarChart(
     BarChartData(
       // El +15% evita que la barra más alta quede pegada al borde.
-      maxY: ajustes.desdeKilos(maximo) * 1.15 + 1,
+      maxY: formato.ajustes.desdeKilos(maximo) * 1.15 + 1,
       borderData: FlBorderData(show: false),
       gridData: FlGridData(
         drawVerticalLine: false,
@@ -492,7 +489,7 @@ class _Grafico extends StatelessWidget {
             x: indice,
             barRods: [
               BarChartRodData(
-                toY: ajustes.desdeKilos(metrica.de(r)),
+                toY: formato.ajustes.desdeKilos(metrica.de(r)),
                 width: 16,
                 // La estimación que sale de una serie larga se pinta apagada,
                 // igual que el número de la tarjeta.
@@ -544,3 +541,19 @@ class _Dato extends StatelessWidget {
     ],
   );
 }
+
+/// Cómo se llama cada métrica del eje Y.
+String etiquetaMetrica(Textos t, Metrica metrica) => switch (metrica) {
+  Metrica.peso => t.comunPeso,
+  // «1RM» es una sigla internacional y no se traduce, igual que kg o RPE.
+  Metrica.unoRm => '1RM',
+  Metrica.volumen => t.comunVolumen,
+};
+
+/// Cómo se llama cada rango del histórico.
+String etiquetaRango(Textos t, Rango rango) => switch (rango) {
+  Rango.mes => t.evolucionRangoMes,
+  Rango.trimestre => t.evolucionRangoTrimestre,
+  Rango.ano => t.evolucionRangoAno,
+  Rango.todo => t.evolucionRangoTodo,
+};

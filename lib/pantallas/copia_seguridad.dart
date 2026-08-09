@@ -19,6 +19,7 @@ import '../datos/copia.dart' as copia;
 import '../datos/media.dart' as media;
 import '../datos/semilla.dart';
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -69,6 +70,9 @@ class _GrupoDatosState extends ConsumerState<GrupoDatos> {
     String nombre, {
     bool conBom = false,
   }) async {
+    // Se lee antes del primer `await`: después, el `BuildContext` puede haber
+    // dejado de ser válido y el analizador lo avisa.
+    final t = context.t;
     final directorio = await getTemporaryDirectory();
     final fichero = File('${directorio.path}/$nombre');
     // El BOM es **solo** para el CSV: sin él, Excel abre los acentos como
@@ -80,34 +84,37 @@ class _GrupoDatosState extends ConsumerState<GrupoDatos> {
       ShareParams(
         files: [XFile(fichero.path)],
         fileNameOverrides: [nombre],
-        subject: 'Copia de seguridad de AppGym',
+        subject: t.copiaAsunto,
       ),
     );
   }
 
   Future<void> _exportarJson() => _hacer('json', () async {
+    final t = context.t;
     final datos = await copia.exportar(ref.read(bdProvider));
     final nombre = copia.nombreFichero(DateTime.now());
     await _compartir(const JsonEncoder.withIndent('  ').convert(datos), nombre);
-    _informar('Copia generada: $nombre');
+    _informar(t.copiaGenerada(nombre));
   });
 
   Future<void> _exportarCsv() => _hacer('csv', () async {
+    final t = context.t;
     final texto = await copia.exportarCsv(ref.read(bdProvider));
     final nombre = copia.nombreFichero(DateTime.now(), extension: 'csv');
     await _compartir(texto, nombre, conBom: true);
-    _informar('CSV generado: $nombre');
+    _informar(t.copiaCsvGenerado(nombre));
   });
 
   // ── Importar ───────────────────────────────────────────────────────────────
 
   Future<void> _importar() => _hacer('importar', () async {
+    final t = context.t;
     // Sin `type: FileType.custom`: en Android muchos gestores no etiquetan los
     // .json y filtrar por extensión deja el selector vacío. Se valida el
     // contenido, que es lo que de verdad protege.
     final elegido = await FilePicker.pickFiles(
       withData: true,
-      dialogTitle: 'Elige la copia de seguridad',
+      dialogTitle: t.copiaElegirFichero,
     );
     final fichero = elegido?.files.singleOrNull;
     if (fichero == null || !mounted) return;
@@ -116,17 +123,17 @@ class _GrupoDatosState extends ConsumerState<GrupoDatos> {
         fichero.bytes ??
         (fichero.path == null ? null : await File(fichero.path!).readAsBytes());
     if (bytes == null) {
-      _informar('No se pudo leer el archivo.');
+      _informar(t.copiaNoSeLee);
       return;
     }
 
     final datos = copia.leer(utf8.decode(bytes, allowMalformed: true));
     if (datos == null) {
-      _informar('El archivo no es un JSON válido.');
+      _informar(t.copiaNoEsJson);
       return;
     }
 
-    final errores = copia.validar(datos);
+    final errores = copia.validar(t, datos);
     if (errores.isNotEmpty) {
       _informar(errores.first);
       return;
@@ -139,11 +146,10 @@ class _GrupoDatosState extends ConsumerState<GrupoDatos> {
     if (modo == copia.ModoImportacion.reemplazar) {
       final confirmado = await ui.dialogoConfirmar(
         context,
-        titulo: '¿Reemplazar todos los datos?',
-        mensaje:
-            'Se borrarán tus rutinas, sesiones y medidas actuales y se '
-            'restaurarán las de la copia. No se puede deshacer.',
-        etiquetaAceptar: 'Reemplazar',
+        titulo: t.copiaReemplazarTitulo,
+        mensaje: t.copiaReemplazarMensaje,
+        etiquetaAceptar: t.copiaReemplazar,
+        etiquetaCancelar: t.comunCancelar,
       );
       if (!confirmado || !mounted) return;
     }
@@ -151,30 +157,30 @@ class _GrupoDatosState extends ConsumerState<GrupoDatos> {
     try {
       final informe = await copia.importar(
         ref.read(bdProvider),
+        t,
         datos,
         modo: modo,
       );
       if (!mounted) return;
       invalidarTodo(ref);
       _informar(
-        ['Importado: ${informe.resumen}', ...informe.avisos].join('\n'),
+        [t.copiaImportado(informe.resumen(t)), ...informe.avisos].join('\n'),
       );
     } on Exception catch (e) {
-      _informar('No se pudo importar: $e');
+      _informar(t.copiaErrorImportar('$e'));
     }
   });
 
   Future<copia.ModoImportacion?> _elegirModo() async {
     final elegido = await ui.elegirEnHoja<copia.ModoImportacion>(
       context,
-      titulo: 'Importar copia de seguridad',
-      mensaje:
-          'Fusionar añade las rutinas que no tengas; una que ya exista entra '
-          'como «(importada)» en vez de mezclarse.',
-      opciones: const [
-        (copia.ModoImportacion.fusionar, 'Fusionar con lo que tengo'),
-        (copia.ModoImportacion.reemplazar, 'Reemplazar todos mis datos'),
+      titulo: context.t.copiaImportar,
+      mensaje: context.t.copiaModoMensaje,
+      opciones: [
+        (copia.ModoImportacion.fusionar, context.t.copiaFusionar),
+        (copia.ModoImportacion.reemplazar, context.t.copiaReemplazarTodo),
       ],
+      etiquetaCancelar: context.t.comunCancelar,
     );
     return elegido?.$1;
   }
@@ -182,24 +188,24 @@ class _GrupoDatosState extends ConsumerState<GrupoDatos> {
   // ── Media y borrado ────────────────────────────────────────────────────────
 
   Future<void> _descargarMedia() => _hacer('media', () async {
+    final t = context.t;
     final catalogo = await ref.read(arranqueProvider.future);
     final pendientes = media.rutasPendientes(catalogo).length;
     if (pendientes == 0) {
-      _informar('Las imágenes ya están descargadas.');
+      _informar(t.copiaMediaYaEstaba);
       return;
     }
 
-    _informar('Descargando 0 de $pendientes…');
+    _informar(t.copiaMediaProgreso(0, pendientes));
     final resultado = await media.descargarTodo(
       catalogo,
       alProgresar: (hechos, total, _) =>
-          _informar('Descargando $hechos de $total…'),
+          _informar(t.copiaMediaProgreso(hechos, total)),
     );
     _informar(
       resultado.fallos == 0
-          ? 'Imágenes descargadas.'
-          : '${resultado.fallos} archivos fallaron; se cargarán desde '
-                'internet cuando hagan falta.',
+          ? t.copiaMediaHecha
+          : t.copiaMediaFallos(resultado.fallos),
     );
   });
 
@@ -208,23 +214,22 @@ class _GrupoDatosState extends ConsumerState<GrupoDatos> {
   /// El catálogo no se borra: son 1.324 filas regenerables desde el asset, y
   /// tirarlas solo alargaría el siguiente arranque. Se resiembra por si acaso.
   Future<void> _borrarTodo() async {
+    final t = context.t;
     final primera = await ui.dialogoConfirmar(
       context,
-      titulo: '¿Borrar todos los datos?',
-      mensaje:
-          'Rutinas, ejercicios, sesiones, medidas y preferencias. El catálogo '
-          'de ejercicios se conserva.',
-      etiquetaAceptar: 'Borrar',
+      titulo: t.copiaBorrarTitulo,
+      mensaje: t.copiaBorrarMensaje,
+      etiquetaAceptar: t.copiaBorrar,
+      etiquetaCancelar: t.comunCancelar,
     );
     if (!primera || !mounted) return;
 
     final segunda = await ui.dialogoConfirmar(
       context,
-      titulo: 'No se puede deshacer',
-      mensaje:
-          'Si no has exportado una copia de seguridad, esto es definitivo. '
-          '¿Seguro?',
-      etiquetaAceptar: 'Sí, borrar todo',
+      titulo: t.copiaBorrarTitulo2,
+      mensaje: t.copiaBorrarMensaje2,
+      etiquetaAceptar: t.copiaBorrarConfirmar,
+      etiquetaCancelar: t.comunCancelar,
     );
     if (!segunda || !mounted) return;
 
@@ -234,7 +239,7 @@ class _GrupoDatosState extends ConsumerState<GrupoDatos> {
       await sembrarCatalogo(bd);
       if (!mounted) return;
       invalidarTodo(ref);
-      _informar('Datos borrados.');
+      _informar(t.copiaBorrado);
     });
   }
 
@@ -242,51 +247,48 @@ class _GrupoDatosState extends ConsumerState<GrupoDatos> {
 
   @override
   Widget build(BuildContext context) => ui.Grupo(
-    cabecera: 'Datos',
-    pie:
-        _estado ??
-        'La copia es un archivo con todo tu histórico. Guárdala fuera del '
-            'móvil: desinstalar la app borra la base de datos.',
+    cabecera: context.t.copiaDatos,
+    pie: _estado ?? context.t.copiaDatosPie,
     filas: [
       _accion(
         context,
         icono: CupertinoIcons.square_arrow_up,
-        titulo: 'Exportar copia de seguridad',
-        subtitulo: 'Un archivo JSON con todos tus datos',
+        titulo: context.t.copiaExportar,
+        subtitulo: context.t.copiaExportarDetalle,
         cargando: _ocupado == 'json',
         onTap: _exportarJson,
       ),
       _accion(
         context,
         icono: CupertinoIcons.square_arrow_down,
-        titulo: 'Importar copia de seguridad',
-        subtitulo: 'Fusionar o reemplazar lo que tienes',
+        titulo: context.t.copiaImportar,
+        subtitulo: context.t.copiaImportarDetalle,
         cargando: _ocupado == 'importar',
         onTap: _importar,
       ),
       _accion(
         context,
         icono: CupertinoIcons.table,
-        titulo: 'Exportar a CSV',
-        subtitulo: 'Una fila por serie, para una hoja de cálculo',
+        titulo: context.t.copiaExportarCsv,
+        subtitulo: context.t.copiaExportarCsvDetalle,
         cargando: _ocupado == 'csv',
         onTap: _exportarCsv,
       ),
       _accion(
         context,
         icono: CupertinoIcons.cloud_download,
-        titulo: 'Descargar imágenes',
+        titulo: context.t.copiaDescargarMedia,
         subtitulo: media.descargaCompleta
-            ? 'Ya están todas en el móvil'
-            : 'Para ver el catálogo sin conexión',
+            ? context.t.copiaMediaCompleta
+            : context.t.copiaMediaDetalle,
         cargando: _ocupado == 'media',
         onTap: _descargarMedia,
       ),
       _accion(
         context,
         icono: CupertinoIcons.trash,
-        titulo: 'Borrar todos los datos',
-        subtitulo: 'Rutinas, sesiones y medidas',
+        titulo: context.t.copiaBorrarTodo,
+        subtitulo: context.t.copiaBorrarTodoDetalle,
         destructivo: true,
         cargando: _ocupado == 'borrar',
         onTap: _borrarTodo,

@@ -13,15 +13,18 @@ library;
 import 'dart:convert';
 
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/widgets.dart' show BuildContext, Localizations;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
+import '../datos/formato.dart';
 import '../datos/geometria.dart';
 import '../datos/media.dart';
 import '../datos/musculos.dart';
 import '../datos/progresion.dart';
 import '../datos/reloj.dart' as reloj;
 import '../datos/semilla.dart';
+import '../l10n/textos.dart';
 
 /// La base de datos, viva mientras viva la app.
 final bdProvider = Provider<AppBD>((ref) {
@@ -281,6 +284,36 @@ final sesionActivaProvider = FutureProvider<SesionActiva?>(
 
 final ajustesProvider = FutureProvider<Ajustes>(
   (ref) => ref.watch(bdProvider).ajustes(),
+);
+
+/// Fechas, números y unidades listos para pintar.
+///
+/// Reúne las dos cosas que casi siempre viajan juntas —el idioma y las
+/// preferencias—, de modo que una pantalla pide una dependencia en vez de dos.
+///
+/// **El idioma sale del árbol de widgets, no de la preferencia.** Es
+/// deliberado: `CupertinoApp` resuelve el idioma del sistema contra
+/// `idiomasSoportados` y el resultado puede no ser el que dice el ajuste
+/// («Automático», o un `es_AR` que cae en `es`). Leerlo de `Localizations` es
+/// lo que garantiza que lo formateado y lo traducido hablen el mismo idioma.
+///
+/// Mientras las preferencias cargan se usan las de fábrica, que es lo mismo que
+/// hacen las pantallas: un formato es siempre mejor que un hueco.
+Formato formatoDe(BuildContext context, WidgetRef ref) => Formato(
+  locale: Localizations.localeOf(context).languageCode,
+  textos: Textos.of(context),
+  ajustes: ref.watch(ajustesProvider).value ?? const Ajustes(),
+);
+
+/// Lo mismo, para un callback.
+///
+/// `WidgetRef.watch` solo vale dentro de `build`; fuera hay que leer. Es la
+/// misma distinción que ya se hacía entre `ref.watch(ajustesProvider)` y
+/// `ref.read(ajustesProvider)`.
+Formato leerFormato(BuildContext context, WidgetRef ref) => Formato(
+  locale: Localizations.localeOf(context).languageCode,
+  textos: Textos.of(context),
+  ajustes: ref.read(ajustesProvider).value ?? const Ajustes(),
 );
 
 // ── Mapa muscular ────────────────────────────────────────────────────────────

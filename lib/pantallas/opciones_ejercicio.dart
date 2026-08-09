@@ -16,9 +16,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/ajustes.dart' show descansos, pasosPeso;
 import '../datos/bd.dart';
-import '../datos/formato.dart' as formato;
+import '../datos/formato.dart';
 import '../datos/progresion.dart' as progresion;
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -60,7 +61,7 @@ class _HojaOpcionesState extends ConsumerState<_HojaOpciones> {
   @override
   Widget build(BuildContext context) {
     final ejercicio = ref.watch(ejercicioProvider(widget.idEjercicio)).value;
-    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
+    final f = formatoDe(context, ref);
     final historial = ref
         .watch(
           resumenSesionesEjercicioProvider((
@@ -81,7 +82,7 @@ class _HojaOpcionesState extends ConsumerState<_HojaOpciones> {
     final fila = ejercicio.ejercicio;
     final config = progresion.ConfiguracionProgresion.resolver(
       ejercicio,
-      ajustes,
+      f.ajustes,
     );
     final observado = historial == null
         ? null
@@ -117,43 +118,43 @@ class _HojaOpcionesState extends ConsumerState<_HojaOpciones> {
                   ui.Grupo(
                     filas: [
                       _fila(
-                        titulo: 'Descanso',
-                        valor: formato.descanso(
-                          fila.descansoSeg ?? ajustes.descansoSeg,
+                        titulo: context.t.comunDescanso,
+                        valor: f.descanso(
+                          fila.descansoSeg ?? f.ajustes.descansoSeg,
                         ),
                         propio: fila.descansoSeg != null,
-                        onTap: () => _elegirDescanso(fila, ajustes),
+                        onTap: () => _elegirDescanso(fila, f),
                       ),
                     ],
                   ),
                   ui.Grupo(
-                    cabecera: 'Progresión',
+                    cabecera: context.t.opcionesProgresion,
                     pie: _pie(config, observado),
                     filas: [
                       _fila(
-                        titulo: 'Estrategia',
+                        titulo: context.t.opcionesEstrategia,
                         valor: _estrategia(config.estrategia),
                         propio: fila.estrategia != null,
                         onTap: _elegirEstrategia,
                       ),
                       _fila(
-                        titulo: 'Rango de repeticiones',
+                        titulo: context.t.comunRangoRepeticiones,
                         valor: '${config.repMin} – ${config.repMax}',
                         propio: fila.repMin != null || fila.repMax != null,
                         onTap: () => _elegirRango(config, observado),
                       ),
                       _fila(
-                        titulo: 'Escalón de peso',
-                        valor: formato.peso(config.incrementoKg, ajustes),
+                        titulo: context.t.opcionesEscalon,
+                        valor: f.peso(config.incrementoKg),
                         propio: fila.incrementoKg != null,
-                        onTap: () => _elegirEscalon(fila, ajustes),
+                        onTap: () => _elegirEscalon(fila, f),
                       ),
                     ],
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(t.l, t.s, t.l, t.l),
                     child: ui.BotonPrincipal(
-                      'Listo',
+                      context.t.comunListo,
                       onPressed: () => Navigator.pop(context, _cambiado),
                     ),
                   ),
@@ -172,12 +173,10 @@ class _HojaOpcionesState extends ConsumerState<_HojaOpciones> {
     (int, int)? observado,
   ) {
     if (config.estrategia == progresion.Estrategia.desactivada) {
-      return 'Este ejercicio no recibe sugerencias.';
+      return context.t.opcionesDesactivada;
     }
     if (observado != null) {
-      return 'En las últimas sesiones has hecho más bien '
-          '${observado.$1}–${observado.$2} repeticiones; toca el rango para '
-          'ajustarlo.';
+      return context.t.opcionesRangoObservado(observado.$1, observado.$2);
     }
     return null;
   }
@@ -198,7 +197,7 @@ class _HojaOpcionesState extends ConsumerState<_HojaOpciones> {
     subtitle: propio
         ? null
         : Text(
-            'Como el global',
+            context.t.comunComoElGlobal,
             style: ui.estilo(
               context,
               size: t.footnote,
@@ -216,26 +215,30 @@ class _HojaOpcionesState extends ConsumerState<_HojaOpciones> {
     onTap: onTap,
   );
 
-  static String _estrategia(progresion.Estrategia estrategia) =>
-      switch (estrategia) {
-        progresion.Estrategia.desactivada => 'Desactivada',
-        progresion.Estrategia.dobleProgresion => 'Doble progresión',
-        progresion.Estrategia.soloRepeticiones => 'Solo repeticiones',
-      };
+  /// El `switch` es exhaustivo: añadir una estrategia rompe la compilación
+  /// aquí, que es donde hay que escribir su nombre.
+  String _estrategia(progresion.Estrategia estrategia) => switch (estrategia) {
+    progresion.Estrategia.desactivada =>
+      context.t.opcionesEstrategiaDesactivada,
+    progresion.Estrategia.dobleProgresion => context.t.opcionesEstrategiaDoble,
+    progresion.Estrategia.soloRepeticiones =>
+      context.t.opcionesEstrategiaSoloRepeticiones,
+  };
 
-  Future<void> _elegirDescanso(Ejercicio fila, Ajustes ajustes) async {
+  Future<void> _elegirDescanso(Ejercicio fila, Formato f) async {
     final elegido = await ui.elegirEnHoja<int?>(
       context,
-      titulo: 'Descanso',
-      mensaje:
-          'Los descansos de una sentadilla y de un curl no son iguales; aquí '
-          'se separa uno del otro.',
+      titulo: context.t.comunDescanso,
+      mensaje: context.t.opcionesDescansoMensaje,
       actual: fila.descansoSeg,
       opciones: [
-        (null, 'Como el global (${formato.descanso(ajustes.descansoSeg)})'),
-        for (final segundos in descansos)
-          (segundos, formato.descanso(segundos)),
+        (
+          null,
+          context.t.comunComoElGlobalCon(f.descanso(f.ajustes.descansoSeg)),
+        ),
+        for (final segundos in descansos) (segundos, f.descanso(segundos)),
       ],
+      etiquetaCancelar: context.t.comunCancelar,
     );
     if (elegido == null) return;
     await _escribir((bd) => bd.fijarDescansoEjercicio(fila.id, elegido.$1));
@@ -244,14 +247,13 @@ class _HojaOpcionesState extends ConsumerState<_HojaOpciones> {
   Future<void> _elegirEstrategia() async {
     final elegida = await ui.elegirEnHoja<int?>(
       context,
-      titulo: 'Estrategia',
-      mensaje:
-          'La doble progresión sube repeticiones dentro del rango y, al '
-          'completarlo, el peso. En peso corporal no hay peso que subir.',
+      titulo: context.t.opcionesEstrategia,
+      mensaje: context.t.opcionesEstrategiaMensaje,
       opciones: [
-        (null, 'Como el global'),
+        (null, context.t.comunComoElGlobal),
         for (final e in progresion.Estrategia.values) (e.index, _estrategia(e)),
       ],
+      etiquetaCancelar: context.t.comunCancelar,
     );
     if (elegida == null) return;
     await _escribir(
@@ -270,17 +272,16 @@ class _HojaOpcionesState extends ConsumerState<_HojaOpciones> {
     final opciones = <((int, int)?, String)>[
       if (observado != null)
         (observado, '${observado.$1} – ${observado.$2}  (lo que haces)'),
-      (null, 'Como el global'),
+      (null, context.t.comunComoElGlobal),
       for (final rango in progresion.rangosRepeticiones)
         if (rango != observado) (rango, '${rango.$1} – ${rango.$2}'),
     ];
 
     final elegido = await ui.elegirEnHoja<(int, int)?>(
       context,
-      titulo: 'Rango de repeticiones',
-      mensaje:
-          '8–12 va bien en accesorios y se queda corto en un peso muerto '
-          'pesado o en gemelos.',
+      titulo: context.t.comunRangoRepeticiones,
+      etiquetaCancelar: context.t.comunCancelar,
+      mensaje: context.t.opcionesRangoMensaje,
       opciones: opciones,
     );
     if (elegido == null) return;
@@ -294,21 +295,24 @@ class _HojaOpcionesState extends ConsumerState<_HojaOpciones> {
     );
   }
 
-  Future<void> _elegirEscalon(Ejercicio fila, Ajustes ajustes) async {
+  Future<void> _elegirEscalon(Ejercicio fila, Formato f) async {
     // Los pasos están en la unidad activa y la columna en kilos, así que se
     // ofrecen los mismos que el selector de peso y se guardan convertidos.
     final elegido = await ui.elegirEnHoja<double?>(
       context,
-      titulo: 'Escalón de peso',
-      mensaje: 'Cuánto sube la sugerencia al completar el rango.',
+      titulo: context.t.opcionesEscalon,
+      mensaje: context.t.opcionesEscalonMensaje,
       opciones: [
         (
           null,
-          'Como el global (${formato.peso(ajustes.aKilos(ajustes.pasoPeso), ajustes)})',
+          context.t.comunComoElGlobalCon(
+            f.peso(f.ajustes.aKilos(f.ajustes.pasoPeso)),
+          ),
         ),
         for (final paso in pasosPeso)
-          (ajustes.aKilos(paso), formato.peso(ajustes.aKilos(paso), ajustes)),
+          (f.ajustes.aKilos(paso), f.peso(f.ajustes.aKilos(paso))),
       ],
+      etiquetaCancelar: context.t.comunCancelar,
     );
     if (elegido == null) return;
     await _escribir(

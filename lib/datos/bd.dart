@@ -13,6 +13,7 @@ library;
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
+import '../l10n/textos.dart';
 import 'ajustes.dart';
 import 'esquemas.dart';
 // Solo por el umbral de repeticiones fiables, que las agregaciones de 1RM
@@ -26,7 +27,7 @@ import 'respaldo.dart';
 // pidiéndolos donde ya los pedían. Las claves y los valores admitidos viven en
 // `ajustes.dart` y solo los necesita la pantalla de Ajustes.
 export 'ajustes.dart'
-    show Ajustes, EscalaEsfuerzo, Formula, Perfil, Tema, Unidad;
+    show Ajustes, EscalaEsfuerzo, Formula, Idioma, Perfil, Tema, Unidad;
 
 /// `Value` sale por aquí para que las pantallas no tengan que importar drift.
 ///
@@ -160,21 +161,38 @@ class Medidas extends Table {
 ///
 /// El peso corporal va primero porque es el que da contexto a las cargas: subir
 /// 5 kg en press perdiendo 3 kg de peso no es lo mismo que subirlos ganando 4.
-const tiposMedida = <(String, String, String)>[
-  ('peso', 'Peso corporal', 'kg'),
-  ('grasa', 'Grasa corporal', '%'),
-  ('cintura', 'Cintura', 'cm'),
-  ('pecho', 'Pecho', 'cm'),
-  ('brazo', 'Brazo', 'cm'),
-  ('muslo', 'Muslo', 'cm'),
+/// La constante se queda con lo que no depende del idioma: la clave y la
+/// unidad. **La clave no se traduce nunca**: está escrita en la columna `tipo`
+/// de la tabla `medidas` de todos los móviles instalados y en todas las copias
+/// de seguridad exportadas, así que traducirla sería perder los datos.
+const tiposMedida = <(String, String)>[
+  ('peso', 'kg'),
+  ('grasa', '%'),
+  ('cintura', 'cm'),
+  ('pecho', 'cm'),
+  ('brazo', 'cm'),
+  ('muslo', 'cm'),
 ];
 
 /// Etiqueta y unidad de un tipo de medida.
-(String, String) etiquetaMedida(String tipo) {
-  for (final (clave, etiqueta, unidad) in tiposMedida) {
+///
+/// La etiqueta no puede salir de una constante: depende del idioma, que depende
+/// del `BuildContext`. El `switch` no es exhaustivo porque la clave es texto,
+/// así que un tipo desconocido se enseña tal cual en vez de romper.
+(String, String) etiquetaMedida(Textos t, String tipo) {
+  final etiqueta = switch (tipo) {
+    'peso' => t.medidaPeso,
+    'grasa' => t.medidaGrasa,
+    'cintura' => t.medidaCintura,
+    'pecho' => t.medidaPecho,
+    'brazo' => t.medidaBrazo,
+    'muslo' => t.medidaMuslo,
+    _ => tipo,
+  };
+  for (final (clave, unidad) in tiposMedida) {
     if (clave == tipo) return (etiqueta, unidad);
   }
-  return (tipo, '');
+  return (etiqueta, '');
 }
 
 /// Preferencias de la app, en clave/valor.

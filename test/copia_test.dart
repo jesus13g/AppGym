@@ -12,6 +12,11 @@ import 'package:appgym/datos/semilla.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'ayuda.dart';
+
+/// Los textos en español: este módulo ya no compone las frases, las recibe.
+final _t = textosDePrueba();
+
 final _catalogoFalso = [
   const EjercicioJson(
     id: '0001',
@@ -152,16 +157,16 @@ void main() {
   group('validar', () {
     test('acepta una copia recién exportada', () async {
       await _poblar(bd);
-      expect(validar(await exportar(bd)), isEmpty);
+      expect(validar(_t, await exportar(bd)), isEmpty);
     });
 
     test('rechaza el JSON de otra aplicación', () {
-      expect(validar({'algo': 1}), hasLength(1));
-      expect(validar({'algo': 1}).single, contains('no es una copia'));
+      expect(validar(_t, {'algo': 1}), hasLength(1));
+      expect(validar(_t, {'algo': 1}).single, contains('no es una copia'));
     });
 
     test('rechaza una copia de una versión futura', () {
-      final errores = validar({
+      final errores = validar(_t, {
         'formato': formatoCopia,
         'version': versionCopia + 1,
         'rutinas': <dynamic>[],
@@ -170,7 +175,7 @@ void main() {
     });
 
     test('señala una rutina sin nombre', () {
-      final errores = validar({
+      final errores = validar(_t, {
         'formato': formatoCopia,
         'version': versionCopia,
         'rutinas': [
@@ -204,6 +209,7 @@ void main() {
 
       final informe = await importar(
         vacia,
+        _t,
         datos,
         modo: ModoImportacion.reemplazar,
       );
@@ -260,11 +266,12 @@ void main() {
           'medidas': <Map<String, dynamic>>[],
         };
 
-        expect(validar(datos), isEmpty);
+        expect(validar(_t, datos), isEmpty);
 
         await sembrarCatalogo(bd, datos: _catalogoFalso);
         final informe = await importar(
           bd,
+          _t,
           datos,
           modo: ModoImportacion.reemplazar,
         );
@@ -289,7 +296,7 @@ void main() {
       final vacia = AppBD(NativeDatabase.memory());
       addTearDown(vacia.close);
       await sembrarCatalogo(vacia, datos: _catalogoFalso);
-      await importar(vacia, datos, modo: ModoImportacion.reemplazar);
+      await importar(vacia, _t, datos, modo: ModoImportacion.reemplazar);
 
       final idRutina = (await vacia.todasLasRutinas()).single.id;
       final ejercicios = await vacia.ejerciciosDeRutina(idRutina);
@@ -311,6 +318,7 @@ void main() {
 
         final informe = await importar(
           vacia,
+          _t,
           datos,
           modo: ModoImportacion.reemplazar,
         );
@@ -333,7 +341,7 @@ void main() {
       addTearDown(otra.close);
       await otra.insertarRutina('Pierna');
 
-      await importar(otra, datos, modo: ModoImportacion.reemplazar);
+      await importar(otra, _t, datos, modo: ModoImportacion.reemplazar);
       expect((await otra.todasLasRutinas()).map((r) => r.nombre), ['Empuje']);
       expect((await otra.ajustes()).unidad, Unidad.lb);
     });
@@ -349,6 +357,7 @@ void main() {
 
       final primera = await importar(
         otra,
+        _t,
         datos,
         modo: ModoImportacion.fusionar,
       );
@@ -356,6 +365,7 @@ void main() {
 
       final segunda = await importar(
         otra,
+        _t,
         datos,
         modo: ModoImportacion.fusionar,
       );
@@ -374,7 +384,7 @@ void main() {
 
       final otra = AppBD(NativeDatabase.memory());
       addTearDown(otra.close);
-      await importar(otra, datos, modo: ModoImportacion.fusionar);
+      await importar(otra, _t, datos, modo: ModoImportacion.fusionar);
 
       // La copia venía en libras; fusionar añade rutinas, no cambia la unidad
       // con la que estabas trabajando.
@@ -386,7 +396,7 @@ void main() {
       await bd.insertarEjercicio(idRutina, 'Press');
 
       await expectLater(
-        importar(bd, {'algo': 1}, modo: ModoImportacion.reemplazar),
+        importar(bd, _t, {'algo': 1}, modo: ModoImportacion.reemplazar),
         throwsA(isA<FormatException>()),
       );
 
@@ -395,7 +405,7 @@ void main() {
     });
 
     test('una sesión con la fecha ilegible se salta y se avisa', () async {
-      final informe = await importar(bd, {
+      final informe = await importar(bd, _t, {
         'formato': formatoCopia,
         'version': versionCopia,
         'rutinas': [

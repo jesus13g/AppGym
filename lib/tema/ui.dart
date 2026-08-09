@@ -422,7 +422,10 @@ class Sugerencia extends StatelessWidget {
     this.textoAccion,
     this.onAccion,
     this.onDescartar,
-  });
+  }) : assert(
+         onAccion == null || textoAccion != null,
+         'Con acción hace falta su etiqueta: este componente no sabe el idioma',
+       );
 
   final IconData icono;
 
@@ -439,7 +442,10 @@ class Sugerencia extends StatelessWidget {
   /// repeticiones: la estimación se da, y se dice que es floja.
   final bool fiable;
 
+  /// Etiqueta del botón de acción. Obligatoria si hay [onAccion]: los
+  /// componentes de este fichero no traducen nada, reciben el texto ya hecho.
   final String? textoAccion;
+
   final VoidCallback? onAccion;
 
   /// Sin esto no aparece la «x»: en la pantalla de resultados no se descarta
@@ -489,7 +495,7 @@ class Sugerencia extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: t.s),
               minimumSize: Size.zero,
               child: Text(
-                textoAccion ?? 'Aplicar',
+                textoAccion!,
                 style: estilo(context, size: t.subhead, color: tinte),
               ),
             ),
@@ -524,6 +530,7 @@ class BarraDescanso extends StatelessWidget {
     required this.onMas,
     required this.onMenos,
     required this.onSaltar,
+    required this.etiquetaSaltar,
   });
 
   /// El tiempo ya formateado como 'M:SS'.
@@ -538,6 +545,10 @@ class BarraDescanso extends StatelessWidget {
   final VoidCallback onMas;
   final VoidCallback onMenos;
   final VoidCallback onSaltar;
+
+  /// «Saltar», ya traducido. Los otros dos botones son «±15 s», que con el
+  /// símbolo del SI se escriben igual en cualquier idioma.
+  final String etiquetaSaltar;
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
@@ -580,7 +591,12 @@ class BarraDescanso extends StatelessWidget {
                         const SizedBox(width: t.s),
                         _boton(context, '+15 s', onMas),
                         const SizedBox(width: t.s),
-                        _boton(context, 'Saltar', onSaltar, destacado: true),
+                        _boton(
+                          context,
+                          etiquetaSaltar,
+                          onSaltar,
+                          destacado: true,
+                        ),
                       ],
                     ),
                   ),
@@ -648,7 +664,13 @@ class DeslizarParaBorrar extends StatelessWidget {
     required this.onBorrar,
     this.titulo,
     this.mensaje,
-  });
+    this.etiquetaEliminar,
+    this.etiquetaCancelar,
+  }) : assert(
+         titulo == null ||
+             (etiquetaEliminar != null && etiquetaCancelar != null),
+         'Con confirmación hacen falta las etiquetas de sus dos botones',
+       );
 
   final Key llave;
   final Widget child;
@@ -657,6 +679,10 @@ class DeslizarParaBorrar extends StatelessWidget {
   /// Si se indica, se pide confirmación antes de borrar.
   final String? titulo;
   final String? mensaje;
+
+  /// Etiquetas del diálogo de confirmación, obligatorias si hay [titulo].
+  final String? etiquetaEliminar;
+  final String? etiquetaCancelar;
 
   @override
   Widget build(BuildContext context) => Dismissible(
@@ -675,7 +701,13 @@ class DeslizarParaBorrar extends StatelessWidget {
     ),
     confirmDismiss: (_) async {
       if (titulo == null) return true;
-      return dialogoConfirmar(context, titulo: titulo!, mensaje: mensaje ?? '');
+      return dialogoConfirmar(
+        context,
+        titulo: titulo!,
+        mensaje: mensaje ?? '',
+        etiquetaAceptar: etiquetaEliminar!,
+        etiquetaCancelar: etiquetaCancelar!,
+      );
     },
     onDismissed: (_) => onBorrar(),
     child: child,
@@ -713,6 +745,8 @@ CupertinoNavigationBar barra(
 Future<DateTime?> selectorFecha(
   BuildContext context, {
   required DateTime inicial,
+  required String etiquetaCancelar,
+  required String etiquetaListo,
   DateTime? maxima,
   DateTime? minima,
 }) {
@@ -733,12 +767,12 @@ Future<DateTime?> selectorFecha(
               children: [
                 CupertinoButton(
                   onPressed: () => Navigator.pop(hoja),
-                  child: const Text('Cancelar'),
+                  child: Text(etiquetaCancelar),
                 ),
                 CupertinoButton(
                   onPressed: () => Navigator.pop(hoja, elegida),
                   child: Text(
-                    'Listo',
+                    etiquetaListo,
                     style: estilo(hoja, weight: t.semibold, color: hoja.acento),
                   ),
                 ),
@@ -772,6 +806,7 @@ Future<(T,)?> elegirEnHoja<T>(
   BuildContext context, {
   required String titulo,
   required List<(T, String)> opciones,
+  required String etiquetaCancelar,
   String? mensaje,
   T? actual,
 }) => showCupertinoModalPopup<(T,)>(
@@ -798,7 +833,7 @@ Future<(T,)?> elegirEnHoja<T>(
     cancelButton: CupertinoActionSheetAction(
       isDefaultAction: true,
       onPressed: () => Navigator.pop(hoja),
-      child: const Text('Cancelar'),
+      child: Text(etiquetaCancelar),
     ),
   ),
 );
@@ -808,9 +843,10 @@ Future<String?> dialogoTexto(
   BuildContext context, {
   required String titulo,
   required String marcador,
+  required String etiquetaAceptar,
+  required String etiquetaCancelar,
   String valor = '',
   String? mensaje,
-  String etiquetaAceptar = 'Guardar',
   bool permitirVacio = false,
 }) {
   final controlador = TextEditingController(text: valor);
@@ -851,7 +887,7 @@ Future<String?> dialogoTexto(
         actions: [
           CupertinoDialogAction(
             onPressed: () => Navigator.pop(dialogo),
-            child: const Text('Cancelar'),
+            child: Text(etiquetaCancelar),
           ),
           CupertinoDialogAction(
             isDefaultAction: true,
@@ -869,7 +905,8 @@ Future<bool> dialogoConfirmar(
   BuildContext context, {
   required String titulo,
   required String mensaje,
-  String etiquetaAceptar = 'Eliminar',
+  required String etiquetaAceptar,
+  required String etiquetaCancelar,
 }) async {
   final confirmado = await showCupertinoDialog<bool>(
     context: context,
@@ -882,7 +919,7 @@ Future<bool> dialogoConfirmar(
       actions: [
         CupertinoDialogAction(
           onPressed: () => Navigator.pop(dialogo, false),
-          child: const Text('Cancelar'),
+          child: Text(etiquetaCancelar),
         ),
         CupertinoDialogAction(
           isDestructiveAction: true,

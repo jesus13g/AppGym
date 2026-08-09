@@ -17,6 +17,12 @@ dependencies:
 
   cupertino_icons: ^1.0.8
 
+  # Fechas, números y plurales del idioma activo (`DateFormat`, `NumberFormat`).
+  # No es un paquete nuevo en el árbol: es el que `flutter_localizations` ya
+  # arrastra, y se declara sin fijar versión a propósito — fijarla rompería
+  # `pub get` en cuanto Flutter suba la suya.
+  intl: any
+
   # Base de datos: drift arrastra sqlite3, las librerías nativas y path_provider,
   # así que no hay que declararlos aparte.
   #
@@ -73,10 +79,20 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
+  # Activa `flutter gen-l10n`, que genera la clase `Textos` desde los ARB de
+  # `lib/l10n/` con la configuración de `l10n.yaml`. Lo generado no se versiona,
+  # igual que los `*.g.dart`: hay que ejecutarlo tras clonar.
+  generate: true
+
   assets:
     # Catálogo de 1.324 ejercicios (datos MIT de hasaneyldrm/exercises-dataset).
     # Las imágenes y GIFs NO se empaquetan: son © Gym visual y se descargan.
     - assets/ejercicios.es.json
+
+    # Los pasos en inglés, aparte: lo único que cambia entre idiomas son las
+    # instrucciones, así que duplicar el catálogo entero sería tirar 300 KB.
+    # Se generan con `python3 tool/instrucciones_en.py`.
+    - assets/instrucciones.en.json
 
     # Rutinas predefinidas. Referencian el catálogo por id; hay un test que
     # comprueba que todos esos ids siguen existiendo.

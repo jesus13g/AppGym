@@ -9,8 +9,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../datos/bd.dart';
-import '../datos/formato.dart' as formato;
+import '../datos/formato.dart';
 import '../estado/providers.dart';
+import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
@@ -37,13 +38,13 @@ class PantallaHistorial extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final rutina = ref.watch(rutinaProvider(idRutina));
     final historial = ref.watch(historialRutinaProvider(idRutina));
-    final ajustes = ref.watch(ajustesProvider).value ?? const Ajustes();
+    final f = formatoDe(context, ref);
 
     return CupertinoPageScaffold(
       backgroundColor: context.fondo,
       navigationBar: ui.barra(
         context,
-        titulo: 'Sesiones',
+        titulo: context.t.historialTitulo,
         tituloAnterior: rutina.value?.nombre,
       ),
       child: SafeArea(
@@ -51,44 +52,37 @@ class PantallaHistorial extends ConsumerWidget {
           loading: () => const ui.Cargando(),
           error: (e, _) => ui.EstadoVacio(
             icono: CupertinoIcons.exclamationmark_triangle,
-            titulo: 'No se pudo cargar el historial',
+            titulo: context.t.historialError,
             subtitulo: '$e',
           ),
           data: (sesiones) => sesiones.isEmpty
-              ? const ui.EstadoVacio(
+              ? ui.EstadoVacio(
                   icono: CupertinoIcons.calendar,
-                  titulo: 'Todavía no hay sesiones',
-                  subtitulo:
-                      'Registra un entrenamiento de esta rutina y aquí '
-                      'podrás repasarlo, corregirlo o eliminarlo.',
+                  titulo: context.t.historialVacio,
+                  subtitulo: context.t.historialVacioDetalle,
                 )
               : ListView(
                   children: [
                     ui.Grupo(
-                      cabecera: formato.plural(
-                        sesiones.length,
-                        'sesión',
-                        'sesiones',
-                      ),
-                      pie: 'Desliza una sesión para eliminarla.',
+                      cabecera: context.t.comunSesiones(sesiones.length),
+                      pie: context.t.historialPie,
                       filas: [
                         for (final sesion in sesiones)
                           ui.DeslizarParaBorrar(
                             llave: ValueKey(sesion.id),
                             onBorrar: () => _borrar(ref, sesion.id),
-                            titulo: '¿Eliminar la sesión?',
-                            mensaje:
-                                'Se borrarán sus series y dejará de contar '
-                                'en el calendario y en las estadísticas. '
-                                'No se puede deshacer.',
+                            titulo: context.t.comunEliminarSesionTitulo,
+                            mensaje: context.t.comunEliminarSesionMensaje,
+                            etiquetaEliminar: context.t.comunEliminar,
+                            etiquetaCancelar: context.t.comunCancelar,
                             child: CupertinoListTile(
                               backgroundColor: context.tarjeta,
                               title: Text(
-                                formato.fechaLarga(sesion.fecha),
+                                f.fechaLarga(sesion.fecha),
                                 style: ui.estilo(context),
                               ),
                               subtitle: Text(
-                                _resumen(sesion, ajustes),
+                                _resumen(context, f, sesion),
                                 style: ui.estilo(
                                   context,
                                   size: t.footnote,
@@ -125,8 +119,10 @@ class PantallaHistorial extends ConsumerWidget {
     );
   }
 
-  String _resumen(ResumenSesion sesion, Ajustes ajustes) =>
-      '${formato.plural(sesion.nEjercicios, 'ejercicio', 'ejercicios')} · '
-      '${formato.plural(sesion.nSeries, 'serie', 'series')} · '
-      '${formato.peso(sesion.volumen, ajustes)}';
+  String _resumen(BuildContext context, Formato f, ResumenSesion sesion) =>
+      context.t.historialResumen(
+        context.t.comunEjercicios(sesion.nEjercicios),
+        context.t.comunSeries(sesion.nSeries),
+        f.peso(sesion.volumen),
+      );
 }
