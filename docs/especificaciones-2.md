@@ -15,10 +15,11 @@
 > nueve dependencias y `flutter analyze` en 0 issues. Ver `CLAUDE.md` para la arquitectura
 > vigente.
 >
-> **Estado: el bloque J está implementado** ([Fase 7](#fase-7--progresiones-)), con el
-> esquema en la v7 y 343 tests. Los bloques **I** y **K** siguen siendo lo previsto, no lo
-> hecho. J se entregó antes que I, invirtiendo el orden que este documento recomienda; el
-> motivo y lo que costó están en la [Fase 7](#fase-7--progresiones-).
+> **Estado: los bloques I y J están implementados** ([Fase 6](#fase-6--internacionalización-)
+> y [Fase 7](#fase-7--progresiones-)), con el esquema en la v7, la app en español e inglés
+> y 390 tests. El bloque **K** sigue siendo lo previsto, no lo hecho. J se entregó antes
+> que I, invirtiendo el orden que este documento recomienda; el motivo y lo que costó están
+> en la [Fase 7](#fase-7--progresiones-).
 
 ## Índice
 
@@ -31,6 +32,7 @@
   - [I5. Plantillas y vocabularios de datos](#i5-plantillas-y-vocabularios-de-datos)
   - [I6. Elegir idioma](#i6-elegir-idioma)
   - [I7. Tests, CI y el coste de mantener dos idiomas](#i7-tests-ci-y-el-coste-de-mantener-dos-idiomas)
+  - [I8. Desviaciones al implementar](#i8-desviaciones-al-implementar)
 - [J. Recomendación automática de progresiones](#j-recomendación-automática-de-progresiones)
   - [J1. El modelo de progresión](#j1-el-modelo-de-progresión)
   - [J2. Configuración por ejercicio](#j2-configuración-por-ejercicio)
@@ -123,7 +125,11 @@ I (idiomas)  →  J (progresiones)  →  K (nube)
 
 ---
 
-## I. Internacionalización de la interfaz
+## I. Internacionalización de la interfaz ✅
+
+> **Implementado en la [Fase 6](#fase-6--internacionalización-).** Lo que sigue se
+> conserva como el porqué de lo que hay; lo que se hizo distinto está en
+> [I8](#i8-desviaciones-al-implementar).
 
 > **Lo que decía el documento anterior:** *«Internacionalización de la interfaz. Los textos
 > siguen incrustados en las pantallas; `flutter_localizations` solo cubre hoy los del
@@ -711,6 +717,62 @@ ficheros.
       un formato de fecha, un plural y una categoría del catálogo.
 - [ ] El test de cobertura falla si se añade una clave a `app_es.arb` y no a `app_en.arb`.
 - [ ] CI ejecuta `flutter gen-l10n` antes de analizar, probar y construir, en los dos jobs.
+
+
+### I8. Desviaciones al implementar
+
+Seis, y ninguna cambia lo que ve el usuario salvo la última, que le da algo que este
+documento no había previsto.
+
+1. **`context.t` no vive en `tema/ui.dart`.** [I1](#i1-mecanismo-de-traducción) lo ponía
+   ahí, pero [I2](#i2-extracción-de-los-textos-de-las-pantallas) exige que `ui.dart` no
+   importe `Textos` —un componente compartido no debe saber en qué idioma está la app—, y
+   las dos cosas no caben juntas. Vive en `lib/l10n/textos.dart`, que reexporta lo
+   generado y es el único fichero que alguien importa: la carpeta `generado/` no se
+   versiona y nadie la nombra.
+
+2. **`idiomasSoportados` se declara a mano.** `Textos.supportedLocales` sale ordenada
+   alfabéticamente, así que pondría el inglés delante, y con «Automático» Flutter cae al
+   **primero** de la lista. La constante fija el español el primero y un test comprueba
+   que los dos conjuntos de idiomas coinciden.
+
+3. **`Formato` recibe los `Textos`.** [I3](#i3-fechas-números-unidades-y-plurales) lo
+   quería sin importar Flutter, pero los relativos («Hace 3 días») salen de una clave ICU,
+   que vive en `Textos`. Devolver el motivo como dato y componer la frase en cada pantalla
+   habría repartido el `switch` de umbrales por quince ficheros. Sigue sin conocer el
+   `BuildContext`, que es lo que el criterio pedía de verdad, y `metricas.dart` sigue sin
+   saber de idiomas.
+
+4. **El idioma sale del árbol de widgets, no de la preferencia.** `formatoDe(context, ref)`
+   lee `Localizations.localeOf`, que es el que `CupertinoApp` resolvió de verdad; leerlo de
+   la preferencia haría que «Automático» o un `es_AR` formatearan en un idioma y tradujeran
+   en otro. Hay una segunda forma, `leerFormato`, para los callbacks: `ref.watch` solo vale
+   dentro de `build`.
+
+5. **`datos/copia.dart` también recibe los `Textos`.** El bloque acotaba el barrido a
+   `lib/pantallas` y `lib/tema`, pero ese módulo componía en español los errores de
+   validación, los avisos de importación y el sufijo «(importada)» que **acaba escrito en
+   la tabla `rutinas`**. Dejarlo fuera habría enseñado frases en español dentro de la app
+   en inglés.
+
+6. **Las instrucciones de los ejercicios sí se traducen.** [I4](#i4-el-catálogo-y-el-índice-de-búsqueda)
+   solo hablaba de los nombres y de las categorías, y daba por hecho lo demás; pero los
+   pasos de `assets/ejercicios.es.json` estaban solo en español y son lo que más se lee de
+   una ficha. El dataset original los trae en inglés y su español coincide **exactamente**
+   con el nuestro, así que `tool/instrucciones_en.py` los baja a
+   `assets/instrucciones.en.json` (633 KB) y la columna `instrucciones` pasa a guardar un
+   mapa por idioma. Sin cambio de esquema: la resiembra por `version_indice` que este
+   bloque ya exigía lo cubre, y `pasosDe` admite además la lista suelta de antes para que
+   una base sin resembrar todavía no se quede sin instrucciones.
+
+**Lo que costó, en números.** Unas 380 claves en cada ARB, 21 ficheros de `lib/`
+tocados, 47 tests nuevos (de 343 a 390) y dos aserciones numéricas cambiadas —las del
+separador de miles, que es justo lo que [I3](#i3-fechas-números-unidades-y-plurales)
+arregla—. Ninguna aserción de texto en español se tocó, que era el criterio caro.
+
+**Lo único que queda en español dentro de `lib/pantallas` y `lib/tema`** son los
+separadores « · » de las líneas compuestas y dos mensajes de `assert`, que son para quien
+programa.
 
 ---
 
@@ -1801,7 +1863,22 @@ que se guarda fuera de la base o en una tabla excluida, y ese es exactamente el 
 Continuación del plan del documento anterior, que llegó hasta la **Fase 5** (mapa muscular).
 Cada fase deja la app funcionando y es publicable por separado.
 
-### Fase 6 — Internacionalización
+### Fase 6 — Internacionalización ✅
+
+Hecha, y en el orden previsto salvo por una cosa: el mecanismo ([I1](#i1-mecanismo-de-traducción))
+y los formatos ([I3](#i3-fechas-números-unidades-y-plurales)) fueron primero, como decía el
+plan, pero las quince pantallas se agruparon en **dos tandas** en vez de quince commits, de
+menos textos a más. El corte por pantalla no aportaba nada: lo que hacía seguro el barrido
+era tener `flutter analyze` en 0 y los tests en verde al final de cada tanda, no el tamaño
+del commit.
+
+Las seis desviaciones están en [I8](#i8-desviaciones-al-implementar). La de fondo es la
+sexta: las instrucciones de los ejercicios estaban solo en español y este bloque no las
+mencionaba.
+
+`schemaVersion` **no se mueve**: el bloque no toca ninguna tabla. Lo que sí cambia es lo
+que se escribe en dos columnas —`busqueda` e `instrucciones`—, y para eso está la clave de
+ajustes `version_indice`, que resiembra el catálogo una vez.
 
 Bloque **I** completo, en este orden:
 

@@ -13,8 +13,9 @@ dart run build_runner build     # genera bd.g.dart; obligatorio tras clonar
 flutter gen-l10n                # genera lib/l10n/generado/; obligatorio tras clonar
 flutter run                     # app en un dispositivo o emulador
 flutter analyze                 # objetivo permanente: 0 issues
-flutter test                    # 343 tests: datos, pantallas, migraciones, copia, ajustes,
-                                #            métricas, músculos, geometría y progresiones
+flutter test                    # 390 tests: datos, pantallas, migraciones, copia, ajustes,
+                                #            métricas, músculos, geometría, progresiones,
+                                #            formatos, traducciones y vocabulario
 dart format lib test
 flutter build apk --release     # APK local (necesita SDK de Android y Java 17)
 ```
@@ -51,7 +52,7 @@ el estado. Interfaz **solo Cupertino**: no se importa `material.dart` en ningún
 
 ```
 lib/
-├── main.dart          CupertinoApp, tema (claro/oscuro/sistema), localización
+├── main.dart          CupertinoApp, tema (claro/oscuro/sistema), idioma
 ├── datos/
 │   ├── bd.dart        las diez tablas y todas las consultas
 │   ├── esquemas.dart  esquemas versionados, generados, para los pasos de migración
@@ -62,22 +63,32 @@ lib/
 │   ├── plantillas.dart rutinas predefinidas desde assets/plantillas.json
 │   ├── semilla.dart   carga del catálogo en la base de datos
 │   ├── media.dart     descarga y resolución de imágenes y GIFs
-│   ├── i18n.dart      vocabulario del catálogo en español
+│   ├── i18n.dart      vocabulario del catálogo: API por idioma
+│   ├── i18n_es.dart   las tres tablas en español
+│   ├── i18n_en.dart   las tres tablas en inglés
 │   ├── metricas.dart  1RM, récords, semana y racha: solo funciones puras
 │   ├── musculos.dart  las 21 regiones del mapa y el reparto del trabajo (puro)
 │   ├── geometria.dart trazados del modelo anatómico y resolución del toque
 │   ├── progresion.dart qué hacer hoy con un ejercicio: doble progresión (puro)
 │   ├── reloj.dart     la hora, en un punto que los tests pueden adelantar
-│   └── formato.dart   fechas, pesos, duraciones y textos
+│   └── formato.dart   `Formato`: fechas, números, pesos y vocabulario del idioma
+├── l10n/
+│   ├── app_es.arb     los textos en español (la plantilla, con las descripciones)
+│   ├── app_en.arb     los textos en inglés
+│   ├── textos.dart    `context.t`, `idiomasSoportados` y el reexport de lo generado
+│   └── generado/      `Textos` y sus delegates  ← NO se versiona
 ├── estado/            providers.dart · descanso.dart (el temporizador)
 ├── tema/              tokens.dart · ui.dart
 └── pantallas/         quince pantallas + cinco piezas compartidas
-assets/                ejercicios.es.json (el catálogo) · plantillas.json · musculatura.json
+assets/                ejercicios.es.json (el catálogo) · instrucciones.en.json (sus pasos en
+                       inglés) · plantillas.json (por idioma) · musculatura.json
 drift_schemas/         un JSON por versión del esquema, para los tests de migración
-tool/                  musculatura.py, que genera el modelo anatómico
+tool/                  musculatura.py (el modelo anatómico) · instrucciones_en.py (los pasos
+                       en inglés, desde el dataset original)
 test/                  datos · pantallas · migraciones · copia · ajustes · plantillas · metricas
-                       musculos · geometria · progresion · esquemas/ (generado)
-docs/                  especificaciones.md (hecho) · especificaciones-2.md (J hecho, I y K no)
+                       musculos · geometria · progresion · formato · i18n · traducciones ·
+                       esquemas/ (generado)
+docs/                  especificaciones.md (hecho) · especificaciones-2.md (I y J hechos, K no)
 ```
 
 Cinco ficheros de `pantallas/` no son pantallas, sino piezas que comparten varias:
@@ -104,12 +115,12 @@ sus récords, resumen semanal con racha, días de calendario pulsables y el mapa
 consulta como el **porqué** de lo que hay: incluye el esquema de datos hasta la v6, el orden de las
 migraciones y las desviaciones de lo que se implementó, que en D son largas y razonadas.
 
-**`docs/especificaciones-2.md` es el trabajo previsto, y de él solo está hecho J.** Recoge los tres
-puntos que el anterior dejó fuera de alcance a propósito:
+**`docs/especificaciones-2.md` es el trabajo previsto, y de él están hechos I y J.** Recoge los
+tres puntos que el anterior dejó fuera de alcance a propósito:
 
 - **I — internacionalización de la interfaz** (ARB + `flutter gen-l10n`, español e inglés, el
-  catálogo con índice de búsqueda multilingüe). **Pendiente.** Iba primero porque es un barrido por
-  las quince pantallas; J se entregó antes, así que el barrido incluirá también sus dos piezas.
+  catálogo con índice de búsqueda multilingüe). **Hecho**, con sus seis desviaciones documentadas
+  en I8.
 - **J — recomendación automática de progresiones** (`datos/progresion.dart`, doble progresión,
   esquema v7). **Hecho**, con sus nueve desviaciones documentadas en J6.
 - **K — sincronización en la nube, cuentas y multidispositivo** (`uuid` + `actualizado` +
@@ -382,13 +393,22 @@ las series efectivas llegan al tope, se sube el peso un escalón y se vuelve al 
 - `assets/ejercicios.es.json` (~1 MB) se versiona y está declarado en `pubspec.yaml`. `semilla.dart`
   lo vuelca en la tabla del catálogo de forma idempotente (compara recuentos) y lo parsea en un
   isolate con `compute()`, para no congelar el primer frame.
-- La columna `busqueda` es el índice: nombre en inglés **más** las traducciones de `datos/i18n.dart`,
-  normalizado sin acentos. Por eso «mancuerna pecho» encuentra lo mismo que «dumbbell bench press».
-  Si tocas `i18n.dart`, hay que **resembrar** (`sembrarCatalogo(bd, forzar: true)`).
+- La columna `busqueda` es el índice: el nombre **más** las traducciones de **todos** los idiomas
+  (`i18n_es.dart` e `i18n_en.dart`), normalizado sin acentos. Por eso «mancuerna pecho» y «dumbbell
+  chest» devuelven lo mismo sea cual sea el idioma activo, y por eso **cambiar de idioma no toca la
+  base**: un índice por idioma obligaría a reescribir 1.324 filas en cada toque del selector.
+- **Al tocar las tablas de `i18n_*.dart` hay que subir `versionIndice`** (`semilla.dart`). El
+  recuento de filas no cambia cuando lo que cambia es lo que se escribe en cada fila, así que sin
+  ese segundo disparador el índice viejo se quedaría. Sube el entero y el catálogo se resiembra una
+  vez en el siguiente arranque; la clave se guarda en `ajustes.version_indice`.
 - Dart no trae normalización Unicode, así que `normalizar()` sustituye los caracteres acentuados en
   vez de descomponerlos en NFKD. Si añades vocabulario con diacríticos raros, amplía el mapa.
 - Los nombres de ejercicio solo existen en inglés y se muestran tal cual; lo que se traduce son las
-  categorías (`bodyPart`, `equipment`, `target`, músculos).
+  categorías (`bodyPart`, `equipment`, `target`, músculos) y **las instrucciones**.
+- Las instrucciones se guardan como un mapa por idioma en la columna `instrucciones`. Las españolas
+  vienen del propio catálogo y las inglesas de `assets/instrucciones.en.json`, que genera
+  `python3 tool/instrucciones_en.py` desde el dataset original. `pasosDe` elige el idioma al pintar
+  y cae al español, y admite además la lista suelta de antes de la v2 del índice.
 - `Ejercicio.idCatalogo` es nulo en los ejercicios personalizados del usuario.
 - El buscador pagina de 40 en 40 con un `ScrollController`; nunca pintes los 1.324 de golpe.
 - El duplicado se comprueba **dentro de la rutina**: dos rutinas sí pueden compartir el mismo
@@ -411,6 +431,42 @@ pantalla de onboarding, o se resuelven contra la URL remota si el usuario la omi
 `inicializarMedia()` se llama desde `arranqueProvider` y fija el directorio con `path_provider`
 (en Android e iOS el directorio de trabajo no es escribible). Cualquier escritura a disco nueva debe
 pasar por ahí.
+
+### Idioma: los textos fuera del código
+
+La app está en **español e inglés**. Ninguna cadena visible vive en `lib/pantallas` ni en
+`lib/tema`: todas están en `lib/l10n/app_es.arb` (la plantilla, con las descripciones) y
+`app_en.arb`, y `flutter gen-l10n` genera de ahí la clase `Textos`.
+
+- **Se escribe `context.t.loQueSea`**, con la extensión de `lib/l10n/textos.dart`. Ese fichero es
+  el único punto de entrada: reexporta lo generado, que no se versiona. Nadie importa `generado/`.
+- **`tema/ui.dart` no importa `Textos`.** Un componente compartido no sabe en qué idioma está la
+  app: recibe el texto ya resuelto. Por eso `dialogoConfirmar`, `elegirEnHoja`, `selectorFecha`,
+  `DeslizarParaBorrar`, `Sugerencia` y `BarraDescanso` piden sus etiquetas.
+- **Un `enum` no lleva su etiqueta.** `Tema`, `Perfil`, `Metrica`, `Region`… se pintan desde un
+  `switch` exhaustivo contra `Textos`, de modo que añadir un valor rompe la compilación justo donde
+  falta la traducción. La clave del `enum` sí es estable cuando se persiste.
+- **Convención de claves:** `ambitoConcepto` en `camelCase` y en español, con el ámbito por delante
+  (`rutinasVacio`, `entrenarAnadirSerie`, `ajustesUnidad`); las compartidas van con `comun`.
+- **Cada texto nuevo son dos ediciones**, una por idioma, y `test/traducciones_test.dart` no deja
+  saltárselo: compara los dos conjuntos de claves y los parámetros de cada frase.
+- **`Formato` (`datos/formato.dart`) es el idioma hecho objeto**: fechas con `DateFormat`, números
+  con `NumberFormat`, pesos en la unidad activa y el vocabulario del catálogo. Se pide con
+  `formatoDe(context, ref)` dentro de `build` y con `leerFormato(context, ref)` en un callback
+  —`ref.watch` solo vale en `build`—. El idioma lo toma del **árbol de widgets**, no de la
+  preferencia: es el que `CupertinoApp` resolvió de verdad.
+- **La semana empieza en lunes en los dos idiomas**, a propósito: la racha y el reparto por semanas
+  están definidos así, y seguir al idioma daría rachas distintas en dos móviles del mismo usuario.
+  Ver la nota de `metricas.lunesDe`.
+- **Lo que no se traduce:** `AppGym`, `kg`, `lb`, `s`, `min`, `RPE`, `RIR`, `1RM` y los nombres de
+  ejercicio del catálogo, que solo existen en inglés.
+- **Lo que nunca se traduce porque está persistido:** las claves de `tiposMedida` (`peso`,
+  `grasa`…), las de `Claves`, los `bodyPart` de los filtros del catálogo y los nombres de los
+  `enum` que se guardan. Están escritos en la base de todos los móviles y en todas las copias
+  exportadas; hay un test de migración que lo fija.
+- **Lo que el usuario ya creó no se renombra.** Una rutina creada desde una plantilla en inglés se
+  llama `Push`; cambiar de idioma después **no** la toca: ya es su dato, con el nombre que él puede
+  editar.
 
 ### Sistema de diseño
 
@@ -448,7 +504,9 @@ termina nunca: los tests de ese grupo van con `_asentar`, a base de fotogramas s
 
 ### Empaquetado
 
-`pubspec.yaml` es la única fuente de dependencias; hoy son nueve. Las dos últimas, `share_plus` y
+`pubspec.yaml` es la única fuente de dependencias; hoy son diez, y la décima ya estaba en el
+árbol: `intl` la arrastra `flutter_localizations`, y se declara —**sin fijar versión**— para poder
+usar `DateFormat` y `NumberFormat` directamente. Las dos últimas, `share_plus` y
 `file_picker`, son de la copia de seguridad: sin ellas la única salida sería escribir en el
 directorio de documentos y cantar la ruta, que en Android no hay quien alcance. `share_plus` se
 queda en la 12 porque la 13 exige `win32 ^6` y `file_picker` pide `win32 ^5`.
