@@ -289,4 +289,20 @@ void main() {
       expect(mediaMovil([80, 80, 80]), [80, 80, 80]);
     });
   });
+
+  group('las claves de dispositivo', () {
+    test('el interruptor de la sincronización es una de ellas', () {
+      // Si se saliera de aquí, viajaría en la copia de seguridad y en la propia
+      // sincronización, y restaurar en un móvil nuevo diría que allí hay una
+      // cuenta conectada que no lo está.
+      expect(Claves.locales, contains(Claves.sincroActiva));
+    });
+
+    test('las preferencias de verdad no están en la lista', () {
+      // El contraste que hace que lo de arriba signifique algo: la unidad o el
+      // idioma sí viajan, porque son del usuario y no del aparato.
+      expect(Claves.locales, isNot(contains(Claves.unidad)));
+      expect(Claves.locales, isNot(contains(Claves.idioma)));
+    });
+  });
 }
