@@ -57,6 +57,8 @@ EjercicioConFicha _ejercicio({
     idRutina: 1,
     nombre: 'Barbell Bench Press',
     orden: 0,
+    uuid: 'ejercicio-$id',
+    actualizado: 0,
     repMin: repMin,
     repMax: repMax,
     incrementoKg: incrementoKg,

@@ -5,6 +5,8 @@
 /// único que responde a «¿me sirve esta copia si pierdo el móvil?».
 library;
 
+import 'dart:convert';
+
 import 'package:appgym/datos/ajustes.dart';
 import 'package:appgym/datos/bd.dart';
 import 'package:appgym/datos/copia.dart';
@@ -151,6 +153,36 @@ void main() {
       });
 
       expect(await exportarCsv(bd), contains('"Empuje, pierna"'));
+    });
+
+    test('la contabilidad de la sincronización no sale en la copia', () async {
+      await _poblar(bd);
+      await bd.fijarEstadoSincro(
+        cursorSubida: const Value(1234),
+        cursorBajada: const Value(1234),
+      );
+      await bd.borrarRutina((await bd.todasLasRutinas()).single.id);
+
+      final json = jsonEncode(await exportar(bd));
+
+      // Ni los cursores, ni las lápidas, ni los sellos. Son de este dispositivo
+      // y de esta cuenta: un cursor importado desde otro móvil haría que la
+      // sincronización se saltara datos sin avisar.
+      expect(json, isNot(contains('1234')));
+      expect(json, isNot(contains('lapida')));
+      expect(json, isNot(contains('actualizado')));
+      expect(json, isNot(contains('cursor')));
+    });
+
+    test('la identidad de cada fila sí viaja, desde la versión 4', () async {
+      await _poblar(bd);
+      final datos = await exportar(bd);
+
+      expect(datos['version'], 4);
+      final rutina = (datos['rutinas'] as List).single as Map;
+      expect(rutina['uuid'], (await bd.todasLasRutinas()).single.uuid);
+      expect((rutina['ejercicios'] as List).first, contains('uuid'));
+      expect((rutina['entrenamientos'] as List).first, contains('uuid'));
     });
   });
 
@@ -377,6 +409,80 @@ void main() {
         'Empuje (importada 2)',
       ]);
     });
+
+    test('restaurar en un móvil nuevo conserva la identidad', () async {
+      await _poblar(bd);
+      final datos = await exportar(bd);
+
+      final nuevo = AppBD(NativeDatabase.memory());
+      addTearDown(nuevo.close);
+      await sembrarCatalogo(nuevo, datos: _catalogoFalso);
+      await importar(nuevo, _t, datos, modo: ModoImportacion.reemplazar);
+
+      // Es lo que hace que enlazar después con la cuenta funda el histórico en
+      // vez de duplicarlo: las filas se reconocen por su `uuid`.
+      expect(
+        (await nuevo.todasLasRutinas()).single.uuid,
+        (await bd.todasLasRutinas()).single.uuid,
+      );
+      expect(
+        (await nuevo.entrenamientosDeRutina(
+          (await nuevo.todasLasRutinas()).single.id,
+        )).map((e) => e.uuid),
+        (await bd.entrenamientosDeRutina(
+          (await bd.todasLasRutinas()).single.id,
+        )).map((e) => e.uuid),
+      );
+    });
+
+    test(
+      'fusionar la copia sobre sus propios datos no repite identidad',
+      () async {
+        await _poblar(bd);
+        final datos = await exportar(bd);
+
+        // Dos filas con el mismo `uuid` no son dos filas: la que entra se lleva
+        // una identidad nueva, y de paso no revienta contra el índice único.
+        await importar(bd, _t, datos, modo: ModoImportacion.fusionar);
+
+        final uuids = (await bd.todasLasRutinas()).map((r) => r.uuid).toList();
+        expect(uuids, hasLength(2));
+        expect(uuids.toSet(), hasLength(2));
+      },
+    );
+
+    test(
+      'una copia de la versión 3 se importa y se le genera identidad',
+      () async {
+        await _poblar(bd);
+        final datos = await exportar(bd);
+        // Una copia hecha antes de que la identidad viajara.
+        datos['version'] = 3;
+        for (final rutina in (datos['rutinas'] as List).cast<Map>()) {
+          rutina.remove('uuid');
+          for (final e in (rutina['ejercicios'] as List).cast<Map>()) {
+            e.remove('uuid');
+          }
+          for (final s in (rutina['entrenamientos'] as List).cast<Map>()) {
+            s.remove('uuid');
+          }
+        }
+
+        final otra = AppBD(NativeDatabase.memory());
+        addTearDown(otra.close);
+        await sembrarCatalogo(otra, datos: _catalogoFalso);
+        final informe = await importar(
+          otra,
+          _t,
+          datos,
+          modo: ModoImportacion.reemplazar,
+        );
+
+        expect(informe.rutinas, 1);
+        expect(informe.entrenamientos, 2);
+        expect((await otra.todasLasRutinas()).single.uuid, hasLength(36));
+      },
+    );
 
     test('fusionar no pisa las preferencias', () async {
       await _poblar(bd);

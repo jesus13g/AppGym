@@ -13,10 +13,12 @@ dart run build_runner build     # genera bd.g.dart; obligatorio tras clonar
 flutter gen-l10n                # genera lib/l10n/generado/; obligatorio tras clonar
 flutter run                     # app en un dispositivo o emulador
 flutter analyze                 # objetivo permanente: 0 issues
-flutter test                    # 441 tests: datos, pantallas, migraciones, copia, copia
-                                #            automática y su adaptador de Drive, ajustes,
-                                #            métricas, músculos, geometría, progresiones,
-                                #            formatos, traducciones y vocabulario
+flutter test                    # 506 tests: datos, pantallas, migraciones, copia, copia
+                                #            automática y su adaptador de Drive, el motor de
+                                #            sincronización con su primer enlace y sus
+                                #            sellos, ajustes, métricas, músculos, geometría,
+                                #            progresiones, formatos, traducciones y
+                                #            vocabulario
 dart format lib test
 flutter build apk --release     # APK local (necesita SDK de Android y Java 17)
 ```
@@ -55,12 +57,15 @@ el estado. Interfaz **solo Cupertino**: no se importa `material.dart` en ningún
 lib/
 ├── main.dart          CupertinoApp, tema (claro/oscuro/sistema), idioma
 ├── datos/
-│   ├── bd.dart        las diez tablas y todas las consultas
+│   ├── bd.dart        las doce tablas y todas las consultas
 │   ├── esquemas.dart  esquemas versionados, generados, para los pasos de migración
 │   ├── ajustes.dart   preferencias: claves, valores por defecto y unidades
 │   ├── copia.dart     exportar e importar la copia de seguridad (JSON y CSV)
 │   ├── copia_automatica.dart  cuándo toca copiar, qué se rota y cuándo se avisa (puro)
 │   ├── nube/          nube.dart (la costura) · drive.dart (Google) · token.dart
+│   ├── sincro/        transporte.dart (la costura) · motor.dart (la reconciliación) ·
+│   │                  enlace.dart (el primer enlace)
+│   ├── identidad.dart el uuid de una fila y el sello de su versión
 │   ├── respaldo.dart  duplicado del fichero .sqlite antes de migrarlo
 │   ├── borrador.dart  estado de la sesión en curso, serializado a JSON
 │   ├── plantillas.dart rutinas predefinidas desde assets/plantillas.json
@@ -91,9 +96,9 @@ tool/                  musculatura.py (el modelo anatómico) · instrucciones_en
                        en inglés, desde el dataset original)
 test/                  datos · pantallas · migraciones · copia · ajustes · plantillas · metricas
                        musculos · geometria · progresion · formato · i18n · traducciones ·
-                       esquemas/ (generado)
-docs/                  especificaciones.md (hecho) · especificaciones-2.md (I, J y la fase 8a
-                       de K hechos; 8b y 8c no) · privacidad.md
+                       sincro · sincro_sellos · enlace · esquemas/ (generado)
+docs/                  especificaciones.md (hecho) · especificaciones-2.md (I, J y las fases
+                       8a y 8b de K hechas; 8c no) · privacidad.md
 ```
 
 Cinco ficheros de `pantallas/` no son pantallas, sino piezas que comparten varias:
@@ -191,19 +196,26 @@ volver. Dos reglas que ya han costado un fallo cada una:
 así que —a diferencia de SQLAlchemy— una fila leída se puede pasar a la interfaz sin más.
 
 ```
-rutinas              id, nombre (único), color
+rutinas              id, nombre (único), color, uuid, actualizado
 ejercicios           id, idRutina, idCatalogo, nombre, descripcion, orden, descansoSeg,
-                     repMin, repMax, incrementoKg, estrategia (las cuatro: null = «global»)
+                     repMin, repMax, incrementoKg, estrategia (las cuatro: null = «global»),
+                     uuid, actualizado
 catalogo_ejercicios  el dataset, de solo lectura, con índices en busqueda/bodyPart/
                      equipment/target
-entrenamientos       id, idRutina, fecha, nota, duracionSeg
+entrenamientos       id, idRutina, fecha, nota, duracionSeg, uuid, actualizado
 serie                una fila por serie: nSerie, repeticiones, peso, calentamiento, rpe, nota
-ajustes              clave, valor
+ajustes              clave, valor, actualizado
 sesiones_activas     el borrador de la sesión en curso (como mucho una fila)
-favoritos            idCatalogo, creado
+favoritos            idCatalogo, creado, actualizado
 vistos               idCatalogo, fecha (se conservan los 10 últimos)
-medidas              id, fecha, tipo, valor — con clave única (fecha, tipo)
+medidas              id, fecha, tipo, valor, actualizado — con clave única (fecha, tipo)
+lapidas              tabla, clave, actualizado — lo que se borró aquí y hay que propagar
+sincro_estado        una fila: los dos cursores, la última pasada y sus avisos
 ```
+
+`uuid` y `actualizado` son de la sincronización y no cambian nada de lo que ya había: **la
+clave primaria sigue siendo el entero** y con él trabajan todas las consultas, los providers
+y las rutas. Ver [Sincronización](#sincronización-identidad-versión-y-lápidas).
 
 **`serie` guarda una fila por serie hecha.** Su columna `nSerie` es el **índice** de la serie dentro
 del ejercicio, no el recuento: hasta el esquema v1 era lo contrario y el nombre se conservó para no
@@ -218,7 +230,7 @@ resueltos.**
 `PRAGMA foreign_keys = ON` se activa en `beforeOpen`. Sin él SQLite ignora los `ON DELETE CASCADE` y
 borrar una rutina dejaría sus series huérfanas.
 
-**Migraciones:** `schemaVersion` va por 7. Todo cambio de esquema exige subirlo y añadir el paso en
+**Migraciones:** `schemaVersion` va por 8. Todo cambio de esquema exige subirlo y añadir el paso en
 `MigrationStrategy`, o las bases de datos existentes se romperán. El flujo completo, tras tocar una
 tabla:
 
@@ -239,9 +251,10 @@ cuando el modelo actual cambie.
 la migra hasta la actual, comparando además el esquema resultante con el volcado. Es lo que caza una
 columna que se añadió al modelo y no a la migración.
 
-**Antes de la v2 se respalda el fichero** (`datos/respaldo.dart`): es la única migración que
-transforma datos. La copia se hace con la base todavía cerrada, desde el callback `databasePath` de
-`drift_flutter`, porque con la conexión abierta el WAL dejaría el duplicado a medias.
+**Antes de la v2 y de la v8 se respalda el fichero** (`datos/respaldo.dart`): son las dos
+migraciones que transforman datos, y la lista `versionesQueTransforman` es lo que lo decide. La
+copia se hace con la base todavía cerrada, desde el callback `databasePath` de `drift_flutter`,
+porque con la conexión abierta el WAL dejaría el duplicado a medias.
 
 Las preferencias viven en la tabla `ajustes`, de clave/valor, para que entren en la misma copia de
 seguridad que el resto de los datos. Quien las interpreta es `datos/ajustes.dart`: ahí están las
@@ -437,6 +450,61 @@ Ocho cosas que conviene no volver a decidir:
 
 `docs/privacidad.md` es requisito, no formalidad: la pantalla de consentimiento de Google pide una
 URL, y «Acerca de» la enlaza. Si cambias qué datos salen del móvil, ese fichero cambia con ellos.
+
+### Sincronización: identidad, versión y lápidas
+
+La fase 8b es **el motor y nada más**: no hay pantalla, no hay cuenta, no hay red y **el APK no
+cambia para el usuario**. Lo que sí cambia es que cada fila que se sincroniza lleva desde ahora su
+identidad y su versión, y que todo borrado deja constancia. El adaptador de un proveedor real es la
+fase 8c y todavía no existe.
+
+- `datos/identidad.dart` da las dos marcas: `uuidV4()` (v4 escrito a mano, sin el paquete `uuid`) y
+  `selloLocal()`, un contador **monótono** en milisegundos.
+- `datos/sincro/transporte.dart` es la costura: `SincroTransporte`, ocho métodos, sin Flutter y sin
+  drift. **El motor no importa el SDK de nadie**, y por eso `test/sincro_falso.dart` puede
+  sustituirlo por un mapa en memoria con su propio reloj.
+- `datos/sincro/motor.dart` es la reconciliación: bajar, aplicar, subir, confirmar.
+- `datos/sincro/enlace.dart` es el primer enlace y sus cuatro casos.
+
+Nueve cosas que conviene no volver a decidir:
+
+- **El `uuid` es una identidad añadida, no un sustituto de la clave primaria.** Todas las consultas,
+  los `family` de los providers y las rutas siguen trabajando con `int`; el `uuid` solo lo usa la
+  capa de sincronización para traducir de identidad global a identidad local al entrar y al salir.
+- **La regla del conflicto es una sola, y no compara relojes:** *al bajar, una fila remota se aplica
+  salvo que la local esté pendiente de subir*. «Pendiente» es `actualizado > cursorSubida`. Lo
+  pendiente gana y se sube justo después, así que el servidor acaba con ello. Comparar el sello de
+  aquí con el del servidor sería comparar dos relojes distintos, y un móvil con la hora mal puesta
+  ganaría todos los conflictos para siempre.
+- **El sello lo pisa el servidor al aceptar la fila.** En local solo tiene que crecer, y por eso
+  `selloLocal` es monótono y `AppBD` lo siembra al abrir con el mayor sello de la base: si no,
+  reabrir con el reloj atrasado repetiría sellos ya usados y una fila cambiada aquí parecería
+  subida.
+- **Los borrados van a la tabla `lapidas`, no a una columna `borrado`.** Con la columna habría que
+  filtrar las cincuenta consultas de `bd.dart` —y la que se olvidara enseñaría datos borrados—, el
+  nombre de una rutina borrada seguiría ocupando su índice único y los `ON DELETE CASCADE` habría
+  que reescribirlos a mano. Solo se entierra a los padres: el `CASCADE` hace el resto en los dos
+  lados.
+- **La sesión es la unidad, no la serie.** `serie` es la única tabla del usuario sin identidad ni
+  versión: viaja dentro de su entrenamiento y se sustituye con él. Por eso **escribir una serie
+  sella su entrenamiento**; si eso se rompe, dos móviles pueden acabar con una sesión mezclada, que
+  es el peor resultado posible.
+- **`medidas`, `favoritos` y `ajustes` se identifican por su clave natural** (`tipo|fecha`,
+  `idCatalogo`, `clave`), que ya es la misma en los dos móviles. Darles un `uuid` haría que la misma
+  medida llegara dos veces y chocara contra su índice único.
+- **`actualizado` tiene `DEFAULT 0` en SQL y se sella a mano en cada escritura.** El cero no es un
+  sello válido, es un olvido, y una fila sin sellar no se subiría nunca. `test/sincro_sellos_test.dart`
+  recorre todas las escrituras públicas y lo comprueba: **si añades una escritura, añade su caso
+  ahí**.
+- **No hay tabla de cola de salida.** «Lo pendiente» se deduce del sello, igual que los récords se
+  calculan en vez de guardarse. Una tabla menos y un modo de fallo menos.
+- **Las claves de `Claves.locales` no viajan**, ni al subir ni al bajar: son de este móvil. Y
+  `sincro_estado` no se exporta en la copia de seguridad, por lo mismo que no se exporta el token.
+
+Lo que **sí** cambió de la copia de seguridad: `versionCopia` pasa a **4** y las rutinas, los
+ejercicios y las sesiones exportan su `uuid`. Es lo que hace que restaurar en un móvil nuevo y
+enlazarlo después funda el histórico en vez de duplicarlo. Si al restaurar ese `uuid` ya está en la
+base, se genera otro: dos filas con la misma identidad no son dos filas.
 
 ### Catálogo de ejercicios
 
