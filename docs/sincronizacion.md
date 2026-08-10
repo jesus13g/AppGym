@@ -1,145 +1,170 @@
-# Montar la sincronización en un proyecto propio
+# Montar el servidor de la sincronización
 
-La sincronización de AppGym necesita un proyecto de [Supabase](https://supabase.com). Este
-documento es el montaje completo, y está escrito para que un *fork* pueda tener el suyo sin
-depender del proyecto de nadie.
+La sincronización de AppGym necesita **su propio servidor**: el de `servidor/`,
+FastAPI y PostgreSQL, que se despliega con `docker compose` en cualquier VPS. Este
+documento es el montaje completo, y está escrito para que un *fork* pueda tener el
+suyo sin depender del servidor de nadie.
 
-**Nada de esto hace falta para usar la app.** Sin configurar, la sincronización *no existe*:
-no hay grupo de Cuenta en Ajustes y no hay disparador que haga nada. La app funciona entera
-en local, igual que antes de la fase 8c, y la copia de seguridad manual y la automática
+**Nada de esto hace falta para usar la app.** Sin configurar, la sincronización *no
+existe*: no hay grupo de Cuenta en Ajustes y no hay disparador que haga nada. La app
+funciona entera en local, y la copia de seguridad manual y la automática a Drive
 siguen sin depender de esto.
 
-## 1. Crear el proyecto
+> Hasta la fase 8c esto era un proyecto de Supabase. Ya no: la decisión O2 se
+> reabrió y se cerró en la opción C de K2, **servidor propio**. El porqué está en
+> `especificaciones-2.md`; en corto, no depender de un BaaS y poder probar el
+> servidor con `pytest` en vez de con un guion SQL pegado a mano en un panel.
 
-Uno nuevo en [supabase.com/dashboard](https://supabase.com/dashboard). La región da igual;
-la más cercana va mejor. El plan gratuito sobra: un año de entrenamiento es del orden de un
-megabyte por usuario.
+## 1. Lo que hace falta
 
-De *Project Settings → API* hacen falta dos valores:
+- Una máquina con Docker: un VPS de 4-6 €/mes sobra. Los datos de un año de
+  entrenamiento son del orden de un megabyte por usuario; lo que se paga no es el
+  volumen, es tener la máquina encendida.
+- Un dominio o subdominio apuntando a su IP con un registro `A`
+  (`appgym.tudominio.com`).
+- Los puertos **80 y 443** abiertos. El 80 lo usa Let's Encrypt para validar el
+  dominio; sin él no hay certificado.
 
-- **Project URL** — `https://xxxxxxxx.supabase.co`
-- **anon public key** — la clave pública. Es pública **por diseño**: lo que protege los datos
-  es la RLS del paso siguiente, no el secreto de esta clave.
+## 2. Levantarlo
 
-La **`service_role` key no se usa nunca** y no debe salir del panel. Si acaba en el APK,
-cualquiera que lo descargue puede leer y borrar los datos de todos los usuarios.
-
-## 2. Aplicar el esquema
-
-Copiar `supabase/esquema.sql` entero en *SQL Editor → New query* y ejecutarlo. Crea:
-
-- el esquema `appgym` con las tablas `filas` y `relojes`,
-- la RLS de las dos, con una política por tabla,
-- las cinco funciones que la app llama: `appgym_subir`, `appgym_bajar`, `appgym_resumen`,
-  `appgym_vaciar` y `appgym_borrar_cuenta`.
-
-Es idempotente: volver a ejecutarlo no destruye nada.
-
-**No añadas `appgym` a *Exposed schemas*** (en *Project Settings → API*). Debe quedarse en
-`public, graphql_public`, que es lo que viene de fábrica. Así la única superficie REST son
-las cinco funciones. Las tablas llevan RLS igualmente, pero es superficie que no hace falta.
-
-## 3. Activar el correo y **poner el código en la plantilla**
-
-En *Authentication → Providers → Email*: activado, y **«Confirm email» activado**.
-
-Y ahora el paso que más se olvida y sin el cual la app no funciona:
-
-> En *Authentication → Emails → Magic Link*, la plantilla tiene que incluir `{{ .Token }}`.
-
-AppGym entra con un **código de seis cifras**, no con un enlace: un enlace mágico exigiría
-deep links, un *intent-filter* en el manifiesto y un dominio de redirección, y el APK aquí se
-instala a mano desde una release. La plantilla de fábrica solo trae `{{ .ConfirmationURL }}`,
-así que hay que añadir el código. Por ejemplo:
-
-```html
-<h2>Entrar en AppGym</h2>
-<p>Tu código es:</p>
-<p style="font-size:28px;letter-spacing:4px"><b>{{ .Token }}</b></p>
-<p>Caduca en una hora. Si no has sido tú, ignora este correo.</p>
+```bash
+git clone <este repositorio> && cd AppGym/servidor
+cp .env.ejemplo .env
+$EDITOR .env          # dominio, contraseña de la base y llave de firma
+docker compose up -d --build
+curl https://appgym.tudominio.com/salud     # {"estado":"vivo"}
 ```
 
-Si la plantilla no lleva `{{ .Token }}`, el usuario recibe un enlace, no tiene ningún código
-que teclear y **no puede entrar**. Es el fallo más probable de todo el montaje.
+Las dos cosas que hay que generar, y que **no se teclean a mano**:
 
-**Si el proyecto es solo tuyo**, conviene además desactivar *Allow new users to sign up* en
-*Authentication → Sign In / Providers* después de crear tu propia cuenta. Con el registro
-abierto, cualquiera que instale el APK puede crear una cuenta en tu proyecto: es tu cuota y
-son datos ajenos que pasas a custodiar.
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(24))"   # POSTGRES_PASSWORD
+python3 -c "import secrets; print(secrets.token_urlsafe(48))"   # APPGYM_JWT_SECRETO
+```
 
-## 4. Compilar apuntando ahí
+`APPGYM_JWT_SECRETO` es la llave con la que se firman los accesos. **No sale del
+`.env`**: no va a CI, no va al APK y no se escribe en el repositorio. Si se
+cambia, los accesos vivos dejan de valer y cada móvil renueva una vez; los
+refrescos siguen sirviendo, porque están en la base.
 
-En local:
+Caddy pide el certificado a Let's Encrypt en el primer arranque y lo renueva solo.
+En local, con `APPGYM_DOMINIO=localhost`, usa su CA interna y el compose entero
+funciona igual.
+
+## 3. Cerrar el registro en cuanto tengas tu cuenta
+
+Crea tu cuenta desde la app (paso 5) y **entonces**:
+
+```bash
+sed -i 's/^APPGYM_REGISTRO_ABIERTO=.*/APPGYM_REGISTRO_ABIERTO=false/' .env
+docker compose up -d
+```
+
+El APK de las releases es público y cualquiera puede sacar de él la URL del
+servidor. Con el registro abierto, cualquiera puede darse de alta: es tu cuota, tu
+disco y **datos de salud ajenos que pasas a custodiar**. Cerrarlo es una línea.
+
+## 4. El anclaje de certificado
+
+Es lo que hace que la app **solo** se crea a la autoridad de tu servidor. Con
+anclaje, un proxy de inspección —o un certificado mal emitido por cualquier
+autoridad del mundo— no puede leer ni modificar el tráfico: el apretón de manos
+falla y la petición no llega a salir.
+
+Se pasa como `--dart-define API_ANCLAS=<el PEM en base64>`. Qué poner dentro:
+
+**Con Let's Encrypt** (lo normal). Los dos raíces de LE, que duran hasta 2035, así
+que las renovaciones cada 60 días no obligan a publicar un APK:
+
+```bash
+curl -s https://letsencrypt.org/certs/isrgrootx1.pem  >  anclas.pem
+curl -s https://letsencrypt.org/certs/isrg-root-x2.pem >> anclas.pem
+base64 -w0 anclas.pem
+```
+
+**Con la CA interna de Caddy** (`tls internal` en el `Caddyfile`). Es el anclaje
+más estrecho: ningún certificado público vale, solo el tuyo. La API no la visita
+ningún navegador, así que no necesita una autoridad pública. El raíz dura diez
+años:
+
+```bash
+docker compose exec caddy cat /data/caddy/pki/authorities/local/root.crt | base64 -w0
+```
+
+**Sin `API_ANCLAS` la app funciona igual**, con las autoridades del sistema: sigue
+habiendo TLS, pero no hay anclaje.
+
+> **El volumen `caddy_datos` hay que conservarlo.** Ahí viven el certificado y su
+> clave. Perderlo con la CA interna significa una CA nueva, y con ella un APK
+> nuevo para todos los móviles.
+
+## 5. Compilar la app apuntando ahí
 
 ```bash
 flutter build apk --release \
-  --dart-define SUPABASE_URL=https://xxxxxxxx.supabase.co \
-  --dart-define SUPABASE_ANON_KEY=eyJhbGciOi...
+  --dart-define API_URL=https://appgym.tudominio.com \
+  --dart-define API_ANCLAS=$(base64 -w0 anclas.pem)
 ```
 
-En CI son los secretos `SUPABASE_URL` y `SUPABASE_ANON_KEY` del repositorio
-(*Settings → Secrets and variables → Actions*). Si no están, llegan vacíos, la
-sincronización queda desactivada y no visible, y el APK se construye igual: es lo que hace
-que un *fork* compile sin tener que tocar nada.
+En CI son los secretos `API_URL` y `API_ANCLAS` del repositorio (*Settings →
+Secrets and variables → Actions*). Si no están, llegan vacíos, la sincronización
+queda desactivada y no visible, y el APK se construye igual: es lo que hace que un
+*fork* compile sin tener que tocar nada.
 
-## 5. Comprobar que el servidor hace lo que promete
+**Cómo comprobar que han entrado**, sin leer ningún log: instala el APK y abre
+*Ajustes*. Si aparece el grupo «Cuenta», la URL llegó. Si no aparece, no.
 
-**Ni una línea del SQL se puede probar con `flutter test`.** Es la única parte del proyecto en
-esa situación, y por eso este guion existe: se pega en el editor SQL, con una sesión iniciada
-desde la app para que `auth.uid()` no sea nulo, o envolviéndolo en un `set request.jwt.claims`.
+## 6. Comprobar que el servidor hace lo que promete
 
-El contrato que hay que ver cumplido es el que implementa `test/sincro_falso.dart`, que es la
-especificación ejecutable del transporte:
+A diferencia de la versión anterior —donde el servidor era SQL en un panel y no
+había forma de probarlo—, aquí eso está automatizado:
 
-```sql
--- 1. El reloj arranca en milisegundos de época, no en cero.
---    Si esto sale por debajo de 1.7e12, el móvil resubirá su histórico entero
---    en cada pasada y el fallo no se verá hasta que el usuario tenga datos.
-select public.appgym_subir('[{"tabla":"rutinas","clave":"prueba-1",
-                              "datos":{"nombre":"Empuje"}}]'::jsonb);
---    → cursor y cursorPrevio deben ser > 1700000000000
-
--- 2. Los sellos crecen, y `cursorPrevio` es donde estaba el servidor antes.
-select public.appgym_subir('[{"tabla":"rutinas","clave":"prueba-2",
-                              "datos":{"nombre":"Tirón"}}]'::jsonb);
---    → cursorPrevio == el `cursor` de la llamada anterior
-
--- 3. Bajar desde cero trae las dos; bajar desde el cursor no trae nada,
---    pero devuelve el cursor igual.
-select public.appgym_bajar(0);
-select public.appgym_bajar((select sello from appgym.relojes
-                             where usuario = auth.uid()));
-
--- 4. Una lápida viaja como `datos: null`.
-select public.appgym_subir('[{"tabla":"rutinas","clave":"prueba-2",
-                              "datos":null}]'::jsonb);
-select public.appgym_bajar(0);   -- prueba-2 sale con "datos": null
-
--- 5. El resumen no cuenta lápidas.
-select public.appgym_resumen();  -- → {"rutinas": 1, "sesiones": 0}
-
--- 6. Vaciar borra las filas y NO reinicia el reloj.
-select public.appgym_vaciar();
-select public.appgym_resumen();                                    -- ceros
-select sello from appgym.relojes where usuario = auth.uid();       -- sigue alto
+```bash
+cd servidor
+createdb appgym_test
+pytest -q          # el reloj, el aislamiento, la cuenta, la concurrencia
 ```
 
-Y el aislamiento, que es el único test que necesita red y que K9 pide: con la sesión de un
-usuario, intentar leer las filas de otro tiene que devolver cero filas, no un error y no
-datos.
+Y el contrato entre la app y el servidor, de extremo a extremo, con el servidor
+levantado de verdad:
 
-```sql
-select count(*) from appgym.filas where usuario <> auth.uid();  -- → 0
+```bash
+docker compose up -d
+flutter test --tags red --dart-define API_URL=https://localhost
 ```
+
+Ese test está fuera de la suite por defecto (`flutter test` no lo ejecuta) porque
+necesita el servidor en pie. Es el sustituto del guion SQL manual que había aquí.
+
+## 7. Las copias
+
+El plan es un `pg_dump` diario, comprimido y rotado a 14 días, en el cron del
+anfitrión:
+
+```cron
+0 4 * * * cd /ruta/AppGym/servidor && docker compose exec -T db \
+  pg_dump -U appgym appgym | gzip > copias/appgym-$(date +\%F).sql.gz && \
+  find copias -name 'appgym-*.sql.gz' -mtime +14 -delete
+```
+
+**Prueba la restauración una vez.** Una copia que no se ha restaurado nunca no es
+una copia, es un fichero.
+
+Aun así, conviene tenerlo claro: **la nube no es la copia de seguridad del
+usuario**. La suya es la exportación de *Ajustes → Datos*, que no depende de nada
+externo, y la copia automática a Drive de la fase 8a.
 
 ## Qué sale del móvil
 
-Exactamente las tablas que lista K6 en `especificaciones-2.md`: rutinas, ejercicios,
-entrenamientos con sus series, medidas, favoritos y preferencias. Más el correo, para la
-cuenta. **Nada más.** El detalle, en lenguaje llano, está en
+Exactamente las tablas que lista K6 en `especificaciones-2.md`: rutinas,
+ejercicios, entrenamientos con sus series, medidas, favoritos y preferencias. Más
+el correo, para la cuenta. **Nada más.** El detalle, en lenguaje llano, está en
 [`privacidad.md`](privacidad.md).
 
-Lo que **no** sale: el catálogo de ejercicios (1.324 filas regenerables desde un *asset*), el
-historial de navegación, la sesión en curso, las imágenes —que son © Gym visual y
-redistribuirlas fuera de sus condiciones no sería legal— y las claves de dispositivo de
-`Claves.locales`.
+Lo que **no** sale: el catálogo de ejercicios (1.324 filas regenerables desde un
+*asset*), el historial de navegación, la sesión en curso, las imágenes —que son
+© Gym visual y redistribuirlas fuera de sus condiciones no sería legal— y las
+claves de dispositivo de `Claves.locales`.
+
+Y lo que el servidor **no** guarda de la cuenta: la contraseña. Guarda su hash
+Argon2id, que no se puede deshacer.

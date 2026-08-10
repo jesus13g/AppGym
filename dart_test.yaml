@@ -1,0 +1,11 @@
+# La etiqueta `red` se declara aquí para que `flutter test` no avise de que se
+# usa una etiqueta desconocida.
+#
+# **No se salta desde aquí**, a propósito: el propio `test/red/` comprueba si hay
+# `--dart-define API_URL` y no hace nada sin él. Así `flutter test` a secas pasa
+# —que es lo que corre CI y lo que se ejecuta al desarrollar— y el mismo fichero
+# sirve tal cual cuando hay un servidor levantado:
+#
+#     flutter test --tags red --dart-define API_URL=http://127.0.0.1:8000
+tags:
+  red:

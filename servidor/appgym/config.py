@@ -50,7 +50,13 @@ class Ajustes(BaseSettings):
     # el resto. Es un cortafuegos de andar por casa —vive en memoria y no
     # sobrevive a un reinicio—, pensado para una sola instancia. Si algún día hay
     # varias, esto se sustituye por Redis y no cambia nada más.
-    limite_auth_minuto: int = 10
+    #
+    # Veinte y no cinco **porque la IP no es la persona**: dos móviles y una
+    # tableta detrás del mismo router comparten IP, y sus renovaciones de token
+    # caen en la misma cuenta. Quien de verdad para a alguien probando
+    # contraseñas es el bloqueo por cuenta de aquí arriba, que no depende de la
+    # IP y que no se puede esquivar cambiándola.
+    limite_auth_minuto: int = 20
     limite_datos_minuto: int = 120
 
     # Cuántas filas admite una subida. El cliente manda en lotes de 200; el margen
