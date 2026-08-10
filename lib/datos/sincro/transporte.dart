@@ -9,19 +9,27 @@
 /// `nube.dart`: con una interfaz pequeña que los tests sustituyen.
 ///
 /// El motor **no importa ningún SDK**: habla con [SincroTransporte]. El
-/// adaptador real (`supabase.dart`, fase 8c) es el único fichero del proyecto
-/// que sabe qué proveedor hay detrás; el de test es un mapa en memoria
+/// adaptador real (`servidor.dart`) es el único fichero del proyecto que sabe
+/// cómo se habla con el servidor; el de test es un mapa en memoria
 /// (`test/sincro_falso.dart`).
 ///
 /// Son **nueve** métodos, no los seis que proponía K10. Los dos primeros de más
 /// son de la fase 8b y están razonados en cada uno: `resumen()`, para enseñar
 /// las cifras de los dos lados antes de preguntar en el primer enlace, y
 /// `vaciar()`, para «este dispositivo manda». El noveno es de la 8c:
-/// `pedirCodigo()`, porque entrar con un código de un solo uso son dos pasos y
-/// no uno.
+/// `registrar()`, porque crear una cuenta y entrar en ella dejaron de ser la
+/// misma operación en cuanto hubo contraseña.
 ///
 /// Nada de aquí importa Flutter ni drift: son datos y una interfaz.
 library;
+
+/// Lo que mide de largo una contraseña aceptable.
+///
+/// Diez, y sin reglas de «una mayúscula y un símbolo»: obligan a contraseñas
+/// peores y más difíciles de recordar, y lo que de verdad importa es la longitud.
+/// **El servidor comprueba lo mismo**; esto está aquí para poder decírselo al
+/// usuario antes de enviar nada.
+const largoMinimoContrasena = 10;
 
 /// La cuenta con la que se está sincronizando.
 class SesionRemota {
@@ -198,26 +206,32 @@ abstract interface class SincroTransporte {
   /// de todo el bloque.
   Future<SesionRemota?> sesionActual();
 
-  /// Pide al servidor que mande un código de un solo uso a [correo].
+  /// Crea una cuenta y entra en ella.
   ///
-  /// Crea la cuenta si no existía: «crear cuenta» y «entrar» son el mismo botón,
-  /// como pide K3.
-  Future<void> pedirCodigo(String correo);
+  /// **Va aparte de [entrar], y no es un capricho.** Con el código por correo de
+  /// la primera versión eran la misma operación —el código creaba la cuenta si no
+  /// existía—, pero con contraseña eso sería un desastre: quien se equivoca al
+  /// teclear su correo se crearía una cuenta nueva y vacía en vez de leer
+  /// «contraseña incorrecta», y no entendería nada de lo que pasa después.
+  ///
+  /// Lanza [ErrorSincro] con motivo `rechazado` si el correo ya tiene cuenta o si
+  /// el servidor no admite cuentas nuevas.
+  Future<SesionRemota> registrar(String correo, String contrasena);
 
-  /// Entra con el código que el usuario acaba de recibir.
+  /// Entra con el correo y la contraseña.
   ///
-  /// **Un código tecleado, no un enlace mágico**, aunque K3 dijera lo segundo.
-  /// Un enlace que vuelve a la app exige deep links, un *intent-filter* en el
-  /// manifiesto y un dominio de redirección configurado en el proveedor; aquí el
-  /// APK se instala a mano desde una release y un *fork* tendría que montar todo
-  /// eso para que la funcionalidad existiera. El código llega en el mismo correo
-  /// y no depende de nada. Es la misma clase de decisión que renunciar a
-  /// `google_sign_in` en la fase 8a.
+  /// **Contraseña y no enlace mágico ni código**, aunque K3 dijera lo primero. Un
+  /// enlace que vuelve a la app exige deep links, un *intent-filter* en el
+  /// manifiesto y un dominio de redirección; y un código de un solo uso exige
+  /// correo saliente, que en un servidor propio es infraestructura que hay que
+  /// montar, pagar y vigilar **antes** de que nadie pueda entrar. Con contraseña,
+  /// el día que el servidor esté en pie ya se puede usar. Es la misma clase de
+  /// decisión que renunciar a `google_sign_in` en la fase 8a.
   ///
-  /// Lanza [ErrorSincro] con motivo `rechazado` si el código no vale o caducó:
-  /// el usuario puede arreglarlo tecleando otra vez, así que no se reintenta
-  /// solo y el mensaje se enseña tal cual.
-  Future<SesionRemota> entrar(String correo, String codigo);
+  /// Lanza [ErrorSincro] con motivo `rechazado` si las credenciales no valen: el
+  /// usuario puede arreglarlo tecleando otra vez, así que no se reintenta solo y
+  /// el mensaje se enseña tal cual.
+  Future<SesionRemota> entrar(String correo, String contrasena);
 
   /// Cierra la sesión. **No borra nada**, ni aquí ni en el servidor.
   Future<void> salir();

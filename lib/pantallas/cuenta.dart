@@ -59,10 +59,21 @@ class GrupoCuenta extends ConsumerWidget {
         filas: [
           _accion(
             context,
-            icono: CupertinoIcons.person_crop_circle_badge_plus,
+            icono: CupertinoIcons.person_crop_circle,
             titulo: context.t.cuentaEntrar,
             cargando: vista.enMarcha,
-            onTap: () => _entrar(context, ref),
+            onTap: () => _entrar(context, ref, creando: false),
+          ),
+          // Dos filas y no una: con contraseña, «entrar» y «crear cuenta» dejan
+          // de poder ser el mismo botón. Quien se equivoca al teclear su correo
+          // tiene que leer «contraseña incorrecta», no acabar con una cuenta
+          // nueva y vacía sin enterarse.
+          _accion(
+            context,
+            icono: CupertinoIcons.person_crop_circle_badge_plus,
+            titulo: context.t.cuentaCrear,
+            cargando: vista.enMarcha,
+            onTap: () => _entrar(context, ref, creando: true),
           ),
         ],
       );
@@ -139,51 +150,155 @@ class GrupoCuenta extends ConsumerWidget {
     );
   }
 
-  // ── Entrar: correo y luego código ──────────────────────────────────────────
+  // ── Entrar: correo y contraseña ────────────────────────────────────────────
 
-  Future<void> _entrar(BuildContext context, WidgetRef ref) async {
-    final textos = context.t;
+  Future<void> _entrar(
+    BuildContext context,
+    WidgetRef ref, {
+    required bool creando,
+  }) async {
     final motor = ref.read(sincronizacionProvider.notifier);
 
-    final correo = await ui.dialogoTexto(
-      context,
-      titulo: textos.cuentaCorreoTitulo,
-      mensaje: textos.cuentaCorreoMensaje,
-      marcador: textos.cuentaCorreoMarcador,
-      teclado: TextInputType.emailAddress,
-      etiquetaAceptar: textos.cuentaContinuar,
-      etiquetaCancelar: textos.comunCancelar,
-    );
-    if (correo == null || !context.mounted) return;
+    final credenciales = await _pedirCredenciales(context, creando: creando);
+    if (credenciales == null || !context.mounted) return;
 
     try {
-      await motor.pedirCodigo(correo);
-    } on ErrorSincro catch (e) {
-      if (context.mounted) ui.aviso(context, e.mensaje);
-      return;
-    }
-    if (!context.mounted) return;
-
-    final codigo = await ui.dialogoTexto(
-      context,
-      titulo: textos.cuentaCodigoTitulo,
-      mensaje: textos.cuentaCodigoMensaje(correo),
-      marcador: textos.cuentaCodigoMarcador,
-      teclado: TextInputType.number,
-      etiquetaAceptar: textos.cuentaContinuar,
-      etiquetaCancelar: textos.comunCancelar,
-    );
-    if (codigo == null || !context.mounted) return;
-
-    try {
-      final lados = await motor.entrar(correo, codigo);
+      final (correo, contrasena) = credenciales;
+      final lados = creando
+          ? await motor.registrar(correo, contrasena)
+          : await motor.entrar(correo, contrasena);
       // Solo hay que preguntar si hay datos a los dos lados. Los otros tres
       // casos de K7 se resuelven solos y no interrumpen a nadie.
       if (lados != null && context.mounted) await decidirEnlace(context, ref);
     } on ErrorSincro catch (e) {
-      // «El código no vale o ha caducado», tal cual lo dice el servidor.
+      // «Correo o contraseña incorrectos», tal cual lo dice el servidor.
       if (context.mounted) ui.aviso(context, e.mensaje);
     }
+  }
+
+  /// El diálogo de credenciales. Devuelve `null` si se cancela.
+  ///
+  /// No sale de `ui.dart` —donde está `dialogoTexto`, que es de un campo— porque
+  /// es el único sitio de la app que pide dos o tres a la vez, y uno de ellos
+  /// oculto. El día que haga falta en otro sitio, sube; hoy sería un componente
+  /// compartido con un solo cliente.
+  ///
+  /// Al **crear** la cuenta pide la contraseña dos veces. En un servidor sin
+  /// correo saliente no hay «he olvidado mi contraseña», así que un dedazo al
+  /// teclearla no se puede arreglar: la cuenta queda inaccesible y hay que crear
+  /// otra. Un campo más es barato comparado con eso.
+  Future<(String, String)?> _pedirCredenciales(
+    BuildContext context, {
+    required bool creando,
+  }) {
+    final textos = context.t;
+    final correo = TextEditingController();
+    final contrasena = TextEditingController();
+    final repetida = TextEditingController();
+
+    // Fuera del `builder`: dentro se reiniciaría en cada repintado y el aviso no
+    // llegaría a verse nunca.
+    String? error;
+
+    return showCupertinoDialog<(String, String)>(
+      context: context,
+      builder: (dialogo) => StatefulBuilder(
+        builder: (dialogo, repintar) {
+          void aceptar() {
+            final unCorreo = correo.text.trim();
+            final unaClave = contrasena.text;
+            if (!unCorreo.contains('@') || unCorreo.length < 3) {
+              repintar(() => error = textos.cuentaCorreoNoVale);
+              return;
+            }
+            if (creando && unaClave.length < largoMinimoContrasena) {
+              repintar(
+                () =>
+                    error = textos.cuentaContrasenaCorta(largoMinimoContrasena),
+              );
+              return;
+            }
+            if (creando && unaClave != repetida.text) {
+              repintar(() => error = textos.cuentaContrasenaNoCoincide);
+              return;
+            }
+            if (unaClave.isEmpty) return;
+            Navigator.pop(dialogo, (unCorreo, unaClave));
+          }
+
+          return CupertinoAlertDialog(
+            title: Text(creando ? textos.cuentaCrear : textos.cuentaEntrar),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: t.s),
+                Text(
+                  creando
+                      ? textos.cuentaCrearMensaje
+                      : textos.cuentaEntrarMensaje,
+                  textAlign: TextAlign.center,
+                  style: ui.estilo(dialogo, size: t.footnote),
+                ),
+                const SizedBox(height: t.s),
+                CupertinoTextField(
+                  controller: correo,
+                  placeholder: textos.cuentaCorreoMarcador,
+                  autofocus: true,
+                  keyboardType: TextInputType.emailAddress,
+                  autocorrect: false,
+                  textCapitalization: TextCapitalization.none,
+                ),
+                const SizedBox(height: t.s),
+                CupertinoTextField(
+                  controller: contrasena,
+                  placeholder: textos.cuentaContrasenaMarcador,
+                  obscureText: true,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  textCapitalization: TextCapitalization.none,
+                  onSubmitted: creando ? null : (_) => aceptar(),
+                ),
+                if (creando) ...[
+                  const SizedBox(height: t.s),
+                  CupertinoTextField(
+                    controller: repetida,
+                    placeholder: textos.cuentaContrasenaRepetir,
+                    obscureText: true,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    textCapitalization: TextCapitalization.none,
+                    onSubmitted: (_) => aceptar(),
+                  ),
+                ],
+                if (error != null) ...[
+                  const SizedBox(height: t.s),
+                  Text(
+                    error!,
+                    textAlign: TextAlign.center,
+                    style: ui.estilo(
+                      dialogo,
+                      size: t.footnote,
+                      color: dialogo.destructivo,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              CupertinoDialogAction(
+                onPressed: () => Navigator.pop(dialogo),
+                child: Text(textos.comunCancelar),
+              ),
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                onPressed: aceptar,
+                child: Text(textos.cuentaContinuar),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   // ── Cerrar sesión, con sus dos salidas ─────────────────────────────────────

@@ -226,21 +226,27 @@ class Sincronizador extends Notifier<VistaSincro> {
 
   // ── La cuenta ──────────────────────────────────────────────────────────────
 
-  Future<void> pedirCodigo(String correo) async {
-    final transporte = _transporte;
-    if (transporte == null) return;
-    await transporte.pedirCodigo(correo);
-  }
+  /// Crea la cuenta y entra en ella. Como [entrar] en todo lo demás.
+  ///
+  /// Lanza [ErrorSincro] si el correo ya tiene cuenta o si el servidor no admite
+  /// cuentas nuevas: eso lo enseña la pantalla.
+  Future<ResumenLados?> registrar(String correo, String contrasena) =>
+      _entrar((t) => t.registrar(correo, contrasena));
 
   /// Entra y enlaza. Devuelve las cifras de los dos lados **si hay que
   /// preguntar**, y `null` si el enlace ya está hecho.
   ///
-  /// Lanza [ErrorSincro] si el código no vale: eso lo enseña la pantalla.
-  Future<ResumenLados?> entrar(String correo, String codigo) async {
+  /// Lanza [ErrorSincro] si las credenciales no valen: eso lo enseña la pantalla.
+  Future<ResumenLados?> entrar(String correo, String contrasena) =>
+      _entrar((t) => t.entrar(correo, contrasena));
+
+  Future<ResumenLados?> _entrar(
+    Future<SesionRemota> Function(SincroTransporte) abrir,
+  ) async {
     final transporte = _transporte;
     if (transporte == null) return null;
 
-    await transporte.entrar(correo, codigo);
+    await abrir(transporte);
     // El interruptor se enciende al entrar: quien acaba de crear una cuenta
     // quiere sincronizar, y pedírselo dos veces sería preguntar por preguntar.
     await _bd.fijarAjustes({Claves.sincroActiva: '1'});

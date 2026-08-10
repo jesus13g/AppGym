@@ -37,7 +37,7 @@ void main() {
   /// Entra en la cuenta y deja el interruptor encendido, que es el estado
   /// normal desde el que se dispara todo.
   Future<void> conCuenta() async {
-    await motor.entrar('yo@ejemplo.com', servidor.codigo);
+    await motor.entrar('yo@ejemplo.com', servidor.contrasena);
   }
 
   setUp(() async {
@@ -66,7 +66,7 @@ void main() {
 
   group('la cuenta', () {
     test('entrar enciende el interruptor y enlaza sin preguntar', () async {
-      final lados = await motor.entrar('yo@ejemplo.com', servidor.codigo);
+      final lados = await motor.entrar('yo@ejemplo.com', servidor.contrasena);
 
       // Los dos lados vacíos no hay nada que decidir: es el primero de los tres
       // casos automáticos de K7.
@@ -352,7 +352,7 @@ void main() {
     test('con datos solo aquí se sube todo sin preguntar', () async {
       await bd.insertarRutina('Empuje');
 
-      final lados = await motor.entrar('yo@ejemplo.com', servidor.codigo);
+      final lados = await motor.entrar('yo@ejemplo.com', servidor.contrasena);
 
       expect(lados, isNull);
       expect(servidor.deTabla('rutinas').length, 1);
@@ -361,7 +361,7 @@ void main() {
     test('con datos solo en la cuenta se baja todo sin preguntar', () async {
       await sembrarLaCuenta();
 
-      final lados = await motor.entrar('yo@ejemplo.com', servidor.codigo);
+      final lados = await motor.entrar('yo@ejemplo.com', servidor.contrasena);
 
       expect(lados, isNull);
       expect((await bd.todasLasRutinas()).single.nombre, 'Tirón');
@@ -371,7 +371,7 @@ void main() {
       await sembrarLaCuenta();
       await bd.insertarRutina('Empuje');
 
-      final lados = await motor.entrar('yo@ejemplo.com', servidor.codigo);
+      final lados = await motor.entrar('yo@ejemplo.com', servidor.contrasena);
 
       // Sin números, la pregunta de qué lado manda no se puede responder.
       expect(lados, isNotNull);
@@ -388,7 +388,7 @@ void main() {
     test('fusionar deja las dos rutinas', () async {
       await sembrarLaCuenta();
       await bd.insertarRutina('Empuje');
-      await motor.entrar('yo@ejemplo.com', servidor.codigo);
+      await motor.entrar('yo@ejemplo.com', servidor.contrasena);
 
       await motor.enlazar(estrategia: EstrategiaEnlace.fusionar);
 
@@ -401,7 +401,7 @@ void main() {
       () async {
         await sembrarLaCuenta();
         await bd.insertarRutina('Empuje');
-        await motor.entrar('yo@ejemplo.com', servidor.codigo);
+        await motor.entrar('yo@ejemplo.com', servidor.contrasena);
 
         await motor.enlazar(estrategia: EstrategiaEnlace.esteDispositivo);
 
@@ -414,7 +414,7 @@ void main() {
     test('«la cuenta manda» exige exportar una copia antes', () async {
       await sembrarLaCuenta();
       await bd.insertarRutina('Empuje');
-      await motor.entrar('yo@ejemplo.com', servidor.codigo);
+      await motor.entrar('yo@ejemplo.com', servidor.contrasena);
 
       // Es la salida que puede destruir dos años de datos y no se ofrece sin
       // red de seguridad.
@@ -428,7 +428,7 @@ void main() {
     test('«la cuenta manda» respalda y sustituye lo local', () async {
       await sembrarLaCuenta();
       await bd.insertarRutina('Empuje');
-      await motor.entrar('yo@ejemplo.com', servidor.codigo);
+      await motor.entrar('yo@ejemplo.com', servidor.contrasena);
 
       var respaldada = false;
       await motor.enlazar(
@@ -459,12 +459,18 @@ void main() {
       // Es lo que le pasa a un fork y a una compilación local: la app se
       // comporta exactamente como antes de la fase 8c.
       await apagado.refrescar();
-      await apagado.pedirCodigo('yo@ejemplo.com');
-      expect(await apagado.entrar('yo@ejemplo.com', '123456'), isNull);
+      expect(
+        await apagado.registrar('yo@ejemplo.com', servidor.contrasena),
+        isNull,
+      );
+      expect(
+        await apagado.entrar('yo@ejemplo.com', servidor.contrasena),
+        isNull,
+      );
       await apagado.intentar(DisparadorSincro.arranque);
 
       expect(servidor.bajadas, 0);
-      expect(servidor.codigosPedidos, isEmpty);
+      expect(servidor.registrados, isEmpty);
       expect(sinServicio.read(sincronizacionProvider).conectado, isFalse);
     });
   });

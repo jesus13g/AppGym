@@ -1,14 +1,12 @@
-/// El adaptador de Supabase, sin Supabase.
+/// El adaptador del servidor, sin servidor.
 ///
 /// Con `MockClient` se ejercita todo lo que el adaptador decide: la forma de
-/// cada petición, la entrada en dos pasos, la rotación del *refresh token*, el
-/// reintento único ante un 401 y la traducción de cada fallo a su
-/// [MotivoSincro].
+/// cada petición, entrar y registrarse, la rotación del refresco, el reintento
+/// único ante un 401 y la traducción de cada fallo a su [MotivoSincro].
 ///
-/// Lo que queda fuera es el servidor: que las cinco funciones de
-/// `supabase/esquema.sql` hagan lo que prometen no se puede comprobar aquí. El
-/// guion para verificarlas a mano está en `docs/sincronizacion.md`, y el
-/// contrato que tienen que cumplir es el que implementa `test/sincro_falso.dart`.
+/// Lo que queda fuera es el servidor, y **ya no queda sin probar**: tiene su
+/// propia suite en `servidor/tests/`, contra PostgreSQL de verdad. El contrato
+/// que las dos mitades comparten es el que implementa `test/sincro_falso.dart`.
 library;
 
 import 'dart:async';
@@ -16,15 +14,16 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:appgym/datos/nube/token.dart';
-import 'package:appgym/datos/sincro/supabase.dart';
+import 'package:appgym/datos/sincro/servidor.dart';
 import 'package:appgym/datos/sincro/transporte.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
-const _url = 'https://proyecto.supabase.co';
+const _url = 'https://appgym.ejemplo.com';
+const _contrasena = 'unaContrasenaLarga1';
 
-/// Una sesión ya guardada, como la que dejaría un [SincroSupabase.entrar]
+/// Una sesión ya guardada, como la que dejaría un [SincroServidor.entrar]
 /// anterior.
 String _sesionGuardada({String refresco = 'refresco-1'}) => jsonEncode({
   'id': 'usuario-1',
@@ -38,12 +37,12 @@ http.Response _json(Object? cuerpo, [int codigo = 200]) => http.Response(
   headers: {'content-type': 'application/json'},
 );
 
-/// Lo que GoTrue contesta al canjear o al renovar.
-http.Response _tokens({String refresco = 'refresco-1'}) => _json({
-  'access_token': 'acceso-1',
-  'refresh_token': refresco,
-  'expires_in': 3600,
-  'user': {'id': 'usuario-1', 'email': 'yo@ejemplo.com'},
+/// Lo que contesta el servidor al entrar, al registrarse y al renovar.
+http.Response _sesion({String refresco = 'refresco-1'}) => _json({
+  'acceso': 'acceso-1',
+  'refresco': refresco,
+  'expira_en': 900,
+  'usuario': {'id': 'usuario-1', 'correo': 'yo@ejemplo.com'},
 });
 
 /// El adaptador con un servidor de mentira detrás.
@@ -51,7 +50,7 @@ http.Response _tokens({String refresco = 'refresco-1'}) => _json({
 /// [responder] recibe cada petición y decide qué contesta; [peticiones] las
 /// guarda todas para poder mirarlas después.
 ({
-  SincroSupabase sincro,
+  SincroServidor sincro,
   List<http.Request> peticiones,
   AlmacenEnMemoria almacen,
 })
@@ -63,9 +62,8 @@ _montar(
   final peticiones = <http.Request>[];
   final almacen = AlmacenEnMemoria(sesion);
   return (
-    sincro: SincroSupabase(
+    sincro: SincroServidor(
       url: _url,
-      clavePublica: 'clave-publica',
       almacen: almacen,
       filasPorLote: filasPorLote,
       cliente: MockClient((peticion) {
@@ -78,48 +76,32 @@ _montar(
   );
 }
 
-/// Un servidor que renueva el token y contesta a una función con [respuesta].
+/// Un servidor que renueva el acceso y contesta a la ruta pedida con
+/// [respuesta].
 Future<http.Response> Function(http.Request) _servidor(
   Object? respuesta, {
   int codigo = 200,
   String refrescoNuevo = 'refresco-2',
 }) =>
-    (peticion) async => peticion.url.path.endsWith('/token')
-    ? _tokens(refresco: refrescoNuevo)
+    (peticion) async => peticion.url.path == '/auth/refrescar'
+    ? _sesion(refresco: refrescoNuevo)
     : _json(respuesta, codigo);
 
 void main() {
-  group('entrar', () {
-    test(
-      'pedir el código manda un OTP que crea la cuenta si hace falta',
-      () async {
-        final m = _montar((_) async => _json({}));
+  group('entrar y registrarse', () {
+    test('entrar canjea una sesión y la guarda', () async {
+      final m = _montar((_) async => _sesion());
 
-        await m.sincro.pedirCodigo('yo@ejemplo.com');
-
-        final peticion = m.peticiones.single;
-        expect(peticion.url.toString(), '$_url/auth/v1/otp');
-        expect(peticion.headers['apikey'], 'clave-publica');
-        final cuerpo = jsonDecode(peticion.body) as Map<String, dynamic>;
-        expect(cuerpo['email'], 'yo@ejemplo.com');
-        // «Crear cuenta» y «entrar» son el mismo botón, como pide K3.
-        expect(cuerpo['create_user'], isTrue);
-      },
-    );
-
-    test('el código canjea una sesión y la guarda', () async {
-      final m = _montar((_) async => _tokens());
-
-      final sesion = await m.sincro.entrar('yo@ejemplo.com', '123456');
+      final sesion = await m.sincro.entrar('yo@ejemplo.com', _contrasena);
 
       expect(sesion.correo, 'yo@ejemplo.com');
       expect(sesion.id, 'usuario-1');
 
       final peticion = m.peticiones.single;
-      expect(peticion.url.toString(), '$_url/auth/v1/verify');
+      expect(peticion.url.toString(), '$_url/auth/entrar');
       final cuerpo = jsonDecode(peticion.body) as Map<String, dynamic>;
-      expect(cuerpo['type'], 'email');
-      expect(cuerpo['token'], '123456');
+      expect(cuerpo['correo'], 'yo@ejemplo.com');
+      expect(cuerpo['contrasena'], _contrasena);
 
       // Lo guardado tiene que bastar para renovar y para contestar quién es sin
       // volver a preguntar al servidor.
@@ -128,41 +110,99 @@ void main() {
       expect(guardado['refresco'], 'refresco-1');
     });
 
-    test(
-      'un código en blanco por los lados se limpia antes de enviarlo',
-      () async {
-        final m = _montar((_) async => _tokens());
+    test('registrarse va a otra ruta y también deja sesión', () async {
+      final m = _montar((_) async => _sesion());
 
-        await m.sincro.entrar('yo@ejemplo.com', ' 123456 ');
+      await m.sincro.registrar('yo@ejemplo.com', _contrasena);
 
-        final cuerpo =
-            jsonDecode(m.peticiones.single.body) as Map<String, dynamic>;
-        expect(cuerpo['token'], '123456');
-      },
-    );
+      // Dos rutas y no una: con contraseña, «entrar» y «crear cuenta» no pueden
+      // ser lo mismo, o un correo mal tecleado crearía una cuenta vacía.
+      expect(m.peticiones.single.url.toString(), '$_url/auth/registro');
+      expect(await m.almacen.leer(), isNotNull);
+    });
 
-    test('un código caducado se rechaza con el mensaje del servidor', () async {
+    test('el correo se limpia por los lados antes de enviarlo', () async {
+      final m = _montar((_) async => _sesion());
+
+      await m.sincro.entrar('  yo@ejemplo.com  ', _contrasena);
+
+      final cuerpo =
+          jsonDecode(m.peticiones.single.body) as Map<String, dynamic>;
+      expect(cuerpo['correo'], 'yo@ejemplo.com');
+      // La contraseña **no** se toca: los espacios de una contraseña son parte
+      // de la contraseña.
+      expect(cuerpo['contrasena'], _contrasena);
+    });
+
+    test('unas credenciales que no valen se rechazan con su mensaje', () async {
       final m = _montar(
-        (_) async => _json({
-          'error_code': 'otp_expired',
-          'msg': 'Token has expired or is invalid',
-        }, 403),
+        (_) async =>
+            _json({'mensaje': 'Correo o contraseña incorrectos.'}, 401),
       );
 
       await expectLater(
-        m.sincro.entrar('yo@ejemplo.com', '000000'),
+        m.sincro.entrar('yo@ejemplo.com', 'la que no era'),
         throwsA(
           isA<ErrorSincro>()
               // Se arregla tecleando otra vez, así que no se reintenta solo...
               .having((e) => e.motivo, 'motivo', MotivoSincro.rechazado)
               .having((e) => e.seReintenta, 'seReintenta', isFalse)
               // ...y el mensaje del servidor se enseña tal cual, que es lo que
-              // le explica al usuario qué ha pasado con su código.
+              // le explica al usuario qué ha pasado.
               .having(
                 (e) => e.mensaje,
                 'mensaje',
-                'Token has expired or is invalid',
+                'Correo o contraseña incorrectos.',
               ),
+        ),
+      );
+    });
+
+    test('un correo ya registrado se rechaza con su mensaje', () async {
+      final m = _montar(
+        (_) async => _json({'mensaje': 'Ese correo ya tiene una cuenta.'}, 409),
+      );
+
+      await expectLater(
+        m.sincro.registrar('yo@ejemplo.com', _contrasena),
+        throwsA(
+          isA<ErrorSincro>()
+              .having((e) => e.motivo, 'motivo', MotivoSincro.rechazado)
+              .having((e) => e.mensaje, 'mensaje', contains('ya tiene')),
+        ),
+      );
+    });
+
+    test('con el registro cerrado, el servidor lo dice y se enseña', () async {
+      final m = _montar(
+        (_) async =>
+            _json({'mensaje': 'Este servidor no admite cuentas nuevas.'}, 403),
+      );
+
+      await expectLater(
+        m.sincro.registrar('yo@ejemplo.com', _contrasena),
+        throwsA(
+          isA<ErrorSincro>()
+              .having((e) => e.motivo, 'motivo', MotivoSincro.rechazado)
+              .having((e) => e.mensaje, 'mensaje', contains('cuentas nuevas')),
+        ),
+      );
+    });
+
+    test('demasiados intentos es temporal, con su frase', () async {
+      final m = _montar(
+        (_) async => _json({
+          'mensaje':
+              'Demasiados intentos fallidos. Prueba dentro de unos minutos.',
+        }, 429),
+      );
+
+      await expectLater(
+        m.sincro.entrar('yo@ejemplo.com', 'la que no era'),
+        throwsA(
+          isA<ErrorSincro>()
+              .having((e) => e.motivo, 'motivo', MotivoSincro.temporal)
+              .having((e) => e.mensaje, 'mensaje', contains('intentos')),
         ),
       );
     });
@@ -205,16 +245,13 @@ void main() {
 
       await m.sincro.bajar(0);
 
-      expect(m.peticiones.first.url.path, '/auth/v1/token');
-      expect(
-        m.peticiones.first.url.queryParameters['grant_type'],
-        'refresh_token',
-      );
-      expect(m.peticiones.last.url.path, '/rest/v1/rpc/appgym_bajar');
+      expect(m.peticiones.first.url.path, '/auth/refrescar');
+      expect(jsonDecode(m.peticiones.first.body)['refresco'], 'refresco-1');
+      expect(m.peticiones.last.url.path, '/sincro/bajar');
       expect(m.peticiones.last.headers['Authorization'], 'Bearer acceso-1');
     });
 
-    test('la rotación del refresh token se guarda', () async {
+    test('la rotación del refresco se guarda', () async {
       final m = _montar(
         _servidor({'cursor': 7, 'filas': <Object>[]}),
         sesion: _sesionGuardada(),
@@ -222,8 +259,9 @@ void main() {
 
       await m.sincro.bajar(0);
 
-      // GoTrue invalida el anterior en cuanto reparte uno nuevo. Si no se
-      // guardase, la sesión moriría en la renovación siguiente.
+      // El servidor invalida el anterior en cuanto reparte uno nuevo, y si el
+      // viejo reaparece revoca la cadena entera por si lo ha robado alguien. Sin
+      // guardar el nuevo, la sesión moriría en la renovación siguiente.
       final guardado = jsonDecode((await m.almacen.leer())!) as Map;
       expect(guardado['refresco'], 'refresco-2');
       expect(guardado['correo'], 'yo@ejemplo.com');
@@ -237,10 +275,10 @@ void main() {
 
       await Future.wait([m.sincro.bajar(0), m.sincro.bajar(0)]);
 
-      // Dos renovaciones canjearían el mismo refresh token dos veces y la
-      // segunda llegaría con uno ya gastado: sesión muerta.
+      // Dos renovaciones canjearían el mismo refresco dos veces, y el servidor
+      // tomaría la segunda por un robo: sesión muerta.
       final renovaciones = m.peticiones
-          .where((p) => p.url.path.endsWith('/token'))
+          .where((p) => p.url.path == '/auth/refrescar')
           .length;
       expect(renovaciones, 1);
     });
@@ -248,10 +286,10 @@ void main() {
     test('un 401 se reintenta una vez tras renovar', () async {
       var llamadas = 0;
       final m = _montar((peticion) async {
-        if (peticion.url.path.endsWith('/token')) return _tokens();
+        if (peticion.url.path == '/auth/refrescar') return _sesion();
         llamadas++;
         return llamadas == 1
-            ? _json({'message': 'JWT expired'}, 401)
+            ? _json({'mensaje': 'La sesión no vale.'}, 401)
             : _json({'cursor': 9, 'filas': <Object>[]});
       }, sesion: _sesionGuardada());
 
@@ -264,9 +302,9 @@ void main() {
     test('dos 401 seguidos son reconectar, no un bucle', () async {
       var llamadas = 0;
       final m = _montar((peticion) async {
-        if (peticion.url.path.endsWith('/token')) return _tokens();
+        if (peticion.url.path == '/auth/refrescar') return _sesion();
         llamadas++;
-        return _json({'message': 'JWT expired'}, 401);
+        return _json({'mensaje': 'La sesión no vale.'}, 401);
       }, sesion: _sesionGuardada());
 
       await expectLater(
@@ -282,13 +320,13 @@ void main() {
       expect(llamadas, 2);
     });
 
-    test('un refresh token gastado mata la sesión y la olvida', () async {
+    test('un refresco gastado mata la sesión y la olvida', () async {
       final m = _montar(
-        (peticion) async => peticion.url.path.endsWith('/token')
+        (peticion) async => peticion.url.path == '/auth/refrescar'
             ? _json({
-                'error_code': 'refresh_token_not_found',
-                'msg': 'Invalid Refresh Token',
-              }, 400)
+                'mensaje':
+                    'La sesión se ha cerrado por seguridad. Vuelve a entrar.',
+              }, 401)
             : _json({}),
         sesion: _sesionGuardada(),
       );
@@ -296,11 +334,9 @@ void main() {
       await expectLater(
         m.sincro.bajar(0),
         throwsA(
-          isA<ErrorSincro>().having(
-            (e) => e.motivo,
-            'motivo',
-            MotivoSincro.reconectar,
-          ),
+          isA<ErrorSincro>()
+              .having((e) => e.motivo, 'motivo', MotivoSincro.reconectar)
+              .having((e) => e.mensaje, 'mensaje', contains('seguridad')),
         ),
       );
       // Si no se olvidara, Ajustes seguiría diciendo que hay cuenta y no habría
@@ -310,8 +346,8 @@ void main() {
 
     test('un fallo temporal al renovar no borra la sesión', () async {
       final m = _montar(
-        (peticion) async => peticion.url.path.endsWith('/token')
-            ? _json({'msg': 'gateway'}, 503)
+        (peticion) async => peticion.url.path == '/auth/refrescar'
+            ? _json({'mensaje': 'gateway'}, 503)
             : _json({}),
         sesion: _sesionGuardada(),
       );
@@ -360,8 +396,8 @@ void main() {
       expect(paquete.filas.first.datos!['nombre'], 'Empuje');
       expect(paquete.filas.last.borrada, isTrue);
 
-      final cuerpo = jsonDecode(m.peticiones.last.body) as Map<String, dynamic>;
-      expect(cuerpo['p_cursor'], 100);
+      // El cursor va en la consulta, no en el cuerpo: `bajar` es un GET.
+      expect(m.peticiones.last.url.queryParameters['cursor'], '100');
     });
 
     test('el cursor avanza aunque no venga ninguna fila', () async {
@@ -400,7 +436,7 @@ void main() {
       );
 
       final cuerpo = jsonDecode(m.peticiones.last.body) as Map<String, dynamic>;
-      final enviada = (cuerpo['p_filas'] as List).single as Map;
+      final enviada = (cuerpo['filas'] as List).single as Map;
       expect(enviada['tabla'], 'rutinas');
       expect(enviada['clave'], 'r-1');
       expect(enviada['datos'], {'nombre': 'Empuje'});
@@ -417,7 +453,7 @@ void main() {
       var lote = 0;
       final m = _montar(
         (peticion) async {
-          if (peticion.url.path.endsWith('/token')) return _tokens();
+          if (peticion.url.path == '/auth/refrescar') return _sesion();
           lote++;
           return _json({
             'sellos': {'rutinas/r-$lote': 1000 + lote},
@@ -452,7 +488,7 @@ void main() {
   });
 
   group('la cuenta', () {
-    test('salir cierra solo esta sesión y olvida', () async {
+    test('salir revoca este refresco y olvida', () async {
       final m = _montar(_servidor({}), sesion: _sesionGuardada());
       await m.sincro.bajar(0); // deja un token de acceso vivo
       m.peticiones.clear();
@@ -460,17 +496,18 @@ void main() {
       await m.sincro.salir();
 
       final salida = m.peticiones.single;
-      expect(salida.url.path, '/auth/v1/logout');
+      expect(salida.url.path, '/auth/salir');
       // Cerrar sesión en este móvil no puede cerrar la de la tableta: K3 dice
-      // «un usuario, N dispositivos».
-      expect(salida.url.queryParameters['scope'], 'local');
+      // «un usuario, N dispositivos». Por eso viaja el refresco de este móvil y
+      // no basta con el token de acceso.
+      expect(jsonDecode(salida.body)['refresco'], 'refresco-2');
       expect(await m.almacen.leer(), isNull);
     });
 
     test('salir olvida aunque el servidor falle', () async {
       final m = _montar((peticion) async {
-        if (peticion.url.path.endsWith('/token')) return _tokens();
-        if (peticion.url.path.endsWith('/logout')) {
+        if (peticion.url.path == '/auth/refrescar') return _sesion();
+        if (peticion.url.path == '/auth/salir') {
           throw const SocketException('sin red');
         }
         return _json({'cursor': 1, 'filas': <Object>[]});
@@ -484,13 +521,29 @@ void main() {
       expect(await m.almacen.leer(), isNull);
     });
 
-    test('borrar la cuenta llama a su función y olvida la sesión', () async {
+    test('borrar la cuenta va por DELETE y olvida la sesión', () async {
       final m = _montar(_servidor(null), sesion: _sesionGuardada());
 
       await m.sincro.borrarCuenta();
 
-      expect(m.peticiones.last.url.path, '/rest/v1/rpc/appgym_borrar_cuenta');
+      expect(m.peticiones.last.url.path, '/auth/cuenta');
+      expect(m.peticiones.last.method, 'DELETE');
       expect(await m.almacen.leer(), isNull);
+    });
+
+    test('una respuesta sin cuerpo (204) no revienta', () async {
+      // `vaciar` y `borrar la cuenta` contestan 204 y cuerpo vacío, que no es
+      // JSON: decodificarlo sin más lanzaría.
+      final m = _montar(
+        (peticion) async => peticion.url.path == '/auth/refrescar'
+            ? _sesion()
+            : http.Response('', 204),
+        sesion: _sesionGuardada(),
+      );
+
+      await m.sincro.vaciar();
+
+      expect(m.peticiones.last.url.path, '/sincro/vaciar');
     });
 
     test('el resumen trae las dos cifras del primer enlace', () async {
@@ -523,57 +576,70 @@ void main() {
     test('429 y 5xx se reintentan solos', () async {
       expect(
         (await falloDe(
-          _servidor({'message': 'slow down'}, codigo: 429),
+          _servidor({
+            'mensaje': 'Demasiadas peticiones seguidas.',
+          }, codigo: 429),
         )).motivo,
         MotivoSincro.temporal,
       );
       expect(
-        (await falloDe(_servidor({'message': 'boom'}, codigo: 503))).motivo,
+        (await falloDe(_servidor({'mensaje': 'boom'}, codigo: 503))).motivo,
         MotivoSincro.temporal,
       );
     });
 
     test('un corte de red es temporal', () async {
       final sinRed = await falloDe(
-        (peticion) async => peticion.url.path.endsWith('/token')
-            ? _tokens()
+        (peticion) async => peticion.url.path == '/auth/refrescar'
+            ? _sesion()
             : throw const SocketException('sin cobertura'),
       );
       expect(sinRed.motivo, MotivoSincro.temporal);
 
       final tarde = await falloDe(
-        (peticion) async => peticion.url.path.endsWith('/token')
-            ? _tokens()
+        (peticion) async => peticion.url.path == '/auth/refrescar'
+            ? _sesion()
             : throw TimeoutException('tardó'),
       );
       expect(tarde.motivo, MotivoSincro.temporal);
     });
 
-    test('un 403 de la RLS pide volver a entrar', () async {
+    test('un fallo del anclaje no se reintenta', () async {
+      // O el certificado del servidor no es el que esta compilación acepta, o
+      // hay algo por el medio leyendo el tráfico. Reintentar no lo arregla, y
+      // sobre todo: la petición no llegó a salir.
+      final fallo = await falloDe(
+        (peticion) async => peticion.url.path == '/auth/refrescar'
+            ? _sesion()
+            : throw const TlsException('certificado no verificado'),
+      );
+      expect(fallo.motivo, MotivoSincro.rechazado);
+      expect(fallo.mensaje, contains('verificar el servidor'));
+    });
+
+    test('un 403 pide volver a entrar', () async {
       expect(
         (await falloDe(
-          _servidor({'message': 'sin sesión'}, codigo: 403),
+          _servidor({'mensaje': 'La cuenta ya no existe.'}, codigo: 403),
         )).motivo,
         MotivoSincro.reconectar,
       );
     });
 
-    test('sin el esquema aplicado, se dice', () async {
+    test('una URL que no es la de AppGym se dice', () async {
       final fallo = await falloDe(
-        _servidor({
-          'code': 'PGRST202',
-          'message': 'Could not find the function',
-        }, codigo: 404),
+        _servidor({'mensaje': 'Not Found'}, codigo: 404),
       );
-      // Esto no se arregla reintentando: hay que ejecutar el esquema.
+      // Esto no se arregla reintentando: la URL apunta a otra cosa, o a un
+      // servidor más viejo que este cliente.
       expect(fallo.motivo, MotivoSincro.rechazado);
-      expect(fallo.mensaje, contains('esquema'));
+      expect(fallo.mensaje, contains('API de AppGym'));
     });
 
     test('un cuerpo que no es JSON no provoca un segundo fallo', () async {
       final fallo = await falloDe(
-        (peticion) async => peticion.url.path.endsWith('/token')
-            ? _tokens()
+        (peticion) async => peticion.url.path == '/auth/refrescar'
+            ? _sesion()
             : http.Response('<html>502</html>', 502),
       );
       expect(fallo.motivo, MotivoSincro.temporal);
@@ -581,9 +647,9 @@ void main() {
   });
 
   test('sin --dart-define no hay servicio', () {
-    // En los tests no se pasan las credenciales, así que la sincronización está
-    // apagada: es exactamente lo que le pasa a un fork y a una compilación
-    // local, y lo que hace que CI siga en verde sin secretos.
+    // En los tests no se pasa la URL, así que la sincronización está apagada: es
+    // exactamente lo que le pasa a un fork y a una compilación local, y lo que
+    // hace que CI siga en verde sin secretos.
     expect(sincroDisponible, isFalse);
   });
 }

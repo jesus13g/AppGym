@@ -48,7 +48,7 @@ void main() {
     // Si el patrón de búsqueda o el directorio de trabajo cambiaran, el resto
     // de este fichero pasaría en verde sin comprobar nada.
     expect(fuentes.length, greaterThan(40));
-    expect(fuentes, contains('lib/datos/sincro/supabase.dart'));
+    expect(fuentes, contains('lib/datos/sincro/servidor.dart'));
   });
 
   test('no se importa material.dart en ningún sitio', () {
@@ -66,12 +66,14 @@ void main() {
 
   test('hablar con la red está aislado en tres ficheros', () {
     // `media.dart` descarga las imágenes del catálogo, `drive.dart` es la copia
-    // automática y `supabase.dart` la sincronización. Nadie más tiene por qué
-    // abrir una conexión, y menos una pantalla.
+    // automática y `servidor.dart` la sincronización. Nadie más tiene por qué
+    // abrir una conexión, y menos una pantalla. `anclaje.dart` no cuenta: solo
+    // usa `dart:io` para decidir de qué certificados fiarse, y por eso no
+    // importa `package:http`.
     const permitidos = {
       'lib/datos/media.dart',
       'lib/datos/nube/drive.dart',
-      'lib/datos/sincro/supabase.dart',
+      'lib/datos/sincro/servidor.dart',
     };
     for (final MapEntry(key: ruta, value: fuente) in fuentes.entries) {
       if (permitidos.contains(ruta)) continue;
@@ -111,7 +113,7 @@ void main() {
   test('el adaptador no sabe de Flutter, ni de drift, ni de la base', () {
     // Habla con la costura y con el almacén, y punto. Si algún día necesitara
     // `bd.dart`, sería que la reconciliación se le está colando dentro.
-    final suyos = _importaciones(fuentes['lib/datos/sincro/supabase.dart']!);
+    final suyos = _importaciones(fuentes['lib/datos/sincro/servidor.dart']!);
     for (final prohibido in ['package:flutter/', 'package:drift/', 'bd.dart']) {
       expect(
         suyos.where((i) => i.contains(prohibido)),
@@ -129,7 +131,7 @@ void main() {
       'lib/datos/sincro/enlace.dart',
     ]) {
       final suyos = _importaciones(fuentes[ruta]!);
-      expect(suyos, isNot(contains('supabase.dart')), reason: ruta);
+      expect(suyos, isNot(contains('servidor.dart')), reason: ruta);
       expect(
         suyos.where((i) => i.startsWith('package:flutter/')),
         isEmpty,

@@ -2337,9 +2337,47 @@
   "@cuentaSinCuentaPie": {
     "description": "Pie del grupo cuando no hay cuenta"
   },
-  "cuentaEntrar": "Crear cuenta o entrar",
+  "cuentaEntrar": "Entrar",
   "@cuentaEntrar": {
-    "description": "Acción que empieza el flujo de entrada"
+    "description": "Acción que abre el diálogo de entrada con una cuenta que ya existe"
+  },
+  "cuentaCrear": "Crear una cuenta",
+  "@cuentaCrear": {
+    "description": "Acción que abre el diálogo de creación de cuenta"
+  },
+  "cuentaEntrarMensaje": "Con el correo y la contraseña de tu cuenta.",
+  "@cuentaEntrarMensaje": {
+    "description": "Explicación del diálogo de entrada"
+  },
+  "cuentaCrearMensaje": "Elige una contraseña larga y apúntala: aquí no hay «he olvidado mi contraseña».",
+  "@cuentaCrearMensaje": {
+    "description": "Explicación del diálogo de creación de cuenta"
+  },
+  "cuentaContrasenaMarcador": "Contraseña",
+  "@cuentaContrasenaMarcador": {
+    "description": "Marcador del campo de contraseña"
+  },
+  "cuentaContrasenaRepetir": "Repite la contraseña",
+  "@cuentaContrasenaRepetir": {
+    "description": "Marcador del campo que repite la contraseña al crear la cuenta"
+  },
+  "cuentaCorreoNoVale": "Ese correo no parece un correo.",
+  "@cuentaCorreoNoVale": {
+    "description": "Aviso del diálogo cuando el correo está mal escrito"
+  },
+  "cuentaContrasenaCorta": "La contraseña tiene que tener al menos {minimo} caracteres.",
+  "@cuentaContrasenaCorta": {
+    "description": "Aviso del diálogo cuando la contraseña es demasiado corta",
+    "placeholders": {
+      "minimo": {
+        "type": "int",
+        "example": "10"
+      }
+    }
+  },
+  "cuentaContrasenaNoCoincide": "Las dos contraseñas no son iguales.",
+  "@cuentaContrasenaNoCoincide": {
+    "description": "Aviso del diálogo cuando la contraseña repetida no coincide"
   },
   "cuentaCorreo": "Correo",
   "@cuentaCorreo": {
@@ -2377,25 +2415,9 @@
   "@cuentaContinuar": {
     "description": "Botón que avanza al paso siguiente de la entrada"
   },
-  "cuentaCorreoTitulo": "¿Cuál es tu correo?",
-  "@cuentaCorreoTitulo": {
-    "description": "Título del primer paso de la entrada"
-  },
-  "cuentaCorreoMensaje": "Te enviaremos un código para entrar. Si no tienes cuenta, se crea sola.",
-  "@cuentaCorreoMensaje": {
-    "description": "Explicación del primer paso de la entrada"
-  },
   "cuentaCorreoMarcador": "tu@correo.com",
   "@cuentaCorreoMarcador": {
     "description": "Marcador del campo de correo"
-  },
-  "cuentaCodigoTitulo": "Escribe el código",
-  "@cuentaCodigoTitulo": {
-    "description": "Título del segundo paso de la entrada"
-  },
-  "cuentaCodigoMarcador": "000000",
-  "@cuentaCodigoMarcador": {
-    "description": "Marcador del campo del código"
   },
   "cuentaSalirTitulo": "Cerrar sesión",
   "@cuentaSalirTitulo": {
@@ -2492,16 +2514,6 @@
       "error": {
         "type": "String",
         "example": "Sin conexión"
-      }
-    }
-  },
-  "cuentaCodigoMensaje": "Te hemos enviado un código de seis cifras a {correo}. Puede tardar un minuto.",
-  "@cuentaCodigoMensaje": {
-    "description": "Explicación del segundo paso de la entrada",
-    "placeholders": {
-      "correo": {
-        "type": "String",
-        "example": "tu@correo.com"
       }
     }
   },
