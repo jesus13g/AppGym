@@ -24,6 +24,7 @@ import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
 import 'copia_nube.dart';
 import 'copia_seguridad.dart';
+import 'cuenta.dart';
 
 /// Versión con la que se compiló, que CI pasa con `--dart-define`.
 ///
@@ -83,8 +84,12 @@ class PantallaAjustes extends ConsumerWidget {
             _entrenamiento(context, ref, ajustes),
             _objetivos(context, ref, ajustes),
             _apariencia(context, ref, ajustes),
-            // Encima del grupo «Datos», que es su vecino temático: los dos
-            // hablan de la copia de seguridad, uno a mano y el otro solo.
+            // Los tres son vecinos temáticos: hablan de sacar los datos del
+            // móvil. La cuenta va primero, que es donde K8 la pide y lo que
+            // hace más —los otros dos son copias; esta trae datos de vuelta—;
+            // y la copia automática encima de «Datos», que es la misma copia
+            // hecha sola.
+            const GrupoCuenta(),
             const GrupoCopiaNube(),
             const GrupoDatos(),
             _acercaDe(context, ref),

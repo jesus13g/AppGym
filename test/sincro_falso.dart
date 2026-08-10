@@ -34,6 +34,16 @@ class SincroFalso implements SincroTransporte {
   /// se enteró de nada.
   bool caerTrasEscribir = false;
 
+  /// El código que [entrar] da por bueno. Cualquier otro se rechaza, como haría
+  /// el servidor de verdad.
+  final String codigo = '123456';
+
+  /// A qué correos se ha pedido un código, en orden.
+  final List<String> codigosPedidos = [];
+
+  /// Lo que lanzará [pedirCodigo], si se pone algo.
+  ErrorSincro? falloAlPedirCodigo;
+
   int bajadas = 0;
   int subidas = 0;
   int vaciados = 0;
@@ -48,8 +58,21 @@ class SincroFalso implements SincroTransporte {
   Future<SesionRemota?> sesionActual() async => _sesion;
 
   @override
-  Future<SesionRemota> entrar(String correo) async =>
-      _sesion = SesionRemota(id: 'usuario-1', correo: correo);
+  Future<void> pedirCodigo(String correo) async {
+    if (falloAlPedirCodigo case final e?) throw e;
+    codigosPedidos.add(correo);
+  }
+
+  @override
+  Future<SesionRemota> entrar(String correo, String codigo) async {
+    // El código se comprueba de verdad: la pantalla tiene que poder enseñar el
+    // mensaje de «no vale», y un falso que aceptara cualquier cosa dejaría ese
+    // camino sin probar.
+    if (codigo != this.codigo) {
+      throw const ErrorSincro.rechazado('El código no vale o ha caducado.');
+    }
+    return _sesion = SesionRemota(id: 'usuario-1', correo: correo);
+  }
 
   @override
   Future<void> salir() async => _sesion = null;

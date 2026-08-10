@@ -10,6 +10,8 @@ import 'package:appgym/datos/geometria.dart';
 import 'package:appgym/datos/musculos.dart';
 import 'package:appgym/datos/nube/nube.dart';
 import 'package:appgym/datos/reloj.dart' as reloj;
+import 'package:appgym/datos/sincro/motor.dart';
+import 'package:appgym/datos/sincro/transporte.dart';
 import 'package:appgym/estado/descanso.dart';
 import 'package:appgym/l10n/textos.dart';
 import 'package:appgym/main.dart';
@@ -28,6 +30,7 @@ import 'package:appgym/pantallas/resumen_sesion.dart';
 import 'package:appgym/pantallas/rutina.dart';
 import 'package:appgym/pantallas/rutinas.dart';
 import 'package:appgym/pantallas/sesion.dart';
+import 'package:appgym/pantallas/sincro_detalle.dart';
 import 'package:appgym/tema/ui.dart' as ui;
 import 'package:drift/native.dart';
 import 'package:flutter/cupertino.dart';
@@ -40,6 +43,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'ayuda.dart';
 import 'nube_falsa.dart';
+import 'sincro_falso.dart';
 
 /// Los formatos en español, para las aserciones que comparan una fecha ya
 /// escrita. Es el mismo idioma que fija `_app`.
@@ -2590,6 +2594,223 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('La copia automática no está al día'));
+      await tester.pumpAndSettle();
+      expect(find.text('Ajustes'), findsWidgets);
+    });
+  });
+  // ── La cuenta ──────────────────────────────────────────────────────────────
+
+  group('cuenta', () {
+    late AppBD bd;
+    late SincroFalso servidor;
+
+    /// La pantalla con un servidor de mentira enchufado. Sin este `override` el
+    /// grupo no se pinta, que es justamente lo que hace una compilación sin
+    /// credenciales.
+    Widget conCuenta(Widget pantalla, {Locale idioma = const Locale('es')}) =>
+        _app(
+          bd,
+          pantalla,
+          idioma: idioma,
+          overrides: [sincroProvider.overrideWithValue(servidor)],
+        );
+
+    /// El campo del diálogo que esté abierto.
+    ///
+    /// Acotado al diálogo a propósito: la pantalla de Ajustes tiene campos
+    /// propios y `enterText` exige que el buscador encuentre **uno**.
+    final campo = find.descendant(
+      of: find.byType(CupertinoAlertDialog),
+      matching: find.byType(CupertinoTextField),
+    );
+
+    /// Entra tecleando el correo y luego el código, que es el flujo entero.
+    Future<void> entrar(WidgetTester tester, {String codigo = '123456'}) async {
+      await tester.tap(find.text('Crear cuenta o entrar'));
+      await tester.pumpAndSettle();
+      await tester.enterText(campo, 'yo@ejemplo.com');
+      await tester.tap(find.text('Continuar'));
+      // `pumpAndSettle` y no fotogramas sueltos: mientras el primer diálogo se
+      // va y el segundo llega, los dos están en el árbol y `campo` encontraría
+      // dos. Aquí no hay nada girando, así que asienta.
+      await tester.pumpAndSettle();
+
+      await tester.enterText(campo, codigo);
+      await tester.tap(find.text('Continuar'));
+      // Al final sí van fotogramas sueltos: si algo falló, `ui.aviso` deja un
+      // mensaje en pantalla que se retira solo a los 1,8 s, y asentar aquí lo
+      // borraría antes de que ningún test pudiera comprobarlo.
+      await _asentar(tester, veces: 20);
+    }
+
+    setUp(() async {
+      bd = AppBD(NativeDatabase.memory());
+      servidor = SincroFalso();
+    });
+
+    tearDown(() async => bd.close());
+
+    testWidgets('sin credenciales el grupo no aparece siquiera', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      // `_app` no sobrescribe `sincroProvider`, así que vale el de verdad, que
+      // sin `--dart-define` es null. Es el criterio de K12.
+      await tester.pumpWidget(_app(bd, const PantallaAjustes()));
+      await tester.pumpAndSettle();
+
+      // Y el grupo «Datos», que es su vecino de más abajo, sigue estando: si el
+      // de la cuenta se pintara, se toparía con él al bajar.
+      await tester.scrollUntilVisible(find.text('DATOS'), 300);
+      await tester.pumpAndSettle();
+      expect(find.text('DATOS'), findsOneWidget);
+      expect(find.text('CUENTA'), findsNothing);
+    });
+
+    testWidgets('sin cuenta ofrece entrar, y entrar la conecta', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(conCuenta(const PantallaAjustes()));
+      await tester.pumpAndSettle();
+
+      final entrarFila = find.text('Crear cuenta o entrar');
+      await tester.scrollUntilVisible(entrarFila, 300);
+      await tester.pumpAndSettle();
+
+      await entrar(tester);
+
+      expect(servidor.codigosPedidos, ['yo@ejemplo.com']);
+      expect(find.text('yo@ejemplo.com'), findsOneWidget);
+      expect(find.text('Sincronizar ahora'), findsOneWidget);
+    });
+
+    testWidgets('un código que no vale se dice y no conecta', (tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(conCuenta(const PantallaAjustes()));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('Crear cuenta o entrar'), 300);
+      await tester.pumpAndSettle();
+
+      await entrar(tester, codigo: '000000');
+
+      // El mensaje del servidor se enseña tal cual.
+      expect(find.text('El código no vale o ha caducado.'), findsOneWidget);
+      expect(find.text('Crear cuenta o entrar'), findsOneWidget);
+
+      // `ui.aviso` se retira solo con un `Future.delayed`, y el test no puede
+      // acabar con ese `Timer` vivo. No es un fallo de la app: es la contra de
+      // haber comprobado el mensaje mientras estaba en pantalla.
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('con datos a los dos lados se pregunta, con las cifras', (
+      tester,
+    ) async {
+      _comoUnMovil(tester);
+      // Aquí una rutina; en la cuenta, otra.
+      await bd.insertarRutina('Empuje');
+      servidor.filas['rutinas/otra'] = const FilaRemota(
+        tabla: 'rutinas',
+        clave: 'otra',
+        actualizado: 1000001,
+        datos: {'nombre': 'Tirón'},
+      );
+
+      await tester.pumpWidget(conCuenta(const PantallaAjustes()));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('Crear cuenta o entrar'), 300);
+      await tester.pumpAndSettle();
+
+      await entrar(tester);
+
+      // Sin los números delante, la pregunta no se puede responder.
+      expect(find.textContaining('1 rutina'), findsWidgets);
+      expect(find.text('Juntarlo todo (recomendado)'), findsOneWidget);
+    });
+
+    testWidgets('borrar la cuenta pide escribir el correo', (tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(conCuenta(const PantallaAjustes()));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('Crear cuenta o entrar'), 300);
+      await tester.pumpAndSettle();
+      await entrar(tester);
+      // Que el diálogo del código termine de irse: si no, al abrir el de borrar
+      // habría dos en el árbol y `campo` encontraría dos.
+      await tester.pumpAndSettle();
+
+      final borrar = find.text('Borrar la cuenta');
+      await tester.scrollUntilVisible(borrar, 300);
+      await tester.pumpAndSettle();
+      await tester.tap(borrar);
+      await tester.pumpAndSettle();
+
+      // Escrito mal, no se borra nada.
+      await tester.enterText(campo, 'otro@sitio.com');
+      await tester.tap(find.text('Borrar la cuenta').last);
+      await _asentar(tester, veces: 20);
+
+      expect(
+        find.text('El correo no coincide. No se ha borrado nada.'),
+        findsOneWidget,
+      );
+      expect(find.text('yo@ejemplo.com'), findsWidgets);
+
+      // El aviso se retira solo con un `Future.delayed`, y el test no puede
+      // acabar con ese `Timer` vivo.
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('el detalle lista los avisos con su frase', (tester) async {
+      _comoUnMovil(tester);
+      await bd.fijarEstadoSincro(
+        subidas: const Value(3),
+        bajadas: const Value(1),
+        avisos: Value(
+          jsonEncode([
+            AvisoSincro(
+              MotivoAviso.rutinaRenombrada,
+              'Empuje (2)',
+              DateTime(2026, 8, 10),
+            ).aJson(),
+          ]),
+        ),
+      );
+
+      await tester.pumpWidget(conCuenta(const PantallaSincroDetalle()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('3 cambios'), findsOneWidget);
+      expect(find.text('1 cambio'), findsOneWidget);
+      expect(
+        find.textContaining('Empuje (2)'),
+        findsOneWidget,
+        reason: 'el motivo viaja como enumerado y la frase se compone aquí',
+      );
+    });
+
+    testWidgets('en inglés el grupo se llama ACCOUNT', (tester) async {
+      _comoUnMovil(tester);
+      await tester.pumpWidget(
+        conCuenta(const PantallaAjustes(), idioma: const Locale('en')),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(find.text('ACCOUNT'), 300);
+      await tester.pumpAndSettle();
+      expect(find.text('Create account or sign in'), findsOneWidget);
+    });
+
+    testWidgets('el aviso de la cabecera lleva a Ajustes', (tester) async {
+      await bd.fijarAjustes({Claves.sincroActiva: '1'});
+      await bd.fijarEstadoSincro(ultimoError: const Value('sin cobertura'));
+      await servidor.entrar('yo@ejemplo.com', servidor.codigo);
+
+      await tester.pumpWidget(conCuenta(const PantallaRutinas()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('La sincronización no está al día'));
       await tester.pumpAndSettle();
       expect(find.text('Ajustes'), findsWidgets);
     });

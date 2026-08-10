@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../datos/media.dart' as media;
 import '../estado/copia_automatica.dart';
 import '../estado/providers.dart';
+import '../estado/sincro.dart';
 import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
@@ -87,6 +88,7 @@ class _PestanasState extends ConsumerState<Pestanas>
       // espera: la app no puede quedarse en blanco por una copia, y su fallo
       // no es visible en la ruta de entrenar.
       _copiar(Disparador.arranque);
+      _sincronizar(DisparadorSincro.arranque);
     });
   }
 
@@ -100,12 +102,19 @@ class _PestanasState extends ConsumerState<Pestanas>
   /// entre intentos, así que alternar de app no dispara nada.
   @override
   void didChangeAppLifecycleState(AppLifecycleState estado) {
-    if (estado == AppLifecycleState.resumed) _copiar(Disparador.vuelta);
+    if (estado != AppLifecycleState.resumed) return;
+    _copiar(Disparador.vuelta);
+    _sincronizar(DisparadorSincro.vuelta);
   }
 
   void _copiar(Disparador disparador) {
     if (!mounted) return;
     ref.read(motorCopiaProvider.notifier).intentar(disparador);
+  }
+
+  void _sincronizar(DisparadorSincro disparador) {
+    if (!mounted) return;
+    ref.read(sincronizacionProvider.notifier).intentar(disparador);
   }
 
   Future<void> _ofrecerContinuar() async {
@@ -164,7 +173,22 @@ class _PestanasState extends ConsumerState<Pestanas>
   }
 
   @override
-  Widget build(BuildContext context) => CupertinoTabScaffold(
+  Widget build(BuildContext context) {
+    // Cuando una pasada de sincronización trae algo, la base ha cambiado por
+    // debajo de la interfaz y hay que repintarlo todo.
+    //
+    // Se escucha aquí, en la raíz, porque es el único widget que está siempre
+    // montado: el motor tiene un `Ref` y no un `WidgetRef`, así que no puede
+    // invalidar nada por su cuenta. `cambios` solo sube, de modo que comparar
+    // con el valor anterior basta para no repintar de más.
+    ref.listen(sincronizacionProvider, (antes, ahora) {
+      if (ahora.cambios > (antes?.cambios ?? 0)) invalidarTodo(ref);
+    });
+
+    return _pestanas(context);
+  }
+
+  Widget _pestanas(BuildContext context) => CupertinoTabScaffold(
     tabBar: CupertinoTabBar(
       backgroundColor: context.barra,
       activeColor: context.acento,

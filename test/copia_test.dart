@@ -174,6 +174,35 @@ void main() {
       expect(json, isNot(contains('cursor')));
     });
 
+    test('el interruptor de la sincronización tampoco sale', () async {
+      await _poblar(bd);
+      await bd.fijarAjustes({Claves.sincroActiva: '1', Claves.unidad: 'lb'});
+
+      final json = jsonEncode(await exportar(bd));
+
+      // Es estado de **este** dispositivo, no una preferencia del usuario:
+      // restaurar la copia en un móvil nuevo diría que allí hay una cuenta
+      // conectada que no lo está. Por eso vive en `Claves.locales`.
+      expect(json, isNot(contains(Claves.sincroActiva)));
+      // Y lo que sí es preferencia sigue saliendo, que es el contraste que
+      // hace que esta comprobación signifique algo.
+      expect(json, contains(Claves.unidad));
+    });
+
+    test('la cuenta y su token no están siquiera en la base', () async {
+      await _poblar(bd);
+      final json = jsonEncode(await exportar(bd));
+
+      // El criterio de K12. No hace falta filtrarlos al exportar porque no
+      // están aquí: la sesión vive en el almacén seguro de la plataforma, que
+      // es lo único que no depende de que nadie se acuerde de excluirla el día
+      // que amplíe la exportación.
+      final crudos = await bd.ajustesCrudos();
+      expect(crudos.keys, isNot(contains('sincro_sesion')));
+      expect(json, isNot(contains('refresco')));
+      expect(json, isNot(contains('access_token')));
+    });
+
     test('la identidad de cada fila sí viaja, desde la versión 4', () async {
       await _poblar(bd);
       final datos = await exportar(bd);

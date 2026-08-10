@@ -134,6 +134,20 @@ abstract final class Claves {
   /// El último fallo, vacío si la última vez fue bien.
   static const copiaNubeError = 'copia_nube_error';
 
+  // ── Sincronización ─────────────────────────────────────────────────────────
+
+  /// Si **este** dispositivo sincroniza. Vacío o ausente es «no».
+  ///
+  /// Es la única clave que necesita la fase 8c, y por lo mismo que las de la
+  /// copia automática: es el interruptor de este móvil, no una preferencia del
+  /// usuario, así que no viaja ni en la copia ni en la sincronización.
+  ///
+  /// El resto del estado no está aquí: la contabilidad de las pasadas vive en
+  /// la tabla `sincro_estado` —que tampoco se exporta— y la cuenta con su token
+  /// vive en el almacén seguro de la plataforma. Por eso la fase 8c **no
+  /// necesita migración de esquema**.
+  static const sincroActiva = 'sincro_activa';
+
   /// Las claves que **no** viajan en la copia de seguridad.
   ///
   /// Son estado del dispositivo, no preferencias: la cuenta conectada, la
@@ -155,6 +169,7 @@ abstract final class Claves {
     copiaNubeCuenta,
     copiaNubeUltima,
     copiaNubeError,
+    sincroActiva,
   };
 }
 

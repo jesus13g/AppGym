@@ -28,6 +28,7 @@ import '../datos/reloj.dart' as reloj;
 import '../estado/copia_automatica.dart';
 import '../estado/descanso.dart';
 import '../estado/providers.dart';
+import '../estado/sincro.dart';
 import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
@@ -433,6 +434,13 @@ class _PantallaEntrenarState extends ConsumerState<PantallaEntrenar> {
     // Rutinas, nunca en la ruta de entrenar.
     unawaited(
       ref.read(motorCopiaProvider.notifier).intentar(Disparador.guardado),
+    );
+    // Y la sincronización, con el mismo contrato: sin esperar, y su fallo se
+    // anota para la cabecera de Rutinas en vez de verse aquí.
+    unawaited(
+      ref
+          .read(sincronizacionProvider.notifier)
+          .intentar(DisparadorSincro.guardado),
     );
 
     final navegador = Navigator.of(context);

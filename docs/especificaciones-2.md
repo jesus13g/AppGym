@@ -1229,7 +1229,7 @@ guardar una sesión cambia la sugerencia de la siguiente, que es el caso de uso 
 
 ---
 
-## K. Sincronización en la nube, cuentas y multidispositivo
+## K. Sincronización en la nube, cuentas y multidispositivo ✅
 
 > **Lo que decía el documento anterior:** *«Sincronización en la nube y multidispositivo.
 > Cambia la naturaleza del proyecto (backend, cuentas, conflictos); B10 cubre la necesidad
@@ -1248,14 +1248,21 @@ de un servicio externo y es el único que puede corromper datos del usuario si s
 al final del plan de entrega por eso, y la mayor parte de lo que sigue es la lista de cosas
 que hay que decidir **antes** de escribir una línea.
 
-> **Estado.** Este apartado es la especificación tal y como se escribió, y se conserva como
-> el porqué. La **fase 8a** (copia automática) y la **fase 8b** (el motor) están hechas; la
-> **8c** —el adaptador del proveedor, las cuentas y la pantalla— no. Al implementar 8b se
-> desviaron once cosas de lo que aquí se preveía, y están enumeradas y razonadas en
-> [las once desviaciones de la fase 8b](#las-once-desviaciones-de-la-fase-8b). Las tres que
-> cambian lo que este apartado dice son: las lápidas van en su propia tabla en vez de en una
-> columna `borrado`, la tabla `serie` no lleva identidad ni versión, y **el reloj no decide
-> un conflicto**.
+> **Estado. El bloque K está entregado entero**: la **fase 8a** (copia automática), la
+> **8b** (el motor) y la **8c** (el adaptador, las cuentas y la pantalla). Este apartado es
+> la especificación tal y como se escribió, y se conserva como el porqué.
+>
+> Al implementar 8b se desviaron once cosas de lo que aquí se preveía, y al implementar 8c
+> otras diez; están enumeradas y razonadas en
+> [las once desviaciones de la fase 8b](#las-once-desviaciones-de-la-fase-8b) y en
+> [las diez desviaciones de la fase 8c](#las-diez-desviaciones-de-la-fase-8c). Las que
+> cambian lo que este apartado dice son seis:
+>
+> - **8b:** las lápidas van en su propia tabla en vez de en una columna `borrado`, la tabla
+>   `serie` no lleva identidad ni versión, y **el reloj no decide un conflicto**.
+> - **8c:** se entra con un **código de seis cifras** y no con un enlace mágico ([K3](#k3-cuentas-e-identidad));
+>   **no hay SDK** —Supabase se habla REST, cero dependencias nuevas ([K2](#k2-elección-de-backend))—;
+>   y **no hay fila «Dispositivos»** ([K8](#k8-interfaz)).
 
 ### K1. El principio: local primero
 
@@ -1770,15 +1777,19 @@ publicación del APK.
 
 ### K12. Criterios de aceptación y riesgos
 
-**Criterios de aceptación.** Marcados los que cierra la fase 8b; los que quedan dependen del
-adaptador, de las cuentas y de la pantalla, que son 8c.
+**Criterios de aceptación. Todos cumplidos**, entre las fases 8b y 8c. El primero se
+reformuló al implementarlo y se explica en su propia línea.
 
 - [x] Sin cuenta y sin red, la app se comporta **exactamente** como antes de este bloque.
       Se comprueba pasando los 441 tests anteriores sin modificar ninguno —salvo los dos
       ajustes mecánicos que se explican en la fase 8b—.
-- [ ] `lib/datos/sincro/` es el único directorio que importa el SDK del proveedor. Hay un
-      test que lo fija, como el que fija que no se importa `material.dart`. *(8c: todavía no
-      hay SDK que aislar.)*
+- [x] `lib/datos/sincro/` es el único directorio que sabe del proveedor. **Reformulado al
+      implementarlo, porque no hay SDK que aislar** (desviación 3): lo que fija
+      `test/importaciones_test.dart` es que hablar con la red esté aislado en tres ficheros,
+      que la costura no importe Flutter ni drift, que el motor no conozca a ningún proveedor
+      y que la URL, la clave y las rutas REST solo aparezcan en el adaptador. De paso queda
+      escrito el test de `material.dart`, que este mismo apartado daba por hecho y no lo
+      estaba.
 - [x] El motor de reconciliación no importa Flutter ni el SDK: recibe un `SincroTransporte`.
 - [x] `test/sincro_test.dart` cubre los escenarios de [K10](#k10-la-costura-de-test), sin
       red. El de las series que llegan antes que su entrenamiento se prueba un nivel más
@@ -1791,13 +1802,19 @@ adaptador, de las cuentas y de la pantalla, que son 8c.
 - [x] Un fallo de red al guardar un entrenamiento **no** produce ningún aviso ni bloquea
       nada: el motor no se llama desde la ruta de entrenar y un error del transporte se
       anota y se devuelve, sin tocar la base.
-- [ ] Cerrar sesión conservando los datos deja la base local intacta y utilizable. *(8c.)*
-- [ ] Borrar la cuenta borra los datos remotos y deja los locales. *(8c.)*
+- [x] Cerrar sesión conservando los datos deja la base local intacta y utilizable. Test en
+      `sincro_estado_test.dart`, junto con la otra salida —borrar los datos de este móvil—
+      y con el reinicio de los cursores, que sin él dejaría medio histórico sin bajar al
+      entrar con otra cuenta.
+- [x] Borrar la cuenta borra los datos remotos y deja los locales. Test.
 - [x] Ni el token ni los cursores de sincronización aparecen en la exportación de la copia
-      de seguridad. Test. *(El token llega en 8c; lo que ya está probado es que la
-      contabilidad de la sincronización no sale.)*
-- [ ] Con la sincronización sin configurar (compilación local), el grupo de Ajustes no se
-      enseña. *(8c: todavía no hay grupo de Ajustes.)*
+      de seguridad. Test, y ahora con el token ya existiendo: **no hace falta filtrarlo,
+      porque no está en la base** —la sesión vive en el almacén seguro de la plataforma—. El
+      interruptor de este dispositivo sí está en `ajustes`, y por eso está en
+      `Claves.locales`, con su test.
+- [x] Con la sincronización sin configurar (compilación local), el grupo de Ajustes no se
+      enseña. Test de pantalla, que además comprueba que el grupo «Datos» —su vecino de más
+      abajo— sigue estando: si el de la cuenta se pintara, se toparía con él al bajar.
 - [x] `flutter analyze` en 0 issues y el APK sigue construyéndose en CI.
 
 **Riesgos.**
@@ -2130,7 +2147,7 @@ previo, cuyo comportamiento **sí** cambia a propósito (ver la desviación 11).
     pisan. Es el único cambio de comportamiento visible de la fase, y solo lo ve quien mire
     el directorio de la app.
 
-### Fase 8c — Sincronización: el servicio
+### Fase 8c — Sincronización: el servicio ✅
 
 1. El adaptador del proveedor, aislado en `lib/datos/sincro/`.
 2. Cuentas: entrar por enlace mágico, cerrar sesión, borrar la cuenta ([K3](#k3-cuentas-e-identidad)).
@@ -2138,6 +2155,97 @@ previo, cuyo comportamiento **sí** cambia a propósito (ver la desviación 11).
 4. Los disparadores y la espera creciente.
 5. La configuración por `--dart-define` y los secretos de CI ([K11](#k11-operación-costes-y-forks)).
 6. La política de privacidad en `docs/` y su enlace desde «Acerca de».
+
+**Hecha**, y en ese orden. **Sin migración de esquema**: `schemaVersion` se queda en 8 y
+`versionCopia` en 4. Lo único nuevo que había que persistir era el interruptor de este
+dispositivo, y para eso ya estaba `Claves.locales`; la contabilidad vive en `sincro_estado`
+—que existe desde 8b— y la sesión en el almacén seguro. El reparto quedó así:
+
+| Fichero | Qué es |
+|---|---|
+| `supabase/esquema.sql` | el servidor: dos tablas, la RLS y cinco funciones |
+| `datos/sincro/transporte.dart` | la costura, que pasa de ocho métodos a nueve |
+| `datos/sincro/supabase.dart` | el adaptador: el único fichero que sabe que Supabase existe |
+| `datos/nube/token.dart` | el almacén seguro, ahora parametrizado por clave |
+| `estado/sincro.dart` | el motor: los disparadores, la espera creciente y la cuenta |
+| `pantallas/cuenta.dart` | el grupo de Ajustes, la entrada, el primer enlace y el aviso |
+| `pantallas/sincro_detalle.dart` | «Última vez», con los avisos de [K5](#k5-conflictos) |
+| `docs/sincronizacion.md` | cómo montar el servidor en un *fork*, y cómo verificarlo a mano |
+
+#### Las diez desviaciones de la fase 8c
+
+1. **Ningún SDK: Supabase se habla REST, y la fase no añade ni una dependencia.**
+   [K2](#k2-elección-de-backend) contaba con `supabase_flutter` y lo llamaba «con diferencia
+   la dependencia más grande del proyecto». Lo es, y para nada: el adaptador son cuatro POST
+   de RPC y cuatro de autenticación, y ese paquete arrastra `gotrue`, `postgrest`,
+   `realtime`, `storage` y `functions_client` —con *websockets*, *deep links* y preferencias
+   compartidas— además de arriesgar el techo de `win32` que fija `file_picker ^11` y que ya
+   mantiene a `share_plus` en la 12 y a `flutter_secure_storage` en la 9. Es exactamente el
+   razonamiento que ya está escrito en `datos/nube/drive.dart` para no usar el SDK de
+   Google, aplicado otra vez.
+2. **Se entra con un código de seis cifras, no con un enlace mágico.**
+   [K3](#k3-cuentas-e-identidad) pedía *magic link*, y en un móvil eso significa volver a la
+   app desde el correo: *deep links*, un *intent-filter* en el manifiesto y un dominio de
+   redirección configurado en el proveedor. Aquí el APK se instala a mano desde una release
+   y un *fork* tendría que montar todo eso para que la funcionalidad existiera. El código
+   llega en el mismo correo, por el mismo endpoint, y no depende de nada. Es la misma clase
+   de decisión que renunciar a `google_sign_in` en la 8a.
+3. **`SincroTransporte` pasa a nueve métodos.** El código parte la entrada en dos pasos, así
+   que aparece `pedirCodigo(correo)` y `entrar` pasa a `entrar(correo, codigo)`. Nadie
+   llamaba todavía a `entrar`, de modo que el cambio de firma solo tocó el transporte falso.
+4. **El servidor es un buzón con reloj, no seis tablas espejo.** K2 eligió Supabase en parte
+   porque «el modelo relacional es el que ya tenemos»; lo relacional se queda donde sirve,
+   en el SQLite del móvil. En el servidor, una tabla `filas(usuario, tabla, clave,
+   actualizado, datos jsonb)`. El motivo de fondo: la costura de 8b ya es genérica por fila,
+   `serie` no tiene identidad propia —viaja dentro de su entrenamiento—, el motor tolera
+   huérfanos a propósito (la cuarentena), de modo que una clave foránea aquí rechazaría
+   paquetes que el cliente sabe colocar; y sobre todo, el APK se instala a mano y conviven
+   versiones arbitrarias, así que con tablas espejo una columna nueva en el móvil exigiría
+   desplegar una migración en el servidor **antes**. Con `jsonb`, el servidor no se entera.
+5. **El reloj del servidor se siembra con la hora de época en milisegundos.** No estaba
+   escrito en ningún sitio y es la clase de detalle que no se ve en los tests y arruina la
+   app en producción: `identidad.selloLocal()` sella en milisegundos de época, así que un
+   servidor que empezara en cero dejaría el `cursorSubida` del móvil por debajo de todos sus
+   sellos locales y **cada pasada resubiría el histórico entero**. El transporte falso
+   arranca en 1.000.000 «a propósito»; ahí era una precaución, aquí es un requisito.
+6. **`appgym_bajar` lee el reloj antes que las filas y las acota con él.** Al revés —filas
+   primero, reloj después— una subida de otro dispositivo que se colara en medio adelantaría
+   el cursor por encima de filas no entregadas, y esas filas no se bajarían nunca. Es la
+   única forma de perder datos que hay en el servidor, así que el orden de esas dos
+   consultas no es estético.
+7. **La sesión entera va al almacén seguro, no solo el token.** [K3](#k3-cuentas-e-identidad)
+   hablaba del token; el correo también hace falta, y ponerlo en `Claves.locales` habría
+   sido peor por un motivo que solo se ve al escribirlo: `sesionActual()` tiene que
+   contestarse **sin red**. Si hiciera falta renovar el token para saber si hay cuenta, un
+   móvil sin cobertura diría «sin cuenta», el usuario volvería a entrar y caería otra vez
+   por el primer enlace, que es el riesgo número uno de todo el bloque.
+8. **No hay fila «Dispositivos».** [K8](#k8-interfaz) la pedía, con su nombre editable y su
+   «revocar». Exigiría una tabla más en el servidor, registrarse en cada pasada y un revocar
+   que, sin introspección de tokens, no echa de verdad al otro móvil: prometería algo que no
+   cumple. Cerrar sesión en el aparato que se tiene delante —que es lo que se hace al
+   venderlo o prestarlo— sí está, con sus dos salidas.
+9. **Si el usuario cancela la pregunta del primer enlace, no se sincroniza hasta que la
+   conteste.** K7 no dice qué pasa al cancelar. La sesión queda abierta y el grupo enseña
+   «Elegir qué datos mandan» en vez de «Sincronizar ahora». La alternativa —dejar que la
+   pasada siguiente fusionara— elegiría por el usuario en el único punto del bloque donde
+   K7 exige preguntar, aunque fusionar sea la recomendada y no pierda nada.
+10. **El aviso de la cabecera aproxima «cambios pendientes desde hace más de un día» por «sin
+    una pasada buena en más de un día».** Contar lo pendiente de verdad son siete consultas
+    en cada repintado de la pestaña por la que se entra a la app, y lo que el usuario acaba
+    viendo es lo mismo.
+
+**Lo que no se hizo, y se dice:** el job opcional de CI con tests contra el proyecto real
+([K11](#k11-operación-costes-y-forks)). Exige credenciales vivas, y K11 ya dice que no
+bloquea la publicación del APK. En su lugar, `docs/sincronizacion.md` lleva el guion de
+verificación manual del servidor —que es la única parte del proyecto que `flutter test` no
+puede tocar— y el contrato que tiene que cumplir es el que implementa `test/sincro_falso.dart`.
+
+**Limitación conocida de «este dispositivo manda»:** vacía el servidor con un borrado duro,
+sin lápidas, que es lo que hace el transporte falso contra el que se escribieron los tests
+del motor. Un *tercer* dispositivo ya enlazado no se entera y conserva sus datos locales;
+tampoco los resucita, porque no están pendientes. La alternativa —enterrarlo todo— propagaría
+el borrado a los datos locales de ese tercer móvil, que es peor. Con dos dispositivos, que es
+el caso de uso de K, no se da.
 
 **Dependencias entre bloques.** Solo una, y es blanda: J y K escriben texto que el usuario
 lee, así que se benefician de que I esté hecho. Si por lo que fuera hubiera que alterar el
@@ -2205,16 +2313,19 @@ las demás se pueden cerrar durante.
    **Recomendación:** entregar 8a igualmente —es útil por sí sola y barata—, y decidir 8b/8c
    después de usarla un par de meses. Si con la copia automática el problema desaparece, la
    respuesta ya está.
-   **8a y 8b entregadas.** Lo que sigue abierto es **8c**, que es donde está la factura: el
-   proveedor, las cuentas y el compromiso de mantenerlos. 8b se ha entregado igual porque no
-   compromete a nada —no añade una dependencia, no cambia el APK y no saca un byte del
-   móvil— y porque era la parte difícil: con el motor probado, decidir 8c es decidir un
-   adaptador, no un bloque.
+   **Cerrada: K se ha hecho entero.** 8a, 8b y 8c entregadas. La factura que 8c traía
+   —el proveedor y el compromiso de mantenerlo— se ha abaratado en lo que se podía: sin
+   dependencia nueva (se habla REST), con el servidor reproducible desde un fichero SQL
+   versionado, y con la app funcionando entera si el servicio se apaga. Lo que no se puede
+   quitar es que ahora existe un servidor con datos de salud de otras personas, y de eso
+   hablan [K9](#k9-seguridad-y-privacidad) y `docs/privacidad.md`.
 
 2. **¿Qué proveedor, si se hace K completo?** ([K2](#k2-elección-de-backend))
-   **Recomendación:** Supabase, por el encaje relacional y la RLS, con todo detrás de
-   `SincroTransporte` para que la decisión sea reversible. La alternativa seria es un
-   backend propio, que duplica el proyecto.
+   **Cerrada: Supabase, pero hablado por REST y sin su SDK.** La RLS es lo que aísla las
+   cuentas y es del servidor, no del cliente; y el cliente son ocho llamadas HTTP, para las
+   que `supabase_flutter` no aporta nada a cambio de ser la dependencia más grande del
+   proyecto. Sigue todo detrás de `SincroTransporte`, así que la decisión sigue siendo
+   reversible: cambiar de proveedor es escribir otro `supabase.dart`.
 
 3. **¿El inglés es el segundo idioma?** ([I1](#i1-mecanismo-de-traducción))
    Es el que más alcance da por el mismo esfuerzo y el que ya está medio hecho, porque el
