@@ -15,11 +15,12 @@
 > nueve dependencias y `flutter analyze` en 0 issues. Ver `CLAUDE.md` para la arquitectura
 > vigente.
 >
-> **Estado: los bloques I y J están implementados** ([Fase 6](#fase-6--internacionalización-)
-> y [Fase 7](#fase-7--progresiones-)), con el esquema en la v7, la app en español e inglés
-> y 390 tests. El bloque **K** sigue siendo lo previsto, no lo hecho. J se entregó antes
-> que I, invirtiendo el orden que este documento recomienda; el motivo y lo que costó están
-> en la [Fase 7](#fase-7--progresiones-).
+> **Estado: los tres bloques están implementados.** I en la [Fase 6](#fase-6--internacionalización-),
+> J en la [Fase 7](#fase-7--progresiones-) y K entero en las [fases 8a](#fase-8a--copia-automática-a-la-nube-del-usuario-),
+> [8b](#fase-8b--sincronización-el-motor-) y [8c](#fase-8c--sincronización-el-servicio-):
+> el esquema en la **v8**, la copia en la **v4**, la app en español e inglés y **583
+> tests**. J se entregó antes que I, invirtiendo el orden que este documento recomienda;
+> el motivo y lo que costó están en la [Fase 7](#fase-7--progresiones-).
 
 ## Índice
 
@@ -771,8 +772,9 @@ separador de miles, que es justo lo que [I3](#i3-fechas-números-unidades-y-plur
 arregla—. Ninguna aserción de texto en español se tocó, que era el criterio caro.
 
 **Lo único que queda en español dentro de `lib/pantallas` y `lib/tema`** son los
-separadores « · » de las líneas compuestas y dos mensajes de `assert`, que son para quien
-programa.
+separadores « · » de las líneas compuestas, dos mensajes de `assert` —que son para quien
+programa— y el `'Español'` del selector de idioma, que va en su propio idioma a propósito:
+un idioma se ofrece con su nombre, o quien no entiende el activo no sabe cuál elegir.
 
 ---
 

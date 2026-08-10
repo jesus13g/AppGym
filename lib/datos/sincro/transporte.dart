@@ -186,7 +186,7 @@ class ErrorSincro implements Exception {
 
 /// Todo lo que la sincronización necesita del mundo exterior.
 ///
-/// Ocho métodos. Cambiar de proveedor es escribir otro adaptador, no reescribir
+/// Nueve métodos. Cambiar de proveedor es escribir otro adaptador, no reescribir
 /// el bloque; y el motor, que es donde está la dificultad, se prueba entero sin
 /// red, sin cuenta y sin proveedor.
 abstract interface class SincroTransporte {
