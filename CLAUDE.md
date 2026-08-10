@@ -100,7 +100,8 @@ test/                  datos · pantallas · migraciones · copia · ajustes · 
                        sincro · sincro_sellos · enlace · sincro_supabase · sincro_estado ·
                        importaciones · esquemas/ (generado)
 docs/                  especificaciones.md (hecho) · especificaciones-2.md (I, J y K enteros,
-                       hechos) · privacidad.md · sincronizacion.md (montar el servidor)
+                       hechos) · privacidad.md · sincronizacion.md (montar el servidor) ·
+                       conectar-backend.md (lo que falta para desplegarlo y verificarlo)
 ```
 
 Seis ficheros de `pantallas/` no son pantallas, sino piezas que comparten varias:
