@@ -2165,9 +2165,9 @@ dispositivo, y para eso ya estaba `Claves.locales`; la contabilidad vive en `sin
 
 | Fichero | Qué es |
 |---|---|
-| `supabase/esquema.sql` | el servidor: dos tablas, la RLS y cinco funciones |
+| `supabase/esquema.sql` | el servidor: dos tablas, la RLS y cinco funciones — **sustituido en la 8d**, ya no existe |
 | `datos/sincro/transporte.dart` | la costura, que pasa de ocho métodos a nueve |
-| `datos/sincro/supabase.dart` | el adaptador: el único fichero que sabe que Supabase existe |
+| `datos/sincro/supabase.dart` | el adaptador: el único fichero que sabe que Supabase existe — **hoy es `servidor.dart`** |
 | `datos/nube/token.dart` | el almacén seguro, ahora parametrizado por clave |
 | `estado/sincro.dart` | el motor: los disparadores, la espera creciente y la cuenta |
 | `pantallas/cuenta.dart` | el grupo de Ajustes, la entrada, el primer enlace y el aviso |

@@ -444,7 +444,7 @@
   "cuentaEntrar": "Sign in",
   "cuentaCrear": "Create an account",
   "cuentaEntrarMensaje": "With your account's email and password.",
-  "cuentaCrearMensaje": "Pick a long password and write it down: there is no «forgot my password» here.",
+  "cuentaCrearMensaje": "Pick a long password and write it down: there is no 'forgot my password' here.",
   "cuentaContrasenaMarcador": "Password",
   "cuentaContrasenaRepetir": "Repeat the password",
   "cuentaCorreoNoVale": "That doesn't look like an email address.",
