@@ -848,6 +848,7 @@ Future<String?> dialogoTexto(
   String valor = '',
   String? mensaje,
   bool permitirVacio = false,
+  TextInputType? teclado,
 }) {
   final controlador = TextEditingController(text: valor);
 
@@ -880,6 +881,15 @@ Future<String?> dialogoTexto(
               controller: controlador,
               placeholder: marcador,
               autofocus: true,
+              keyboardType: teclado,
+              // Un correo o un código de seis cifras no se autocorrigen ni se
+              // ponen en mayúscula: el teclado los estropearía. Un nombre de
+              // rutina sí quiere el comportamiento normal, y por eso depende de
+              // que se haya pedido un teclado concreto.
+              autocorrect: teclado == null,
+              textCapitalization: teclado == null
+                  ? TextCapitalization.sentences
+                  : TextCapitalization.none,
               onSubmitted: (_) => aceptar(),
             ),
           ],

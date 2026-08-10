@@ -15,6 +15,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../datos/bd.dart';
 import '../datos/copia.dart' as copia;
 import '../datos/media.dart' as media;
 import '../datos/semilla.dart';
@@ -23,6 +24,28 @@ import '../l10n/textos.dart';
 import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
+
+/// Escribe una copia JSON en el almacenamiento de la app y devuelve el fichero.
+///
+/// Es la red de seguridad de K7: la salida «la cuenta manda» del primer enlace
+/// llama a esto **sin preguntar** antes de sustituir el histórico local, que es
+/// la única acción de la app capaz de destruir dos años de datos.
+///
+/// Va al directorio de documentos y **no al temporal**, al revés que
+/// `_compartir`: aquel escribe un fichero de paso, porque el que importa es el
+/// que el usuario guarda desde la hoja de compartir. Aquí no hay hoja —K7 dice
+/// «sin preguntar»— y una red de seguridad en un directorio que el sistema puede
+/// vaciar no es una red.
+Future<File> escribirCopiaLocal(AppBD bd, {DateTime? cuando}) async {
+  final datos = await copia.exportar(bd);
+  final nombre = copia.nombreFichero(cuando ?? DateTime.now());
+  final directorio = await getApplicationDocumentsDirectory();
+  final fichero = File('${directorio.path}/$nombre');
+  await fichero.writeAsString(
+    const JsonEncoder.withIndent('  ').convert(datos),
+  );
+  return fichero;
+}
 
 class GrupoDatos extends ConsumerStatefulWidget {
   const GrupoDatos({super.key});

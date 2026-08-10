@@ -2328,5 +2328,289 @@
   "nubeAviso": "La copia automática no está al día",
   "@nubeAviso": {
     "description": "Aviso discreto de la cabecera de Rutinas cuando la copia falla o se retrasa"
+  },
+  "cuentaCabecera": "Cuenta",
+  "@cuentaCabecera": {
+    "description": "Cabecera del grupo de sincronización en Ajustes"
+  },
+  "cuentaSinCuentaPie": "Tus datos están solo en este dispositivo. Con una cuenta, tus rutinas y tu histórico aparecen también en tu tableta.",
+  "@cuentaSinCuentaPie": {
+    "description": "Pie del grupo cuando no hay cuenta"
+  },
+  "cuentaEntrar": "Crear cuenta o entrar",
+  "@cuentaEntrar": {
+    "description": "Acción que empieza el flujo de entrada"
+  },
+  "cuentaCorreo": "Correo",
+  "@cuentaCorreo": {
+    "description": "Fila que enseña el correo de la cuenta"
+  },
+  "cuentaSincronizar": "Sincronizar",
+  "@cuentaSincronizar": {
+    "description": "Interruptor que enciende la sincronización en este dispositivo"
+  },
+  "cuentaUltimaVez": "Última vez",
+  "@cuentaUltimaVez": {
+    "description": "Fila que lleva al detalle de la última sincronización"
+  },
+  "cuentaNunca": "Nunca",
+  "@cuentaNunca": {
+    "description": "Valor de «Última vez» cuando todavía no se ha sincronizado"
+  },
+  "cuentaAhora": "Sincronizar ahora",
+  "@cuentaAhora": {
+    "description": "Acción que dispara una pasada a mano"
+  },
+  "cuentaSalir": "Cerrar sesión",
+  "@cuentaSalir": {
+    "description": "Acción que cierra la sesión de la cuenta"
+  },
+  "cuentaBorrar": "Borrar la cuenta",
+  "@cuentaBorrar": {
+    "description": "Acción destructiva que borra la cuenta del servidor"
+  },
+  "cuentaPie": "Tus rutinas, sesiones, medidas y preferencias se copian a tu cuenta y aparecen en tus demás dispositivos. Las imágenes no: cada dispositivo se las descarga.",
+  "@cuentaPie": {
+    "description": "Pie del grupo con la cuenta conectada"
+  },
+  "cuentaContinuar": "Continuar",
+  "@cuentaContinuar": {
+    "description": "Botón que avanza al paso siguiente de la entrada"
+  },
+  "cuentaCorreoTitulo": "¿Cuál es tu correo?",
+  "@cuentaCorreoTitulo": {
+    "description": "Título del primer paso de la entrada"
+  },
+  "cuentaCorreoMensaje": "Te enviaremos un código para entrar. Si no tienes cuenta, se crea sola.",
+  "@cuentaCorreoMensaje": {
+    "description": "Explicación del primer paso de la entrada"
+  },
+  "cuentaCorreoMarcador": "tu@correo.com",
+  "@cuentaCorreoMarcador": {
+    "description": "Marcador del campo de correo"
+  },
+  "cuentaCodigoTitulo": "Escribe el código",
+  "@cuentaCodigoTitulo": {
+    "description": "Título del segundo paso de la entrada"
+  },
+  "cuentaCodigoMarcador": "000000",
+  "@cuentaCodigoMarcador": {
+    "description": "Marcador del campo del código"
+  },
+  "cuentaSalirTitulo": "Cerrar sesión",
+  "@cuentaSalirTitulo": {
+    "description": "Título de la hoja con las dos salidas de cerrar sesión"
+  },
+  "cuentaSalirMensaje": "Tus datos seguirán en tu cuenta. ¿Qué hacemos con los de este dispositivo?",
+  "@cuentaSalirMensaje": {
+    "description": "Explicación de la hoja de cerrar sesión"
+  },
+  "cuentaSalirConservar": "Conservar los datos aquí",
+  "@cuentaSalirConservar": {
+    "description": "Salida de cerrar sesión que deja la base local intacta"
+  },
+  "cuentaSalirBorrar": "Borrar los datos de este dispositivo",
+  "@cuentaSalirBorrar": {
+    "description": "Salida de cerrar sesión para un móvil que se vende o se presta"
+  },
+  "cuentaSalirBorrarTitulo": "¿Borrar los datos de este dispositivo?",
+  "@cuentaSalirBorrarTitulo": {
+    "description": "Título de la confirmación al salir borrando"
+  },
+  "cuentaSalirBorrarMensaje": "Se borrarán las rutinas, las sesiones y las medidas de este dispositivo. Seguirán estando en tu cuenta.",
+  "@cuentaSalirBorrarMensaje": {
+    "description": "Explicación de la confirmación al salir borrando"
+  },
+  "cuentaBorrarTitulo": "¿Borrar la cuenta?",
+  "@cuentaBorrarTitulo": {
+    "description": "Título de la confirmación de borrar la cuenta"
+  },
+  "cuentaBorrarConfirmar": "Borrar la cuenta",
+  "@cuentaBorrarConfirmar": {
+    "description": "Botón que confirma el borrado de la cuenta"
+  },
+  "cuentaBorrarNoCoincide": "El correo no coincide. No se ha borrado nada.",
+  "@cuentaBorrarNoCoincide": {
+    "description": "Aviso cuando lo escrito no confirma el borrado"
+  },
+  "cuentaBorrada": "Cuenta borrada. Tus datos siguen en este dispositivo.",
+  "@cuentaBorrada": {
+    "description": "Aviso tras borrar la cuenta"
+  },
+  "cuentaEnlaceTitulo": "Hay datos en los dos sitios",
+  "@cuentaEnlaceTitulo": {
+    "description": "Título de la hoja del primer enlace"
+  },
+  "cuentaEnlaceFusionar": "Juntarlo todo (recomendado)",
+  "@cuentaEnlaceFusionar": {
+    "description": "Salida del primer enlace que no pierde nada"
+  },
+  "cuentaEnlaceLaCuentaTitulo": "¿Sustituir lo de este dispositivo?",
+  "@cuentaEnlaceLaCuentaTitulo": {
+    "description": "Título de la confirmación de «manda la cuenta»"
+  },
+  "cuentaEnlaceElegir": "Elegir qué datos mandan",
+  "@cuentaEnlaceElegir": {
+    "description": "Fila que vuelve a abrir la pregunta del primer enlace"
+  },
+  "sincroAviso": "La sincronización no está al día",
+  "@sincroAviso": {
+    "description": "Aviso discreto de la cabecera de Rutinas"
+  },
+  "sincroDetalleTitulo": "Sincronización",
+  "@sincroDetalleTitulo": {
+    "description": "Título de la pantalla de detalle"
+  },
+  "sincroUltimaPasada": "Última vez",
+  "@sincroUltimaPasada": {
+    "description": "Cabecera del grupo con las cifras de la última pasada"
+  },
+  "sincroSubidas": "Enviado",
+  "@sincroSubidas": {
+    "description": "Fila con cuántas filas se subieron"
+  },
+  "sincroBajadas": "Recibido",
+  "@sincroBajadas": {
+    "description": "Fila con cuántas filas se bajaron"
+  },
+  "sincroAvisos": "Avisos",
+  "@sincroAvisos": {
+    "description": "Cabecera del grupo de avisos"
+  },
+  "sincroAvisosPie": "Cosas que no se pudieron resolver sin cambiar algo. Se sustituyen en la sincronización siguiente.",
+  "@sincroAvisosPie": {
+    "description": "Pie del grupo de avisos"
+  },
+  "sincroSinAvisos": "Nada que contar",
+  "@sincroSinAvisos": {
+    "description": "Texto cuando no hay ningún aviso"
+  },
+  "cuentaErrorPie": "La última sincronización falló: {error}",
+  "@cuentaErrorPie": {
+    "description": "Pie del grupo cuando la última pasada falló",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "Sin conexión"
+      }
+    }
+  },
+  "cuentaCodigoMensaje": "Te hemos enviado un código de seis cifras a {correo}. Puede tardar un minuto.",
+  "@cuentaCodigoMensaje": {
+    "description": "Explicación del segundo paso de la entrada",
+    "placeholders": {
+      "correo": {
+        "type": "String",
+        "example": "tu@correo.com"
+      }
+    }
+  },
+  "cuentaBorrarMensaje": "Se borrarán del servidor todos los datos de la cuenta. Los de este dispositivo se quedan. No se puede deshacer.\n\nEscribe {correo} para confirmar.",
+  "@cuentaBorrarMensaje": {
+    "description": "Explicación de la confirmación de borrar la cuenta",
+    "placeholders": {
+      "correo": {
+        "type": "String",
+        "example": "tu@correo.com"
+      }
+    }
+  },
+  "cuentaEnlaceMensaje": "Aquí: {rutinasAqui} y {sesionesAqui}.\nEn la cuenta: {rutinasCuenta} y {sesionesCuenta}.",
+  "@cuentaEnlaceMensaje": {
+    "description": "Las cifras de los dos lados en el primer enlace",
+    "placeholders": {
+      "rutinasAqui": {
+        "type": "String",
+        "example": "3 rutinas"
+      },
+      "sesionesAqui": {
+        "type": "String",
+        "example": "214 sesiones"
+      },
+      "rutinasCuenta": {
+        "type": "String",
+        "example": "2 rutinas"
+      },
+      "sesionesCuenta": {
+        "type": "String",
+        "example": "180 sesiones"
+      }
+    }
+  },
+  "cuentaEnlaceEsteDispositivo": "Mandan los de aquí ({n, plural, =1{se perderá 1 sesión de la cuenta} other{se perderán {n} sesiones de la cuenta}})",
+  "@cuentaEnlaceEsteDispositivo": {
+    "description": "Salida del primer enlace que sustituye lo de la cuenta",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "cuentaEnlaceLaCuenta": "Manda la cuenta ({n, plural, =1{se perderá 1 sesión de aquí} other{se perderán {n} sesiones de aquí}})",
+  "@cuentaEnlaceLaCuenta": {
+    "description": "Salida del primer enlace que sustituye lo local",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "cuentaEnlaceLaCuentaMensaje": "{n, plural, =1{Se sustituirá 1 sesión de este dispositivo} other{Se sustituirán {n} sesiones de este dispositivo}} por lo que hay en la cuenta. Antes se guardará una copia de seguridad en este dispositivo.",
+  "@cuentaEnlaceLaCuentaMensaje": {
+    "description": "Explicación de la confirmación de «manda la cuenta»",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "sincroFilas": "{n, plural, =0{Nada} =1{1 cambio} other{{n} cambios}}",
+  "@sincroFilas": {
+    "description": "Un recuento de filas sincronizadas",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "sincroUltimoError": "La última vez falló: {error}",
+  "@sincroUltimoError": {
+    "description": "Pie del grupo cuando la última pasada falló",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "Sin conexión"
+      }
+    }
+  },
+  "sincroAvisoRenombrada": "Ya tenías una rutina con ese nombre, así que la que llegó se llama ahora «{nombre}».",
+  "@sincroAvisoRenombrada": {
+    "description": "Aviso de rutina renombrada por choque de nombre",
+    "placeholders": {
+      "nombre": {
+        "type": "String",
+        "example": "Empuje (2)"
+      }
+    }
+  },
+  "sincroAvisoSinPadre": "Llegó algo cuyo sitio ya no existe y se descartó ({id}).",
+  "@sincroAvisoSinPadre": {
+    "description": "Aviso de una fila huérfana",
+    "placeholders": {
+      "id": {
+        "type": "String",
+        "example": "ejercicios/9c1e"
+      }
+    }
+  },
+  "sincroAvisoSeriesPerdidas": "De la sesión del {fecha} se perdieron series de un ejercicio que ya no está.",
+  "@sincroAvisoSeriesPerdidas": {
+    "description": "Aviso de series perdidas al aplicar una sesión",
+    "placeholders": {
+      "fecha": {
+        "type": "String",
+        "example": "1 ago 2026"
+      }
+    }
   }
 }

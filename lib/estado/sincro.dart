@@ -79,6 +79,7 @@ class VistaSincro {
     this.activa = false,
     this.enMarcha = false,
     this.disponible = false,
+    this.enlacePendiente = false,
     this.avisos = const [],
     this.cambios = 0,
   });
@@ -99,6 +100,18 @@ class VistaSincro {
   /// de Ajustes **no aparece**: un fork o una compilación local funcionan sin
   /// tocar nada, igual que hoy ponen `local` en la versión.
   final bool disponible;
+
+  /// Hay datos a los dos lados y el usuario todavía no ha dicho cuál manda.
+  ///
+  /// Mientras esté puesto **no se sincroniza**: una pasada normal aplicaría la
+  /// salida «fusionar» sin haberla preguntado, y aunque fusionar es la
+  /// recomendada y no pierde nada, elegir por el usuario en el único punto del
+  /// bloque donde K7 exige preguntar sería justo lo que no hay que hacer.
+  ///
+  /// Es transitorio y no se persiste: si la app se cierra con la pregunta a
+  /// medias, la pasada siguiente fusiona, que es la salida recomendada y la
+  /// única de las tres que no destruye nada.
+  final bool enlacePendiente;
 
   /// Los avisos de la última pasada, ya decodificados.
   ///
@@ -130,12 +143,17 @@ class VistaSincro {
 
   /// Lo único que cambia fuera de [Sincronizador.refrescar], que reconstruye la
   /// vista entera leyendo de la base.
-  VistaSincro copiar({bool? enMarcha, bool masCambios = false}) => VistaSincro(
+  VistaSincro copiar({
+    bool? enMarcha,
+    bool? enlacePendiente,
+    bool masCambios = false,
+  }) => VistaSincro(
     estado: estado,
     sesion: sesion,
     activa: activa,
     enMarcha: enMarcha ?? this.enMarcha,
     disponible: disponible,
+    enlacePendiente: enlacePendiente ?? this.enlacePendiente,
     avisos: avisos,
     cambios: masCambios ? cambios + 1 : cambios,
   );
@@ -185,6 +203,7 @@ class Sincronizador extends Notifier<VistaSincro> {
       activa: activa,
       enMarcha: state.enMarcha,
       disponible: true,
+      enlacePendiente: state.enlacePendiente,
       avisos: _avisosDe(estado.avisos),
       cambios: state.cambios,
     );
@@ -251,10 +270,10 @@ class Sincronizador extends Notifier<VistaSincro> {
       );
       _fallos = 0;
       await refrescar();
-      _marcar(enMarcha: false, masCambios: true);
+      _marcar(enMarcha: false, enlacePendiente: false, masCambios: true);
       return null;
     } on DecisionPendiente catch (e) {
-      _marcar(enMarcha: false);
+      _marcar(enMarcha: false, enlacePendiente: true);
       return e.lados;
     } on Object {
       _marcar(enMarcha: false);
@@ -294,7 +313,7 @@ class Sincronizador extends Notifier<VistaSincro> {
     );
     await _bd.fijarAjustes({Claves.sincroActiva: ''});
     await refrescar();
-    _marcar(masCambios: true);
+    _marcar(enlacePendiente: false, masCambios: true);
   }
 
   /// Borra la cuenta del servidor. **Los datos locales no se tocan.**
@@ -318,6 +337,9 @@ class Sincronizador extends Notifier<VistaSincro> {
     final transporte = _transporte;
     if (transporte == null || state.enMarcha) return;
     if (!state.activa || !state.conectado) return;
+    // Con la pregunta del primer enlace sin contestar no se toca nada: ver la
+    // nota de `VistaSincro.enlacePendiente`.
+    if (state.enlacePendiente) return;
 
     final ahora = reloj.ahora();
 

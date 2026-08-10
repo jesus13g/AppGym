@@ -14,6 +14,7 @@ import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
 import 'ajustes.dart';
 import 'copia_nube.dart';
+import 'cuenta.dart';
 import 'rutina.dart';
 
 class PantallaRutinas extends ConsumerWidget {
@@ -197,10 +198,15 @@ class PantallaRutinas extends ConsumerWidget {
               ],
             ),
           ),
-          // El aviso de la copia automática, que casi siempre no ocupa nada.
-          // Va aquí, en la cabecera de la primera pestaña, porque es por donde
-          // se entra a la app; y **nunca** en la ruta de entrenar.
+          // Los avisos de la copia automática y de la sincronización, que casi
+          // siempre no ocupan nada. Van aquí, en la cabecera de la primera
+          // pestaña, porque es por donde se entra a la app; y **nunca** en la
+          // ruta de entrenar.
+          //
+          // Que los dos puedan avisar a la vez son dos líneas, y es honesto:
+          // son dos cosas rotas.
           const SliverToBoxAdapter(child: AvisoCopia()),
+          const SliverToBoxAdapter(child: AvisoSincronizacion()),
           SliverFillRemaining(
             hasScrollBody: false,
             child: resumen.when(
