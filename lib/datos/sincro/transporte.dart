@@ -9,9 +9,16 @@
 /// `nube.dart`: con una interfaz pequeña que los tests sustituyen.
 ///
 /// El motor **no importa ningún SDK**: habla con [SincroTransporte]. El
-/// adaptador real llegará en la fase 8c y será el único fichero que sepa qué
-/// proveedor hay detrás; el de test es un mapa en memoria
+/// adaptador real (`supabase.dart`, fase 8c) es el único fichero del proyecto
+/// que sabe qué proveedor hay detrás; el de test es un mapa en memoria
 /// (`test/sincro_falso.dart`).
+///
+/// Son **nueve** métodos, no los seis que proponía K10. Los dos primeros de más
+/// son de la fase 8b y están razonados en cada uno: `resumen()`, para enseñar
+/// las cifras de los dos lados antes de preguntar en el primer enlace, y
+/// `vaciar()`, para «este dispositivo manda». El noveno es de la 8c:
+/// `pedirCodigo()`, porque entrar con un código de un solo uso son dos pasos y
+/// no uno.
 ///
 /// Nada de aquí importa Flutter ni drift: son datos y una interfaz.
 library;
@@ -184,10 +191,33 @@ class ErrorSincro implements Exception {
 /// red, sin cuenta y sin proveedor.
 abstract interface class SincroTransporte {
   /// La cuenta con la que se está sincronizando, o `null` si no hay ninguna.
+  ///
+  /// **Se contesta sin red.** Si hiciera falta cobertura para saber si hay
+  /// cuenta, un móvil sin línea diría «sin cuenta» y el usuario volvería a
+  /// entrar, cayendo otra vez por el primer enlace, que es el riesgo número uno
+  /// de todo el bloque.
   Future<SesionRemota?> sesionActual();
 
-  /// Entra con un enlace mágico enviado a [correo]. Espera a que se confirme.
-  Future<SesionRemota> entrar(String correo);
+  /// Pide al servidor que mande un código de un solo uso a [correo].
+  ///
+  /// Crea la cuenta si no existía: «crear cuenta» y «entrar» son el mismo botón,
+  /// como pide K3.
+  Future<void> pedirCodigo(String correo);
+
+  /// Entra con el código que el usuario acaba de recibir.
+  ///
+  /// **Un código tecleado, no un enlace mágico**, aunque K3 dijera lo segundo.
+  /// Un enlace que vuelve a la app exige deep links, un *intent-filter* en el
+  /// manifiesto y un dominio de redirección configurado en el proveedor; aquí el
+  /// APK se instala a mano desde una release y un *fork* tendría que montar todo
+  /// eso para que la funcionalidad existiera. El código llega en el mismo correo
+  /// y no depende de nada. Es la misma clase de decisión que renunciar a
+  /// `google_sign_in` en la fase 8a.
+  ///
+  /// Lanza [ErrorSincro] con motivo `rechazado` si el código no vale o caducó:
+  /// el usuario puede arreglarlo tecleando otra vez, así que no se reintenta
+  /// solo y el mensaje se enseña tal cual.
+  Future<SesionRemota> entrar(String correo, String codigo);
 
   /// Cierra la sesión. **No borra nada**, ni aquí ni en el servidor.
   Future<void> salir();
