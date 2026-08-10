@@ -46,3 +46,13 @@ media/
 # Previas de usar y tirar de tool/musculatura.py
 tool/previa.svg
 tool/previa.html
+
+# El servidor (servidor/). El .env lleva la contraseña de la base y la llave con
+# la que se firman los accesos: no se versiona nunca. El ejemplo, sí.
+servidor/.env
+servidor/copias/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
