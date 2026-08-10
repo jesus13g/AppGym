@@ -16,6 +16,7 @@ import 'package:drift_flutter/drift_flutter.dart';
 import '../l10n/textos.dart';
 import 'ajustes.dart';
 import 'esquemas.dart';
+import 'identidad.dart';
 // Solo por el umbral de repeticiones fiables, que las agregaciones de 1RM
 // necesitan escribir en el SQL. `metricas.dart` importa a su vez este fichero
 // por los tipos de sus parámetros; el ciclo es legal en Dart y preferible a
@@ -52,8 +53,52 @@ const coloresRutina = <String>[
   '#FFD60A', // amarillo
 ];
 
+/// La versión de una fila: cuándo se tocó por última vez, para saber cuál de
+/// las dos copias es la buena y cuáles quedan por subir.
+///
+/// Lo pone [selloLocal] al escribir y lo pisa el sello del servidor al
+/// confirmar la subida (`sincro/motor.dart`). Una fila con `actualizado` mayor
+/// que el cursor de subida es una fila que este móvil ha cambiado y el servidor
+/// todavía no tiene: eso, y no comparar relojes, es lo que resuelve los
+/// conflictos.
+///
+/// Lleva valor por defecto en SQL —cero— porque sin él `ALTER TABLE ADD COLUMN`
+/// no admite una columna obligatoria, y la v8 se añade sobre bases que ya
+/// existen. Ese cero **no es un sello válido**: significa «nadie ha sellado esta
+/// fila», que es un fallo de programación, así que toda escritura pasa
+/// [selloLocal] a mano y `test/sincro_sellos_test.dart` recorre las escrituras
+/// públicas una por una para que ninguna se quede sin él.
+///
+/// No se usa `clientDefault`, que sellaría solo las inserciones: drift no deja
+/// combinarlo con `withDefault`, y sin el valor por defecto en SQL la migración
+/// no se puede escribir.
+mixin ColumnaVersion on Table {
+  IntColumn get actualizado => integer().withDefault(const Constant(0))();
+}
+
+/// La identidad de una fila entre dispositivos.
+///
+/// Solo la llevan las cuatro tablas cuya clave natural no sirve: una rutina se
+/// puede renombrar, un ejercicio no es único ni por nombre ni por catálogo, y
+/// dos sesiones del mismo día en la misma rutina son dos sesiones distintas.
+/// `medidas`, `favoritos` y `ajustes` **no la llevan** porque ya tienen una
+/// clave estable en los dos móviles —`(fecha, tipo)`, `idCatalogo` y `clave`—,
+/// y darles además un `uuid` solo conseguiría que la misma medida llegara dos
+/// veces con dos identidades y chocara contra su índice único.
+///
+/// La unicidad va como índice y no como `UNIQUE` de columna porque SQLite no
+/// deja añadir una columna única con `ALTER TABLE`, y esto se añade en la
+/// migración a la v8 sobre bases que ya existen. El valor por defecto —la cadena
+/// vacía— está por el mismo motivo que el cero de [ColumnaVersion] y tampoco es
+/// un valor válido: el índice único hace que la segunda fila sin identidad falle
+/// en el acto, en vez de dejar dos filas que la sincronización creería la misma.
+mixin ColumnaIdentidad on Table {
+  TextColumn get uuid => text().withDefault(const Constant(''))();
+}
+
 @DataClassName('Rutina')
-class Rutinas extends Table {
+@TableIndex(name: 'idx_rutinas_uuid', columns: {#uuid}, unique: true)
+class Rutinas extends Table with ColumnaIdentidad, ColumnaVersion {
   IntColumn get id => integer().autoIncrement()();
 
   /// No se permiten nombres duplicados.
@@ -64,7 +109,8 @@ class Rutinas extends Table {
 }
 
 @DataClassName('Entrenamiento')
-class Entrenamientos extends Table {
+@TableIndex(name: 'idx_entrenamientos_uuid', columns: {#uuid}, unique: true)
+class Entrenamientos extends Table with ColumnaIdentidad, ColumnaVersion {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get idRutina =>
       integer().references(Rutinas, #id, onDelete: KeyAction.cascade)();
@@ -114,7 +160,7 @@ class SesionesActivas extends Table {
 /// hubiera uno guardado. Un favorito cuyo id ya no exista se cae solo del
 /// `join` de [AppBD.favoritos], que es el peor caso admisible.
 @DataClassName('Favorito')
-class Favoritos extends Table {
+class Favoritos extends Table with ColumnaVersion {
   TextColumn get idCatalogo => text()();
   DateTimeColumn get creado => dateTime()();
 
@@ -139,7 +185,7 @@ class Vistos extends Table {
 /// Tabla genérica en vez de una columna por medida: añadir «cuello» dentro de
 /// un año no debería costar una migración.
 @DataClassName('Medida')
-class Medidas extends Table {
+class Medidas extends Table with ColumnaVersion {
   IntColumn get id => integer().autoIncrement()();
 
   /// Siempre a medianoche: una entrada por día y tipo.
@@ -200,7 +246,7 @@ const tiposMedida = <(String, String)>[
 /// Una tabla de dos columnas en vez de un fichero aparte: entra en la misma
 /// copia de seguridad y en la misma transacción que el resto de los datos.
 @DataClassName('Ajuste')
-class AjustesTabla extends Table {
+class AjustesTabla extends Table with ColumnaVersion {
   @override
   String get tableName => 'ajustes';
 
@@ -209,6 +255,78 @@ class AjustesTabla extends Table {
 
   @override
   Set<Column> get primaryKey => {clave};
+}
+
+/// Lo que se borró aquí, para que el borrado llegue al otro dispositivo.
+///
+/// Un `DELETE` desaparece, y desde el otro móvil una fila borrada no se
+/// distingue de una fila que él tiene y este nunca tuvo. La lápida es lo que
+/// convierte «ya no está» en un hecho que se puede contar.
+///
+/// **Va en una tabla aparte y no como una columna `borrado` en cada tabla**, que
+/// es lo que proponía la especificación. Marcar la fila en su sitio obligaría a
+/// filtrar las cincuenta consultas de este fichero —una que se olvide enseña
+/// datos borrados—, dejaría el nombre de una rutina borrada ocupando su índice
+/// único, y anularía los `ON DELETE CASCADE`, que habría que reescribir a mano.
+/// Aquí el borrado sigue siendo un borrado de verdad y nada de lo que ya
+/// funciona cambia.
+///
+/// [tabla] es el nombre de la tabla y [clave] la identidad de la fila en ella:
+/// el `uuid` donde lo hay, y la clave natural en `medidas` (`tipo|fecha`),
+/// `favoritos` (`idCatalogo`) y `ajustes` (`clave`).
+///
+/// Los hijos no llevan lápida propia: al aplicar la del padre el `CASCADE` se
+/// los lleva, que es exactamente el resultado que describe K5 —«la sesión llega
+/// y se descarta con su padre»—.
+@DataClassName('Lapida')
+class Lapidas extends Table {
+  @override
+  String get tableName => 'lapidas';
+
+  TextColumn get tabla => text()();
+  TextColumn get clave => text()();
+  IntColumn get actualizado => integer().withDefault(const Constant(0))();
+
+  @override
+  Set<Column> get primaryKey => {tabla, clave};
+}
+
+/// El estado de la propia sincronización, en una fila.
+///
+/// **No va en la tabla `ajustes`** por el mismo motivo que el token: `ajustes`
+/// se exporta en la copia de seguridad, y un cursor importado desde otro móvil
+/// haría que la sincronización se saltara datos sin avisar. Aquí, además, no es
+/// una preferencia del usuario: es contabilidad de este dispositivo.
+@DataClassName('EstadoSincro')
+class SincroEstado extends Table {
+  @override
+  String get tableName => 'sincro_estado';
+
+  /// Siempre 1: la tabla es de una fila y la clave existe para garantizarlo.
+  IntColumn get id => integer()();
+
+  /// Hasta dónde está subido. Lo que tenga [ColumnaVersion.actualizado] por
+  /// encima es lo que este móvil ha cambiado y el servidor todavía no tiene.
+  IntColumn get cursorSubida => integer().withDefault(const Constant(0))();
+
+  /// Hasta dónde está bajado. Se le pide al servidor lo posterior.
+  IntColumn get cursorBajada => integer().withDefault(const Constant(0))();
+
+  DateTimeColumn get ultimaSincro => dateTime().nullable()();
+
+  /// Filas subidas y bajadas en la última pasada, para la pantalla de detalle.
+  IntColumn get subidas => integer().withDefault(const Constant(0))();
+  IntColumn get bajadas => integer().withDefault(const Constant(0))();
+
+  /// Lo que no se pudo resolver sin perder algo, como JSON. Nunca es un
+  /// diálogo: es una lista que se lee cuando se quiere y se descarta.
+  TextColumn get avisos => text().withDefault(const Constant('[]'))();
+
+  /// El último error, ya legible. Nulo si la última pasada fue bien.
+  TextColumn get ultimoError => text().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
 }
 
 /// Ejercicio del catálogo, sembrado desde assets/ejercicios.es.json.
@@ -254,7 +372,8 @@ class CatalogoEjercicios extends Table {
 /// Si [idCatalogo] apunta a una ficha, hereda de ella imagen, músculos e
 /// instrucciones. Si es nulo, es un ejercicio personalizado del usuario.
 @DataClassName('Ejercicio')
-class Ejercicios extends Table {
+@TableIndex(name: 'idx_ejercicios_uuid', columns: {#uuid}, unique: true)
+class Ejercicios extends Table with ColumnaIdentidad, ColumnaVersion {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get idRutina =>
       integer().references(Rutinas, #id, onDelete: KeyAction.cascade)();
@@ -300,6 +419,15 @@ class Ejercicios extends Table {
 }
 
 /// Una serie registrada: una fila por serie hecha.
+///
+/// **Es la única tabla del usuario sin `uuid` ni `actualizado`, y es a
+/// propósito.** Una sesión y sus series se reconcilian como un bloque (K5): si
+/// un móvil añadió una quinta serie y el otro corrigió el peso de la segunda,
+/// no se mezclan, gana la sesión entera más reciente. Con el bloque como unidad
+/// la serie no necesita identidad propia —viaja dentro de su entrenamiento— y
+/// la tabla más numerosa, la que hace grande la migración a la v8, se queda sin
+/// tocar. Lo que sí hace falta es que **escribir una serie selle su
+/// entrenamiento**, que es lo que convierte al bloque en una unidad de verdad.
 @DataClassName('Serie')
 class SeriesTabla extends Table {
   @override
@@ -744,6 +872,8 @@ class RecordSesion {
     Favoritos,
     Vistos,
     Medidas,
+    Lapidas,
+    SincroEstado,
   ],
 )
 class AppBD extends _$AppBD {
@@ -764,7 +894,7 @@ class AppBD extends _$AppBD {
       );
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -779,11 +909,16 @@ class AppBD extends _$AppBD {
       from4To5: _de4A5,
       from5To6: _de5A6,
       from6To7: _de6A7,
+      from7To8: _de7A8,
     ),
     beforeOpen: (details) async {
       // Sin esto SQLite ignora las claves foráneas y los ON DELETE CASCADE
       // no llegan a ejecutarse.
       await customStatement('PRAGMA foreign_keys = ON');
+      // Y sin esto, un móvil con el reloj atrasado —o unos sellos que puso el
+      // servidor y van por delante de la hora local— repetiría sellos ya
+      // usados, y una fila cambiada aquí parecería ya subida.
+      sembrarSello(await mayorSello());
     },
   );
 
@@ -864,6 +999,69 @@ class AppBD extends _$AppBD {
     await m.addColumn(esquema.ejercicios, esquema.ejercicios.estrategia);
   }
 
+  /// v7 → v8: identidad y versión en cada fila que se sincroniza.
+  ///
+  /// Es la migración más grande desde la v2 y la segunda que **toca filas** en
+  /// vez de solo añadir sitio donde ponerlas, así que se respalda el fichero
+  /// antes (`respaldo.dart`, el mismo que ya protegía la v2) y todo lo de aquí
+  /// va dentro de la transacción que `stepByStep` abre.
+  ///
+  /// El relleno se hace en Dart y no en SQL por dos motivos: SQLite no genera
+  /// uuid, y el sello tiene que salir del mismo contador monótono que usa el
+  /// resto de la app. Se rellena en un solo `UPDATE` por fila de las tablas con
+  /// identidad, y en uno por tabla en las que solo llevan sello.
+  ///
+  /// **`serie` no se toca**, que es lo que hace que esta migración sea barata en
+  /// una base de dos años: la sesión es la unidad de reconciliación y las series
+  /// viajan dentro de ella.
+  ///
+  /// Todo lo que existía se sella con el **mismo** valor, y no con la fecha en
+  /// que se creó cada fila: son datos que este dispositivo tiene y el servidor
+  /// no, y lo que dice el sello no es cuándo se entrenó sino que está pendiente
+  /// de subir. El índice único del `uuid` se crea **después** de rellenarlo, o
+  /// chocarían todas las filas con la cadena vacía del valor por defecto.
+  Future<void> _de7A8(Migrator m, Schema8 esquema) async {
+    for (final tabla in [
+      esquema.rutinas,
+      esquema.ejercicios,
+      esquema.entrenamientos,
+    ]) {
+      await m.addColumn(tabla, tabla.columnsByName['uuid']!);
+    }
+    for (final tabla in [
+      esquema.rutinas,
+      esquema.ejercicios,
+      esquema.entrenamientos,
+      esquema.medidas,
+      esquema.favoritos,
+      esquema.ajustes,
+    ]) {
+      await m.addColumn(tabla, tabla.columnsByName['actualizado']!);
+    }
+    await m.createTable(esquema.lapidas);
+    await m.createTable(esquema.sincroEstado);
+
+    final sello = selloLocal();
+    for (final tabla in ['rutinas', 'ejercicios', 'entrenamientos']) {
+      final filas = await customSelect(
+        'SELECT id FROM $tabla',
+      ).map((f) => f.read<int>('id')).get();
+      for (final id in filas) {
+        await customStatement(
+          'UPDATE $tabla SET uuid = ?, actualizado = ? WHERE id = ?',
+          [uuidV4(), sello, id],
+        );
+      }
+    }
+    for (final tabla in ['medidas', 'favoritos', 'ajustes']) {
+      await customStatement('UPDATE $tabla SET actualizado = ?', [sello]);
+    }
+
+    await m.createIndex(esquema.idxRutinasUuid);
+    await m.createIndex(esquema.idxEjerciciosUuid);
+    await m.createIndex(esquema.idxEntrenamientosUuid);
+  }
+
   /// v2 → v3: los ejercicios ganan su posición dentro de la rutina.
   ///
   /// Las rutinas existentes conservan el orden que tenían, que era el de
@@ -900,6 +1098,8 @@ class AppBD extends _$AppBD {
       RutinasCompanion.insert(
         nombre: nombre,
         color: Value(coloresRutina[usadas % coloresRutina.length]),
+        uuid: Value(uuidV4()),
+        actualizado: Value(selloLocal()),
       ),
     );
   }
@@ -963,8 +1163,12 @@ class AppBD extends _$AppBD {
   }
 
   /// Elimina una rutina con sus entrenamientos y ejercicios (por el cascade).
-  Future<void> borrarRutina(int idRutina) =>
-      (delete(rutinas)..where((r) => r.id.equals(idRutina))).go();
+  Future<void> borrarRutina(int idRutina) => transaction(() async {
+    final vieja = await rutina(idRutina);
+    if (vieja == null) return;
+    await (delete(rutinas)..where((r) => r.id.equals(idRutina))).go();
+    await _enterrar(TablaSincro.rutinas, vieja.uuid);
+  });
 
   /// Renombra una rutina. Devuelve `false` si el nombre ya lo usa otra.
   Future<bool> renombrarRutina(int idRutina, String nombre) async {
@@ -978,7 +1182,12 @@ class AppBD extends _$AppBD {
     if (choca != null) return false;
 
     final filas = await (update(rutinas)..where((r) => r.id.equals(idRutina)))
-        .write(RutinasCompanion(nombre: Value(nombre)));
+        .write(
+          RutinasCompanion(
+            nombre: Value(nombre),
+            actualizado: Value(selloLocal()),
+          ),
+        );
     return filas > 0;
   }
 
@@ -1064,6 +1273,8 @@ class AppBD extends _$AppBD {
         nombre: nombre,
         descripcion: Value(descripcion),
         orden: Value(await _siguienteOrden(idRutina)),
+        uuid: Value(uuidV4()),
+        actualizado: Value(selloLocal()),
       ),
     );
     return true;
@@ -1085,9 +1296,14 @@ class AppBD extends _$AppBD {
   Future<void> reordenarEjercicios(int idRutina, List<int> idsEnOrden) =>
       transaction(() async {
         for (final (posicion, id) in idsEnOrden.indexed) {
-          await (update(ejercicios)
-                ..where((e) => e.id.equals(id) & e.idRutina.equals(idRutina)))
-              .write(EjerciciosCompanion(orden: Value(posicion)));
+          await (update(
+            ejercicios,
+          )..where((e) => e.id.equals(id) & e.idRutina.equals(idRutina))).write(
+            EjerciciosCompanion(
+              orden: Value(posicion),
+              actualizado: Value(selloLocal()),
+            ),
+          );
         }
       });
 
@@ -1125,15 +1341,24 @@ class AppBD extends _$AppBD {
       EjerciciosCompanion(
         idRutina: Value(idRutinaDestino),
         orden: Value(await _siguienteOrden(idRutinaDestino)),
+        actualizado: Value(selloLocal()),
       ),
     );
     return true;
   }
 
   /// Quita un ejercicio de una rutina, con sus series (por el cascade).
-  Future<void> borrarEjercicio(int idRutina, int idEjercicio) => (delete(
-    ejercicios,
-  )..where((e) => e.idRutina.equals(idRutina) & e.id.equals(idEjercicio))).go();
+  Future<void> borrarEjercicio(int idRutina, int idEjercicio) =>
+      transaction(() async {
+        final viejo =
+            await (select(ejercicios)..where(
+                  (e) => e.idRutina.equals(idRutina) & e.id.equals(idEjercicio),
+                ))
+                .getSingleOrNull();
+        if (viejo == null) return;
+        await (delete(ejercicios)..where((e) => e.id.equals(idEjercicio))).go();
+        await _enterrar(TablaSincro.ejercicios, viejo.uuid);
+      });
 
   /// Un ejercicio con su ficha de catálogo resuelta.
   Future<EjercicioConFicha?> ejercicio(int idEjercicio) async {
@@ -1301,17 +1526,24 @@ class AppBD extends _$AppBD {
   // ── Favoritos y vistos recientemente ───────────────────────────────────────
 
   /// Marca o desmarca un ejercicio del catálogo como favorito.
-  Future<void> marcarFavorito(String idCatalogo, bool valor) async {
-    if (!valor) {
-      await (delete(
-        favoritos,
-      )..where((f) => f.idCatalogo.equals(idCatalogo))).go();
-      return;
-    }
-    await into(favoritos).insertOnConflictUpdate(
-      FavoritosCompanion.insert(idCatalogo: idCatalogo, creado: DateTime.now()),
-    );
-  }
+  Future<void> marcarFavorito(String idCatalogo, bool valor) =>
+      transaction(() async {
+        if (!valor) {
+          await (delete(
+            favoritos,
+          )..where((f) => f.idCatalogo.equals(idCatalogo))).go();
+          await _enterrar(TablaSincro.favoritos, idCatalogo);
+          return;
+        }
+        await into(favoritos).insertOnConflictUpdate(
+          FavoritosCompanion.insert(
+            idCatalogo: idCatalogo,
+            creado: DateTime.now(),
+            actualizado: Value(selloLocal()),
+          ),
+        );
+        await _desenterrar(TablaSincro.favoritos, idCatalogo);
+      });
 
   /// Los favoritos, del más reciente al más antiguo.
   ///
@@ -1413,16 +1645,27 @@ class AppBD extends _$AppBD {
   /// primaria: la primaria es el `id` autoincremental, que nunca choca, de modo
   /// que un `insertOnConflictUpdate` normal reventaría contra el índice único
   /// en vez de sustituir el valor del día.
-  Future<void> registrarMedida(DateTime fecha, String tipo, double valor) {
-    final dia = DateTime(fecha.year, fecha.month, fecha.day);
-    return into(medidas).insert(
-      MedidasCompanion.insert(fecha: dia, tipo: tipo, valor: valor),
-      onConflict: DoUpdate(
-        (_) => MedidasCompanion(valor: Value(valor)),
-        target: [medidas.fecha, medidas.tipo],
-      ),
-    );
-  }
+  Future<void> registrarMedida(DateTime fecha, String tipo, double valor) =>
+      transaction(() async {
+        final dia = DateTime(fecha.year, fecha.month, fecha.day);
+        final sello = selloLocal();
+        await into(medidas).insert(
+          MedidasCompanion.insert(
+            fecha: dia,
+            tipo: tipo,
+            valor: valor,
+            actualizado: Value(sello),
+          ),
+          onConflict: DoUpdate(
+            (_) => MedidasCompanion(
+              valor: Value(valor),
+              actualizado: Value(sello),
+            ),
+            target: [medidas.fecha, medidas.tipo],
+          ),
+        );
+        await _desenterrar(TablaSincro.medidas, claveMedida(dia, tipo));
+      });
 
   /// Una medida a lo largo del tiempo, de la más antigua a la más reciente.
   Future<List<Medida>> serieMedida(
@@ -1449,12 +1692,15 @@ class AppBD extends _$AppBD {
           .getSingleOrNull();
 
   Future<void> borrarMedida(DateTime fecha, String tipo) =>
-      (delete(medidas)..where(
-            (m) =>
-                m.fecha.equals(DateTime(fecha.year, fecha.month, fecha.day)) &
-                m.tipo.equals(tipo),
-          ))
-          .go();
+      transaction(() async {
+        final dia = DateTime(fecha.year, fecha.month, fecha.day);
+        final filas = await (delete(
+          medidas,
+        )..where((m) => m.fecha.equals(dia) & m.tipo.equals(tipo))).go();
+        if (filas > 0) {
+          await _enterrar(TablaSincro.medidas, claveMedida(dia, tipo));
+        }
+      });
 
   Future<List<Medida>> todasLasMedidas() =>
       (select(medidas)..orderBy([
@@ -1519,6 +1765,8 @@ class AppBD extends _$AppBD {
           fecha: fecha,
           nota: Value(_limpiar(nota)),
           duracionSeg: Value(duracionSeg),
+          uuid: Value(uuidV4()),
+          actualizado: Value(selloLocal()),
         ),
       );
       await _insertarSeries(idEntrenamiento, conSeries);
@@ -1564,12 +1812,15 @@ class AppBD extends _$AppBD {
     if (existe == null) return false;
 
     await transaction(() async {
+      // El sello sube aunque lo que cambie sea una serie: la sesión es la
+      // unidad de reconciliación y las series no llevan versión propia.
       await (update(
         entrenamientos,
       )..where((e) => e.id.equals(idEntrenamiento))).write(
         EntrenamientosCompanion(
           fecha: Value(fecha),
           nota: Value(_limpiar(nota)),
+          actualizado: Value(selloLocal()),
         ),
       );
       await (delete(
@@ -1582,7 +1833,16 @@ class AppBD extends _$AppBD {
 
   /// Borra una sesión con sus series (por el cascade).
   Future<void> borrarEntrenamiento(int idEntrenamiento) =>
-      (delete(entrenamientos)..where((e) => e.id.equals(idEntrenamiento))).go();
+      transaction(() async {
+        final vieja = await (select(
+          entrenamientos,
+        )..where((e) => e.id.equals(idEntrenamiento))).getSingleOrNull();
+        if (vieja == null) return;
+        await (delete(
+          entrenamientos,
+        )..where((e) => e.id.equals(idEntrenamiento))).go();
+        await _enterrar(TablaSincro.entrenamientos, vieja.uuid);
+      });
 
   Future<void> _insertarSeries(
     int idEntrenamiento,
@@ -2064,7 +2324,11 @@ class AppBD extends _$AppBD {
 
   Future<void> fijarAjuste(String clave, String valor) =>
       into(ajustesTabla).insertOnConflictUpdate(
-        AjustesTablaCompanion.insert(clave: clave, valor: valor),
+        AjustesTablaCompanion.insert(
+          clave: clave,
+          valor: valor,
+          actualizado: Value(selloLocal()),
+        ),
       );
 
   /// Escribe varias preferencias de golpe, en una transacción.
@@ -2108,7 +2372,10 @@ class AppBD extends _$AppBD {
   /// Fija el descanso propio de un ejercicio. `null` vuelve al valor global.
   Future<void> fijarDescansoEjercicio(int idEjercicio, int? segundos) =>
       (update(ejercicios)..where((e) => e.id.equals(idEjercicio))).write(
-        EjerciciosCompanion(descansoSeg: Value(segundos)),
+        EjerciciosCompanion(
+          descansoSeg: Value(segundos),
+          actualizado: Value(selloLocal()),
+        ),
       );
 
   /// Fija la configuración de progresión propia de un ejercicio.
@@ -2130,6 +2397,7 @@ class AppBD extends _$AppBD {
       repMax: repMax,
       incrementoKg: incrementoKg,
       estrategia: estrategia,
+      actualizado: Value(selloLocal()),
     ),
   );
 
@@ -2359,9 +2627,32 @@ class AppBD extends _$AppBD {
   // recalcularlos aquí sería reinterpretar los datos del usuario. Quien las
   // llama es `copia.dart`, siempre dentro de una `transaction()`.
 
-  Future<int> restaurarRutina(String nombre, String? color) => into(
-    rutinas,
-  ).insert(RutinasCompanion.insert(nombre: nombre, color: Value(color)));
+  /// La identidad de la copia se conserva **si está libre**.
+  ///
+  /// Restaurar en un móvil nuevo y enlazarlo después con la cuenta tiene que
+  /// reconocer las filas, no duplicarlas. Pero si ese `uuid` ya está aquí —una
+  /// copia importada dos veces, o fusionada sobre sus propios datos—, se genera
+  /// uno nuevo: el usuario ha pedido añadir, y dos filas con la misma identidad
+  /// no son dos filas.
+  Future<String> _identidadLibre(
+    String? propuesta,
+    Future<bool> Function(String) ocupada,
+  ) async {
+    if (propuesta == null || propuesta.isEmpty) return uuidV4();
+    return await ocupada(propuesta) ? uuidV4() : propuesta;
+  }
+
+  Future<int> restaurarRutina(String nombre, String? color, {String? uuid}) =>
+      _identidadLibre(uuid, (u) async => await rutinaPorUuid(u) != null).then(
+        (identidad) => into(rutinas).insert(
+          RutinasCompanion.insert(
+            nombre: nombre,
+            color: Value(color),
+            uuid: Value(identidad),
+            actualizado: Value(selloLocal()),
+          ),
+        ),
+      );
 
   Future<int> restaurarEjercicio(
     int idRutina, {
@@ -2374,7 +2665,8 @@ class AppBD extends _$AppBD {
     int? repMax,
     double? incrementoKg,
     int? estrategia,
-  }) => into(ejercicios).insert(
+    String? uuid,
+  }) async => into(ejercicios).insert(
     EjerciciosCompanion.insert(
       idRutina: idRutina,
       nombre: nombre,
@@ -2386,6 +2678,13 @@ class AppBD extends _$AppBD {
       repMax: Value(repMax),
       incrementoKg: Value(incrementoKg),
       estrategia: Value(estrategia),
+      uuid: Value(
+        await _identidadLibre(
+          uuid,
+          (u) async => await ejercicioPorUuid(u) != null,
+        ),
+      ),
+      actualizado: Value(selloLocal()),
     ),
   );
 
@@ -2394,12 +2693,20 @@ class AppBD extends _$AppBD {
     DateTime fecha, {
     String? nota,
     int? duracionSeg,
-  }) => into(entrenamientos).insert(
+    String? uuid,
+  }) async => into(entrenamientos).insert(
     EntrenamientosCompanion.insert(
       idRutina: idRutina,
       fecha: fecha,
       nota: Value(_limpiar(nota)),
       duracionSeg: Value(duracionSeg),
+      uuid: Value(
+        await _identidadLibre(
+          uuid,
+          (u) async => await entrenamientoPorUuid(u) != null,
+        ),
+      ),
+      actualizado: Value(selloLocal()),
     ),
   );
 
@@ -2441,19 +2748,516 @@ class AppBD extends _$AppBD {
   /// medidas»—, y dejaría además la cuenta olvidada en la tabla con su token
   /// todavía en el almacén seguro. Por lo mismo, importar una copia con
   /// «reemplazar» no apaga la copia automática de este dispositivo.
-  Future<void> borrarTodosLosDatos() => transaction(() async {
-    final locales = {
-      for (final entrada in (await ajustesCrudos()).entries)
-        if (Claves.locales.contains(entrada.key)) entrada.key: entrada.value,
-    };
+  /// Con [conLapidas] en falso el borrado **no se propaga**: es lo que hace
+  /// falta en «la cuenta manda» del primer enlace (K7), donde lo local se
+  /// sustituye por lo remoto y enterrar lo que se va vaciaría también la nube,
+  /// que es justo el lado que se quiere conservar. En el botón de Ajustes va en
+  /// cierto: ahí el usuario sí está diciendo que esos datos se vayan.
+  Future<void> borrarTodosLosDatos({bool conLapidas = true}) => transaction(
+    () async {
+      final locales = {
+        for (final entrada in (await ajustesCrudos()).entries)
+          if (Claves.locales.contains(entrada.key)) entrada.key: entrada.value,
+      };
 
-    await delete(sesionesActivas).go();
-    await delete(rutinas).go();
-    await delete(medidas).go();
-    await delete(favoritos).go();
-    await delete(vistos).go();
-    await delete(ajustesTabla).go();
+      if (conLapidas) await _enterrarTodo();
 
-    await fijarAjustes(locales);
+      await delete(sesionesActivas).go();
+      await delete(rutinas).go();
+      await delete(medidas).go();
+      await delete(favoritos).go();
+      await delete(vistos).go();
+      await delete(ajustesTabla).go();
+
+      await fijarAjustes(locales);
+    },
+  );
+
+  // ── Sincronización ─────────────────────────────────────────────────────────
+  //
+  // Lo que el motor (`sincro/motor.dart`) necesita de la base, y nada más. Son
+  // escrituras que **no** aplican las reglas de los métodos normales —no ponen
+  // color, no recalculan el orden, no entierran lo que borran— porque lo que
+  // llega ya viene decidido desde el otro lado, igual que pasa con las de
+  // restauración de una copia.
+
+  /// El mayor sello que hay en la base, cursores incluidos.
+  ///
+  /// De una sola consulta: son ocho `MAX` sobre tablas pequeñas y se pide una
+  /// vez por apertura, para sembrar el contador de [selloLocal].
+  Future<int> mayorSello() async {
+    final fila = await customSelect('''
+      SELECT MAX(m) AS s FROM (
+        SELECT MAX(actualizado) AS m FROM rutinas
+        UNION ALL SELECT MAX(actualizado) FROM ejercicios
+        UNION ALL SELECT MAX(actualizado) FROM entrenamientos
+        UNION ALL SELECT MAX(actualizado) FROM medidas
+        UNION ALL SELECT MAX(actualizado) FROM favoritos
+        UNION ALL SELECT MAX(actualizado) FROM ajustes
+        UNION ALL SELECT MAX(actualizado) FROM lapidas
+        UNION ALL SELECT MAX(cursor_subida) FROM sincro_estado
+        UNION ALL SELECT MAX(cursor_bajada) FROM sincro_estado
+      )
+    ''').getSingle();
+    return fila.read<int?>('s') ?? 0;
+  }
+
+  /// El estado de la sincronización, con sus valores de fábrica si no hay fila.
+  ///
+  /// La fila se escribe la primera vez que hay algo que anotar; hasta entonces
+  /// «nunca se ha sincronizado» y «los cursores a cero» son lo mismo, y devolver
+  /// eso evita que leer el estado tenga que escribir.
+  static const sinSincronizar = EstadoSincro(
+    id: 1,
+    cursorSubida: 0,
+    cursorBajada: 0,
+    subidas: 0,
+    bajadas: 0,
+    avisos: '[]',
+  );
+
+  Future<EstadoSincro> estadoSincro() async =>
+      await (select(
+        sincroEstado,
+      )..where((e) => e.id.equals(1))).getSingleOrNull() ??
+      sinSincronizar;
+
+  /// Escribe las partes del estado que se pasen; el resto se queda como está.
+  Future<void> fijarEstadoSincro({
+    Value<int> cursorSubida = const Value.absent(),
+    Value<int> cursorBajada = const Value.absent(),
+    Value<DateTime?> ultimaSincro = const Value.absent(),
+    Value<int> subidas = const Value.absent(),
+    Value<int> bajadas = const Value.absent(),
+    Value<String> avisos = const Value.absent(),
+    Value<String?> ultimoError = const Value.absent(),
+  }) => into(sincroEstado).insertOnConflictUpdate(
+    SincroEstadoCompanion(
+      id: const Value(1),
+      cursorSubida: cursorSubida,
+      cursorBajada: cursorBajada,
+      ultimaSincro: ultimaSincro,
+      subidas: subidas,
+      bajadas: bajadas,
+      avisos: avisos,
+      ultimoError: ultimoError,
+    ),
+  );
+
+  /// La clave con la que viaja una medida: su clave natural, no un `uuid`.
+  ///
+  /// La fecha ya está a medianoche, así que la cadena es la misma en los dos
+  /// dispositivos aunque los relojes no coincidan al segundo.
+  static String claveMedida(DateTime fecha, String tipo) =>
+      '$tipo|${fecha.toIso8601String().substring(0, 10)}';
+
+  Future<void> _enterrar(TablaSincro tabla, String clave) =>
+      into(lapidas).insertOnConflictUpdate(
+        LapidasCompanion.insert(
+          tabla: tabla.name,
+          clave: clave,
+          actualizado: Value(selloLocal()),
+        ),
+      );
+
+  Future<void> _desenterrar(TablaSincro tabla, String clave) => (delete(
+    lapidas,
+  )..where((l) => l.tabla.equals(tabla.name) & l.clave.equals(clave))).go();
+
+  /// Una lápida por cada fila que se sincroniza, antes de vaciarlo todo.
+  ///
+  /// Solo hacen falta las de los padres: al aplicarlas, el `CASCADE` del otro
+  /// móvil se lleva ejercicios y sesiones igual que se los lleva aquí.
+  Future<void> _enterrarTodo() async {
+    for (final r in await select(rutinas).get()) {
+      await _enterrar(TablaSincro.rutinas, r.uuid);
+    }
+    for (final m in await select(medidas).get()) {
+      await _enterrar(TablaSincro.medidas, claveMedida(m.fecha, m.tipo));
+    }
+    for (final f in await select(favoritos).get()) {
+      await _enterrar(TablaSincro.favoritos, f.idCatalogo);
+    }
+    for (final a in await select(ajustesTabla).get()) {
+      if (Claves.locales.contains(a.clave)) continue;
+      await _enterrar(TablaSincro.ajustes, a.clave);
+    }
+  }
+
+  // Lo pendiente de subir: lo que este móvil ha cambiado por encima del cursor.
+  // Van por tabla y no en una consulta genérica porque cada una devuelve su
+  // clase de datos, que es lo que el motor necesita para componer el paquete.
+
+  Future<List<Rutina>> rutinasDesde(int cursor) => (select(
+    rutinas,
+  )..where((r) => r.actualizado.isBiggerThanValue(cursor))).get();
+
+  Future<List<Ejercicio>> ejerciciosDesde(int cursor) => (select(
+    ejercicios,
+  )..where((e) => e.actualizado.isBiggerThanValue(cursor))).get();
+
+  Future<List<Entrenamiento>> entrenamientosDesde(int cursor) => (select(
+    entrenamientos,
+  )..where((e) => e.actualizado.isBiggerThanValue(cursor))).get();
+
+  Future<List<Medida>> medidasDesde(int cursor) => (select(
+    medidas,
+  )..where((m) => m.actualizado.isBiggerThanValue(cursor))).get();
+
+  Future<List<Favorito>> favoritosDesde(int cursor) => (select(
+    favoritos,
+  )..where((f) => f.actualizado.isBiggerThanValue(cursor))).get();
+
+  Future<List<Ajuste>> ajustesDesde(int cursor) => (select(
+    ajustesTabla,
+  )..where((a) => a.actualizado.isBiggerThanValue(cursor))).get();
+
+  // Traducir de identidad global a identidad local. Es lo único que hace el
+  // `uuid` en toda la app: dentro, se sigue trabajando con el `id` entero.
+
+  Future<Rutina?> rutinaPorUuid(String uuid) =>
+      (select(rutinas)..where((r) => r.uuid.equals(uuid))).getSingleOrNull();
+
+  Future<Rutina?> rutinaPorNombre(String nombre) => (select(
+    rutinas,
+  )..where((r) => r.nombre.equals(nombre))).getSingleOrNull();
+
+  Future<Ejercicio?> ejercicioPorUuid(String uuid) =>
+      (select(ejercicios)..where((e) => e.uuid.equals(uuid))).getSingleOrNull();
+
+  /// La fila cruda de un ejercicio. No es [ejercicio], que resuelve su ficha de
+  /// catálogo: aquí solo hace falta el camino de vuelta del id local al `uuid`.
+  Future<Ejercicio?> ejercicioPorId(int id) =>
+      (select(ejercicios)..where((e) => e.id.equals(id))).getSingleOrNull();
+
+  Future<Entrenamiento?> entrenamientoPorUuid(String uuid) => (select(
+    entrenamientos,
+  )..where((e) => e.uuid.equals(uuid))).getSingleOrNull();
+
+  Future<Medida?> medidaPorClave(DateTime fecha, String tipo) =>
+      (select(medidas)
+            ..where((m) => m.fecha.equals(fecha) & m.tipo.equals(tipo)))
+          .getSingleOrNull();
+
+  Future<Favorito?> favoritoPorId(String idCatalogo) => (select(
+    favoritos,
+  )..where((f) => f.idCatalogo.equals(idCatalogo))).getSingleOrNull();
+
+  Future<Ajuste?> ajustePorClave(String clave) => (select(
+    ajustesTabla,
+  )..where((a) => a.clave.equals(clave))).getSingleOrNull();
+
+  Future<List<Serie>> seriesDeEntrenamiento(int idEntrenamiento) =>
+      (select(seriesTabla)
+            ..where((s) => s.idEntrenamiento.equals(idEntrenamiento))
+            ..orderBy([(s) => OrderingTerm(expression: s.id)]))
+          .get();
+
+  // Escribir lo que llega. Se escribe **tal cual**, con el sello que trae y sin
+  // las reglas de los métodos normales —no ponen color, no recalculan el orden,
+  // no entierran lo que borran—: lo que llega ya viene decidido desde el otro
+  // lado, igual que pasa con la restauración de una copia.
+
+  Future<void> aplicarRutina({
+    required String uuid,
+    required String nombre,
+    required String? color,
+    required int actualizado,
+  }) => into(rutinas).insert(
+    RutinasCompanion.insert(
+      nombre: nombre,
+      color: Value(color),
+      uuid: Value(uuid),
+      actualizado: Value(actualizado),
+    ),
+    onConflict: DoUpdate(
+      (_) => RutinasCompanion(
+        nombre: Value(nombre),
+        color: Value(color),
+        actualizado: Value(actualizado),
+      ),
+      target: [rutinas.uuid],
+    ),
+  );
+
+  Future<void> aplicarEjercicio({
+    required String uuid,
+    required int idRutina,
+    required String nombre,
+    required int actualizado,
+    String? idCatalogo,
+    String? descripcion,
+    int orden = 0,
+    int? descansoSeg,
+    int? repMin,
+    int? repMax,
+    double? incrementoKg,
+    int? estrategia,
+  }) {
+    final valores = EjerciciosCompanion(
+      idRutina: Value(idRutina),
+      idCatalogo: Value(idCatalogo),
+      nombre: Value(nombre),
+      descripcion: Value(descripcion),
+      orden: Value(orden),
+      descansoSeg: Value(descansoSeg),
+      repMin: Value(repMin),
+      repMax: Value(repMax),
+      incrementoKg: Value(incrementoKg),
+      estrategia: Value(estrategia),
+      actualizado: Value(actualizado),
+    );
+    return into(ejercicios).insert(
+      valores.copyWith(uuid: Value(uuid)),
+      onConflict: DoUpdate((_) => valores, target: [ejercicios.uuid]),
+    );
+  }
+
+  /// Escribe una sesión con sus series **en bloque** y devuelve su id local.
+  ///
+  /// Las series se borran y se reinsertan enteras, que es lo que hace que la
+  /// sesión sea la unidad de reconciliación: nunca queda una mezcla de las de
+  /// aquí y las de allí. [series] apunta a ejercicios por id local, ya
+  /// resueltos por el motor.
+  Future<int> aplicarEntrenamiento({
+    required String uuid,
+    required int idRutina,
+    required DateTime fecha,
+    required int actualizado,
+    required Map<int, List<ValoresSerie>> series,
+    String? nota,
+    int? duracionSeg,
+  }) => transaction(() async {
+    final valores = EntrenamientosCompanion(
+      idRutina: Value(idRutina),
+      fecha: Value(fecha),
+      nota: Value(_limpiar(nota)),
+      duracionSeg: Value(duracionSeg),
+      actualizado: Value(actualizado),
+    );
+    await into(entrenamientos).insert(
+      valores.copyWith(uuid: Value(uuid)),
+      onConflict: DoUpdate((_) => valores, target: [entrenamientos.uuid]),
+    );
+    final id = (await entrenamientoPorUuid(uuid))!.id;
+    await (delete(
+      seriesTabla,
+    )..where((s) => s.idEntrenamiento.equals(id))).go();
+    await _insertarSeries(id, _soloConSeries(series));
+    return id;
   });
+
+  Future<void> aplicarMedida({
+    required DateTime fecha,
+    required String tipo,
+    required double valor,
+    required int actualizado,
+  }) => into(medidas).insert(
+    MedidasCompanion.insert(
+      fecha: fecha,
+      tipo: tipo,
+      valor: valor,
+      actualizado: Value(actualizado),
+    ),
+    onConflict: DoUpdate(
+      (_) => MedidasCompanion(
+        valor: Value(valor),
+        actualizado: Value(actualizado),
+      ),
+      target: [medidas.fecha, medidas.tipo],
+    ),
+  );
+
+  Future<void> aplicarFavorito({
+    required String idCatalogo,
+    required DateTime creado,
+    required int actualizado,
+  }) => into(favoritos).insertOnConflictUpdate(
+    FavoritosCompanion.insert(
+      idCatalogo: idCatalogo,
+      creado: creado,
+      actualizado: Value(actualizado),
+    ),
+  );
+
+  Future<void> aplicarAjuste({
+    required String clave,
+    required String valor,
+    required int actualizado,
+  }) => into(ajustesTabla).insertOnConflictUpdate(
+    AjustesTablaCompanion.insert(
+      clave: clave,
+      valor: valor,
+      actualizado: Value(actualizado),
+    ),
+  );
+
+  /// Borra lo que otro dispositivo borró, y dice si había algo que borrar.
+  ///
+  /// **No deja lápida**: la lápida es de quien borra, y volver a enterrar lo ya
+  /// enterrado solo haría que el borrado diera vueltas entre los dos móviles.
+  Future<bool> aplicarBorrado(TablaSincro tabla, String clave) async {
+    final filas = switch (tabla) {
+      TablaSincro.rutinas => await (delete(
+        rutinas,
+      )..where((r) => r.uuid.equals(clave))).go(),
+      TablaSincro.ejercicios => await (delete(
+        ejercicios,
+      )..where((e) => e.uuid.equals(clave))).go(),
+      TablaSincro.entrenamientos => await (delete(
+        entrenamientos,
+      )..where((e) => e.uuid.equals(clave))).go(),
+      TablaSincro.medidas => await () {
+        final [tipo, fecha] = clave.split('|');
+        return (delete(medidas)..where(
+              (m) =>
+                  m.tipo.equals(tipo) & m.fecha.equals(DateTime.parse(fecha)),
+            ))
+            .go();
+      }(),
+      TablaSincro.favoritos => await (delete(
+        favoritos,
+      )..where((f) => f.idCatalogo.equals(clave))).go(),
+      TablaSincro.ajustes => await (delete(
+        ajustesTabla,
+      )..where((a) => a.clave.equals(clave))).go(),
+    };
+    await _desenterrar(tabla, clave);
+    return filas > 0;
+  }
+
+  /// Renombra una rutina sin comprobar nada, sellándola como cambio local.
+  ///
+  /// Lo usa el motor al deshacer un choque de nombres: el nombre nuevo tiene
+  /// que subir, o el otro dispositivo no se enteraría de la desambiguación.
+  Future<void> renombrarRutinaSincro(int idRutina, String nombre, int sello) =>
+      (update(rutinas)..where((r) => r.id.equals(idRutina))).write(
+        RutinasCompanion(nombre: Value(nombre), actualizado: Value(sello)),
+      );
+
+  /// Cambia el sello de una fila ya escrita.
+  ///
+  /// Es lo que confirma una subida: la fila pasa a llevar el sello del servidor
+  /// y con eso deja de estar pendiente. Con [esperado] la escritura solo ocurre
+  /// si la fila sigue teniendo ese sello, que es como se distingue una fila
+  /// subida de una que cambió mientras se subía; devuelve si escribió.
+  ///
+  /// Sin [esperado] sella pase lo que pase, que es lo que hace falta para
+  /// devolver a pendiente una fila que sí cambió: dejarla con el sello viejo la
+  /// escondería detrás del cursor y el cambio no llegaría nunca.
+  Future<bool> resellar(
+    TablaSincro tabla,
+    String clave,
+    int sello, {
+    int? esperado,
+  }) async {
+    Expression<bool> conSello(GeneratedColumn<int> columna) =>
+        esperado == null ? const Constant(true) : columna.equals(esperado);
+
+    final filas = switch (tabla) {
+      TablaSincro.rutinas =>
+        await (update(rutinas)
+              ..where((r) => r.uuid.equals(clave) & conSello(r.actualizado)))
+            .write(RutinasCompanion(actualizado: Value(sello))),
+      TablaSincro.ejercicios =>
+        await (update(ejercicios)
+              ..where((e) => e.uuid.equals(clave) & conSello(e.actualizado)))
+            .write(EjerciciosCompanion(actualizado: Value(sello))),
+      TablaSincro.entrenamientos =>
+        await (update(entrenamientos)
+              ..where((e) => e.uuid.equals(clave) & conSello(e.actualizado)))
+            .write(EntrenamientosCompanion(actualizado: Value(sello))),
+      TablaSincro.medidas => await () {
+        final [tipo, fecha] = clave.split('|');
+        return (update(medidas)..where(
+              (m) =>
+                  m.tipo.equals(tipo) &
+                  m.fecha.equals(DateTime.parse(fecha)) &
+                  conSello(m.actualizado),
+            ))
+            .write(MedidasCompanion(actualizado: Value(sello)));
+      }(),
+      TablaSincro.favoritos =>
+        await (update(favoritos)..where(
+              (f) => f.idCatalogo.equals(clave) & conSello(f.actualizado),
+            ))
+            .write(FavoritosCompanion(actualizado: Value(sello))),
+      TablaSincro.ajustes =>
+        await (update(ajustesTabla)
+              ..where((a) => a.clave.equals(clave) & conSello(a.actualizado)))
+            .write(AjustesTablaCompanion(actualizado: Value(sello))),
+    };
+    return filas > 0;
+  }
+
+  /// Lo mismo para una lápida.
+  Future<bool> resellarLapida(
+    TablaSincro tabla,
+    String clave,
+    int sello, {
+    int? esperado,
+  }) async {
+    final consulta = update(lapidas)
+      ..where((l) => l.tabla.equals(tabla.name) & l.clave.equals(clave));
+    if (esperado != null) {
+      consulta.where((l) => l.actualizado.equals(esperado));
+    }
+    return await consulta.write(LapidasCompanion(actualizado: Value(sello))) >
+        0;
+  }
+
+  /// Cuántas sesiones hay en total. Solo lo pide el primer enlace, para poder
+  /// enseñar la cifra antes de preguntar.
+  Future<int> contarEntrenamientos() => entrenamientos.count().getSingle();
+
+  /// La lápida de una fila, si la hay.
+  Future<Lapida?> lapidaDe(TablaSincro tabla, String clave) =>
+      (select(lapidas)
+            ..where((l) => l.tabla.equals(tabla.name) & l.clave.equals(clave)))
+          .getSingleOrNull();
+
+  /// Todas las lápidas con sello posterior a [cursor].
+  Future<List<Lapida>> lapidasDesde(int cursor) =>
+      (select(lapidas)
+            ..where((l) => l.actualizado.isBiggerThanValue(cursor))
+            ..orderBy([(l) => OrderingTerm(expression: l.actualizado)]))
+          .get();
+
+  /// Entierra una fila que ya no está, sin haber tenido que leerla antes.
+  ///
+  /// Lo usa el primer enlace cuando sube lo local y hay que dejar constancia de
+  /// algo que se borró estando ya enlazado.
+  Future<void> enterrar(TablaSincro tabla, String clave) =>
+      _enterrar(tabla, clave);
+
+  /// Quita las lápidas que el servidor ya tiene y que no puede necesitar nadie.
+  ///
+  /// Una lápida confirmada sigue siendo útil mientras haya un dispositivo que
+  /// no la haya bajado, y eso no se sabe desde aquí; lo que sí se puede es no
+  /// guardarla para siempre. Se conservan las de los últimos noventa días.
+  Future<void> podarLapidas(int anteriorA) => (delete(
+    lapidas,
+  )..where((l) => l.actualizado.isSmallerThanValue(anteriorA))).go();
+}
+
+/// Las tablas que viajan, con el nombre exacto con el que viajan.
+///
+/// Es el vocabulario del protocolo: el nombre del valor entra en la lápida y en
+/// el paquete, así que **no se renombra** sin romper la compatibilidad con lo
+/// que ya haya en el servidor y en las lápidas guardadas. El orden de
+/// declaración es el orden en el que se aplican: los padres antes que los
+/// hijos.
+///
+/// `catalogo_ejercicios`, `vistos`, `sesiones_activas`, `serie`, `lapidas` y
+/// `sincro_estado` no están, y cada ausencia tiene su motivo en K6: el catálogo
+/// se regenera de un asset, los vistos son ruido, la sesión viva se reescribe
+/// cada dos segundos, las series viajan dentro de su entrenamiento y las dos
+/// últimas son la contabilidad de la propia sincronización.
+enum TablaSincro {
+  rutinas,
+  ejercicios,
+  entrenamientos,
+  medidas,
+  favoritos,
+  ajustes,
 }

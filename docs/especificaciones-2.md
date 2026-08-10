@@ -1248,6 +1248,15 @@ de un servicio externo y es el único que puede corromper datos del usuario si s
 al final del plan de entrega por eso, y la mayor parte de lo que sigue es la lista de cosas
 que hay que decidir **antes** de escribir una línea.
 
+> **Estado.** Este apartado es la especificación tal y como se escribió, y se conserva como
+> el porqué. La **fase 8a** (copia automática) y la **fase 8b** (el motor) están hechas; la
+> **8c** —el adaptador del proveedor, las cuentas y la pantalla— no. Al implementar 8b se
+> desviaron once cosas de lo que aquí se preveía, y están enumeradas y razonadas en
+> [las once desviaciones de la fase 8b](#las-once-desviaciones-de-la-fase-8b). Las tres que
+> cambian lo que este apartado dice son: las lápidas van en su propia tabla en vez de en una
+> columna `borrado`, la tabla `serie` no lleva identidad ni versión, y **el reloj no decide
+> un conflicto**.
+
 ### K1. El principio: local primero
 
 Todo lo demás se deduce de esta regla, así que va primero y no se negocia:
@@ -1761,28 +1770,35 @@ publicación del APK.
 
 ### K12. Criterios de aceptación y riesgos
 
-**Criterios de aceptación.**
+**Criterios de aceptación.** Marcados los que cierra la fase 8b; los que quedan dependen del
+adaptador, de las cuentas y de la pantalla, que son 8c.
 
-- [ ] Sin cuenta y sin red, la app se comporta **exactamente** como antes de este bloque.
-      Se comprueba pasando los 291 tests anteriores sin modificar ninguno.
+- [x] Sin cuenta y sin red, la app se comporta **exactamente** como antes de este bloque.
+      Se comprueba pasando los 441 tests anteriores sin modificar ninguno —salvo los dos
+      ajustes mecánicos que se explican en la fase 8b—.
 - [ ] `lib/datos/sincro/` es el único directorio que importa el SDK del proveedor. Hay un
-      test que lo fija, como el que fija que no se importa `material.dart`.
-- [ ] El motor de reconciliación no importa Flutter ni el SDK: recibe un `SincroTransporte`.
-- [ ] `test/sincro_test.dart` cubre los ocho escenarios de [K10](#k10-la-costura-de-test),
-      sin red.
-- [ ] La migración 7 → 8 rellena `uuid` en todas las filas de todas las tablas
-      sincronizables, pasa el test de migración desde cada versión anterior y hace el
-      respaldo previo del fichero.
-- [ ] Dos dispositivos con el mismo histórico convergen: tras sincronizar los dos, sus
+      test que lo fija, como el que fija que no se importa `material.dart`. *(8c: todavía no
+      hay SDK que aislar.)*
+- [x] El motor de reconciliación no importa Flutter ni el SDK: recibe un `SincroTransporte`.
+- [x] `test/sincro_test.dart` cubre los escenarios de [K10](#k10-la-costura-de-test), sin
+      red. El de las series que llegan antes que su entrenamiento se prueba un nivel más
+      arriba, por la desviación 7.
+- [x] La migración 7 → 8 rellena `uuid` en todas las filas de todas las tablas que lo
+      llevan, pasa el test de migración desde cada versión anterior y hace el respaldo
+      previo del fichero.
+- [x] Dos dispositivos con el mismo histórico convergen: tras sincronizar los dos, sus
       bases dan el mismo resumen (rutinas, sesiones, series, volumen total).
-- [ ] Un fallo de red al guardar un entrenamiento **no** produce ningún aviso ni bloquea
-      nada.
-- [ ] Cerrar sesión conservando los datos deja la base local intacta y utilizable.
-- [ ] Borrar la cuenta borra los datos remotos y deja los locales.
-- [ ] El token de sesión **no** aparece en la exportación de la copia de seguridad. Test.
+- [x] Un fallo de red al guardar un entrenamiento **no** produce ningún aviso ni bloquea
+      nada: el motor no se llama desde la ruta de entrenar y un error del transporte se
+      anota y se devuelve, sin tocar la base.
+- [ ] Cerrar sesión conservando los datos deja la base local intacta y utilizable. *(8c.)*
+- [ ] Borrar la cuenta borra los datos remotos y deja los locales. *(8c.)*
+- [x] Ni el token ni los cursores de sincronización aparecen en la exportación de la copia
+      de seguridad. Test. *(El token llega en 8c; lo que ya está probado es que la
+      contabilidad de la sincronización no sale.)*
 - [ ] Con la sincronización sin configurar (compilación local), el grupo de Ajustes no se
-      enseña.
-- [ ] `flutter analyze` en 0 issues y el APK sigue construyéndose en CI.
+      enseña. *(8c: todavía no hay grupo de Ajustes.)*
+- [x] `flutter analyze` en 0 issues y el APK sigue construyéndose en CI.
 
 **Riesgos.**
 
@@ -1802,29 +1818,41 @@ publicación del APK.
 ## L. Modelo de datos consolidado
 
 Estado del esquema tras aplicar este documento entero. En **negrita**, lo nuevo respecto al
-estado actual (v6).
+estado que tenía (v6). **Actualizado con lo que se construyó de verdad**: las diferencias con
+lo que este apartado preveía están en las desviaciones 1, 2 y 3 de la
+[fase 8b](#las-once-desviaciones-de-la-fase-8b).
 
 ```
-rutinas              id, nombre, color, **uuid, actualizado, borrado**
+rutinas              id, nombre, color, **uuid, actualizado**
 ejercicios           id, idRutina, idCatalogo, nombre, descripcion, orden, descansoSeg,
                      **repMin, repMax, incrementoKg, estrategia**,
-                     **uuid, actualizado, borrado**
+                     **uuid, actualizado**
 catalogo_ejercicios  (sin cambios de columnas; cambia el contenido de `busqueda`,
                      que pasa a ser multilingüe — I4)
 entrenamientos       id, idRutina, fecha, nota, duracionSeg,
-                     **uuid, actualizado, borrado**
-serie                id, idEntrenamiento, idEjercicio, nSerie, repeticiones, peso,
-                     calentamiento, rpe, nota, **uuid, actualizado, borrado**
+                     **uuid, actualizado**
+serie                (sin cambios: la sesión es la unidad de reconciliación y sus series
+                     viajan dentro de ella, así que no necesitan identidad ni versión)
 ajustes              clave, valor, **actualizado**
                      (+ claves nuevas: idioma, progresion_activa, rep_min, rep_max,
                       perfil_progresion, version_indice)
 sesiones_activas     (sin cambios; no se sincroniza)
-favoritos            idCatalogo, creado, **uuid, actualizado, borrado**
+favoritos            idCatalogo, creado, **actualizado**
 vistos               (sin cambios; no se sincroniza)
-medidas              id, fecha, tipo, valor, **uuid, actualizado, borrado**
-**sincro_estado**    clave, valor — cursores y estado de la sincronización, fuera de
-                     `ajustes` a propósito: `ajustes` se exporta en la copia de seguridad
+medidas              id, fecha, tipo, valor, **actualizado**
+**lapidas**          tabla, clave, actualizado — lo que se borró aquí, para que el borrado
+                     llegue al otro dispositivo. En una tabla y no en una columna `borrado`
+                     por dentro: así el borrado sigue siendo un borrado y ninguna de las
+                     cincuenta consultas de `bd.dart` tiene que filtrar
+**sincro_estado**    id, cursorSubida, cursorBajada, ultimaSincro, subidas, bajadas,
+                     avisos, ultimoError — una fila, fuera de `ajustes` a propósito:
+                     `ajustes` se exporta en la copia de seguridad
 ```
+
+Las tres tablas con `uuid` son aquellas cuya clave natural no sirve: una rutina se renombra,
+un ejercicio no es único ni por nombre ni por catálogo, y dos sesiones del mismo día en la
+misma rutina son dos sesiones. Las otras tres se identifican por la clave que ya tenían y que
+es la misma en los dos móviles: `(fecha, tipo)`, `idCatalogo` y `clave`.
 
 **Secuencia de `schemaVersion`:**
 
@@ -1832,25 +1860,25 @@ medidas              id, fecha, tipo, valor, **uuid, actualizado, borrado**
 |---|---|---|---|
 | 1–6 | Todo el documento anterior | Solo la 2 | **Hechas** |
 | 7 | **J2** — `repMin`, `repMax`, `incrementoKg`, `estrategia` en `ejercicios` | No | **Hecha** |
-| 8 | **K4** — `uuid`, `actualizado`, `borrado` en las tablas sincronizables, y la tabla `sincro_estado` | No, pero toca todas las filas | Prevista |
+| 8 | **K4** — `uuid` y `actualizado` en las tablas sincronizables, más las tablas `lapidas` y `sincro_estado` | No, pero toca todas sus filas | **Hecha** |
 
 El bloque I **no cambia el esquema**: el idioma es una clave más en la tabla de clave/valor,
 y `busqueda` ya existe. Lo que sí necesita es una resiembra del catálogo, disparada por la
 clave `version_indice` ([I4](#i4-el-catálogo-y-el-índice-de-búsqueda)).
 
-**Formato de la copia de seguridad.** `versionCopia` (`copia.dart:34`) pasa de **2 a 3**
-—el primero de los dos cambios, el de J2, ya está hecho—:
+**Formato de la copia de seguridad.** `versionCopia` pasa de **2 a 4**, y los dos escalones
+están hechos:
 
-| Cambio | Bloque |
-|---|---|
-| Los ejercicios llevan `repMin`, `repMax`, `incrementoKg`, `estrategia` | J2 |
-| Las filas llevan su `uuid`, para que una copia restaurada en otro móvil no duplique al sincronizar | K4 |
-| Se exportan las claves de ajustes nuevas (ya entra la tabla entera, no hay cambio de código) | I6, J2 |
+| Cambio | Bloque | Versión |
+|---|---|---|
+| Los ejercicios llevan `repMin`, `repMax`, `incrementoKg`, `estrategia` | J2 | 3 |
+| Las rutinas, los ejercicios y las sesiones llevan su `uuid`, para que una copia restaurada en otro móvil no duplique al sincronizar | K4 | 4 |
+| Se exportan las claves de ajustes nuevas (ya entra la tabla entera, no hay cambio de código) | I6, J2 | 3 |
 
-Una copia de la versión 2 se sigue importando: lo que falta entra como `null` —que en J2 es
-«como el global»— y los `uuid` que falten se generan al importar. **Hay que ampliar el test
-de ida y vuelta de `copia_test.dart` con una copia v2 real**, o el compromiso no es
-verificable.
+Una copia de la versión 2 o de la 3 se sigue importando: lo que falta entra como `null` —que
+en J2 es «como el global»— y los `uuid` que falten se generan al importar. Y si el `uuid` que
+viene ya está en esta base, también se genera uno nuevo: dos filas con la misma identidad no
+son dos filas. `copia_test.dart` cubre los tres casos.
 
 Y **el token de sesión no entra en la copia** ([K3](#k3-cuentas-e-identidad)), ni los
 cursores de sincronización ([K4](#k4-modelo-de-sincronización)). Es el único dato de la app
@@ -1995,19 +2023,112 @@ escritorio*, y sus dos valores como secretos `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT
 Sin ellos la copia automática queda **desactivada y no visible**, y todo lo demás —incluida
 CI— sigue igual.
 
-### Fase 8b — Sincronización: el motor
+### Fase 8b — Sincronización: el motor ✅
 
 Bloque **K**, la mitad que no se ve, y **sin ningún SDK todavía**:
 
-1. Migración 7 → 8 (`uuid`, `actualizado`, `borrado`, `sincro_estado`), con su respaldo
+1. Migración 7 → 8 (`uuid`, `actualizado`, las lápidas y `sincro_estado`), con su respaldo
    previo y sus tests de migración.
 2. `SincroTransporte` y la implementación falsa en memoria.
-3. El motor de reconciliación, con los ocho escenarios de
+3. El motor de reconciliación, con los escenarios de
    [K10](#k10-la-costura-de-test) en verde.
 4. La lógica del primer enlace ([K7](#k7-el-primer-enlace)) con sus cuatro casos.
 
 Al terminar esta fase **el APK no cambia para el usuario**: no hay pantalla, no hay cuenta y
 no hay red. Pero está hecha la parte difícil y está probada entera.
+
+**Hecha**, y en el orden previsto. `schemaVersion` pasa a 8 y `versionCopia` a 4. El reparto
+quedó así:
+
+| Fichero | Qué es |
+|---|---|
+| `datos/identidad.dart` | `uuidV4` y `selloLocal`: la identidad y la versión de una fila |
+| `datos/bd.dart` | las columnas nuevas, las dos tablas nuevas, la migración y la API que el motor necesita |
+| `datos/sincro/transporte.dart` | la costura: ocho métodos, sin Flutter y sin drift |
+| `datos/sincro/motor.dart` | bajar, aplicar, subir, confirmar |
+| `datos/sincro/enlace.dart` | el primer enlace y sus cuatro casos |
+| `test/sincro_falso.dart` | el servidor de mentira, con su propio reloj |
+
+65 tests nuevos —22 de sincronización, 25 de sellos y lápidas, 11 del primer enlace y el
+resto repartidos entre migraciones y copia—, la suite en **506**. Los 441 anteriores pasan
+sin tocar nada salvo dos ajustes mecánicos: un constructor de `Ejercicio` escrito a mano en
+`progresion_test.dart`, que ahora pide las dos columnas nuevas, y el test del respaldo
+previo, cuyo comportamiento **sí** cambia a propósito (ver la desviación 11).
+
+#### Las once desviaciones de la fase 8b
+
+1. **Las lápidas van en su propia tabla, no en una columna `borrado`.** Es la desviación de
+   fondo y de ella salen varias de las demás. Marcar la fila en su sitio, como pedía
+   [K4](#k4-modelo-de-sincronización), obligaría a filtrar las cincuenta consultas de
+   `bd.dart` —y una que se olvidara enseñaría datos borrados—, dejaría el nombre de una
+   rutina borrada ocupando su índice único, de modo que no se podría volver a crear, y
+   anularía los `ON DELETE CASCADE`, que habría que reescribir a mano. Con la tabla
+   `lapidas (tabla, clave, actualizado)` el borrado sigue siendo un borrado, ninguna consulta
+   cambia y el criterio de aceptación de que los 441 tests anteriores pasen sin tocarse se
+   cumple de verdad. Solo se entierra a los padres: al aplicar la lápida, el `CASCADE` del
+   otro móvil se lleva a los hijos igual que se los llevó aquí.
+2. **`serie` no lleva ni `uuid` ni `actualizado`.** Sale de aplicar [K5](#k5-conflictos) hasta
+   el final: si la sesión es la unidad de reconciliación, la serie no necesita identidad
+   propia —viaja dentro de su entrenamiento y se sustituye con él—. De paso, la tabla más
+   numerosa, la que hacía cara la migración en una base de dos años, se queda sin tocar. A
+   cambio, **escribir una serie sella su entrenamiento**, que es lo que convierte al bloque
+   en una unidad de verdad.
+3. **`medidas`, `favoritos` y `ajustes` tampoco llevan `uuid`.** Ya tienen una clave estable
+   en los dos móviles —`(fecha, tipo)`, `idCatalogo` y `clave`—, que la propia [K6](#k6-qué-se-sincroniza-y-qué-no)
+   reconoce al hablar de las medidas. Darles además un `uuid` haría que la misma medida
+   llegara dos veces con dos identidades y chocara contra su índice único, que es
+   exactamente el problema que la identidad venía a evitar.
+4. **El reloj no decide un conflicto: decide el cursor de subida.** K4 decía «gana la fila
+   con el `actualizado` más alto» y a la vez que el reloj del móvil no es de fiar; las dos
+   cosas no se sostienen juntas, porque comparar el sello local de aquí con el del servidor
+   es comparar dos relojes. La regla que se implementó es una sola: **al bajar, una fila
+   remota se aplica salvo que la local esté pendiente de subir**, y lo pendiente se sube a
+   continuación, así que el servidor acaba con ella. Gana quien llega el último al servidor,
+   que es lo único que un cliente con la hora mal puesta no puede falsear, y es lo que hace
+   verificable el octavo escenario de K10 sin inventarse un reloj de confianza.
+5. **`SincroTransporte` tiene ocho métodos, no seis.** Sobran dos de los previstos y faltaban
+   dos: `resumen()`, para poder enseñar las cifras de los dos lados antes de preguntar en el
+   primer enlace, y `vaciar()`, para «este dispositivo manda», que sin él tendría que
+   enterrar una por una las filas del otro lado —la misma operación, hecha cara y a trozos—.
+6. **La respuesta a una subida trae también el cursor previo del servidor.** Sin eso, el
+   dispositivo que acaba de subir se descarga su propio eco en la pasada siguiente, y con dos
+   móviles activos las mismas filas van y vienen sin parar. Con el cursor previo el cliente
+   sabe si lo que hay entre él y el cursor nuevo es solo suyo y puede adelantar también el
+   cursor de bajada. Hay un test que lo fija.
+7. **La cuarentena reordena dentro del paquete; no hay tabla de cuarentena.** Como el paquete
+   trae el delta entero y se aplica en una transacción, una fila solo puede llegar antes que
+   su padre por el orden en que venga, y eso se arregla ordenando por dependencias y
+   reintentando mientras se avance. Lo que quede sin colocar después de eso es un huérfano de
+   verdad —su padre se borró— y no se va a resolver esperando: se descarta con un aviso. El
+   caso literal de K10, «series que llegan antes que su entrenamiento», no puede darse porque
+   las series viajan dentro de su sesión; lo que se prueba es la misma propiedad un nivel más
+   arriba.
+8. **`actualizado` lleva `DEFAULT 0` en SQL y se sella a mano en cada escritura.** Sin el
+   valor por defecto, `ALTER TABLE ADD COLUMN` no admite una columna obligatoria y la
+   migración sobre bases existentes no se puede escribir; y drift **no deja** combinar
+   `withDefault` con un `clientDefault` que sellara las inserciones solo. El cero no es un
+   sello válido: una fila sin sellar no se subiría nunca y el fallo no se vería hasta que al
+   usuario le faltaran datos en el otro móvil. El contrapeso es `test/sincro_sellos_test.dart`,
+   que recorre **todas** las escrituras públicas y comprueba que cada una deja algo
+   pendiente, y cada borrado su lápida. Por lo mismo, la unicidad del `uuid` va como índice y
+   no como `UNIQUE` de columna: SQLite no deja añadir una columna única con `ALTER TABLE`.
+9. **`borrarTodosLosDatos` gana un parámetro y, por defecto, propaga.** Con lápidas, que es
+   lo que el botón de Ajustes quiere decir. Sin ellas en «la cuenta manda» del primer enlace,
+   donde enterrar lo local se llevaría por delante la cuenta, que es justo el lado que el
+   usuario acaba de decir que manda.
+10. **`versionCopia` pasa a 4 y la identidad viaja en la copia de seguridad.** Lo pedía
+    [L](#l-modelo-de-datos-consolidado) y el plan de la fase no lo listaba, pero dejarlo
+    fuera rompía el caso de uso que 8a existe para resolver: restaurar en un móvil nuevo y
+    enlazarlo después duplicaría el histórico entero. Con el `uuid` dentro, las filas se
+    reconocen y se funden. Si al restaurar ese `uuid` ya está aquí —una copia importada dos
+    veces— se genera uno nuevo: dos filas con la misma identidad no son dos filas. Las copias
+    de la 2 y la 3 se siguen importando.
+11. **El respaldo previo del fichero cubre ahora cualquier base anterior a la v8**, y no solo
+    las de la v1. `respaldo.dart` tenía escrita la v2 como única migración que transforma
+    datos; ahora hay dos, y la lista `versionesQueTransforman` es lo que decide. El nombre del
+    fichero ya llevaba la versión de partida, así que el respaldo de la v2 y el de la v8 no se
+    pisan. Es el único cambio de comportamiento visible de la fase, y solo lo ve quien mire
+    el directorio de la app.
 
 ### Fase 8c — Sincronización: el servicio
 
@@ -2084,8 +2205,11 @@ las demás se pueden cerrar durante.
    **Recomendación:** entregar 8a igualmente —es útil por sí sola y barata—, y decidir 8b/8c
    después de usarla un par de meses. Si con la copia automática el problema desaparece, la
    respuesta ya está.
-   **8a entregada.** La segunda mitad de la pregunta sigue abierta a propósito: es ahora
-   cuando se puede contestar con la funcionalidad puesta en vez de en abstracto.
+   **8a y 8b entregadas.** Lo que sigue abierto es **8c**, que es donde está la factura: el
+   proveedor, las cuentas y el compromiso de mantenerlos. 8b se ha entregado igual porque no
+   compromete a nada —no añade una dependencia, no cambia el APK y no saca un byte del
+   móvil— y porque era la parte difícil: con el motor probado, decidir 8c es decidir un
+   adaptador, no un bloque.
 
 2. **¿Qué proveedor, si se hace K completo?** ([K2](#k2-elección-de-backend))
    **Recomendación:** Supabase, por el encaje relacional y la RLS, con todo detrás de

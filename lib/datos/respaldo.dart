@@ -1,9 +1,11 @@
 /// Copia de seguridad del fichero de base de datos antes de migrarlo.
 ///
-/// La migración a la v2 del esquema es la única del proyecto que **transforma**
-/// datos: expande cada fila agregada de `serie` en una fila por serie. Si algo
-/// saliera mal, el histórico del usuario —meses de entrenamientos— no se puede
-/// reconstruir, así que antes de tocarlo se guarda una copia intacta al lado.
+/// Dos migraciones del proyecto **tocan filas** en vez de solo añadir sitio
+/// donde ponerlas: la v2, que expande cada fila agregada de `serie` en una fila
+/// por serie, y la v8, que rellena la identidad y la versión de todo lo que se
+/// sincroniza. Si algo saliera mal, el histórico del usuario —meses de
+/// entrenamientos— no se puede reconstruir, así que antes de tocarlo se guarda
+/// una copia intacta al lado.
 ///
 /// La copia se hace con la base **todavía cerrada**: con la conexión abierta,
 /// SQLite tiene datos en el WAL que el fichero principal aún no contiene y el
@@ -20,6 +22,12 @@ import 'package:path_provider/path_provider.dart';
 /// Nombre del fichero que abre `driftDatabase(name: 'appgym')`.
 const _fichero = 'appgym.sqlite';
 
+/// Las versiones cuya migración transforma datos ya escritos.
+///
+/// Antes de cruzar cualquiera de ellas se respalda el fichero. Al añadir una
+/// migración que toque filas, su versión va aquí y no hay nada más que hacer.
+const versionesQueTransforman = {2, 8};
+
 /// Ruta de la base de datos, respaldándola antes si todavía es de la v1.
 ///
 /// Reproduce la ruta por defecto de `drift_flutter` (el directorio de
@@ -32,16 +40,18 @@ Future<String> rutaBaseDeDatos() async {
   return base.path;
 }
 
-/// Copia `appgym.sqlite` a `appgym.bak-vN.sqlite` si es de una versión anterior
-/// a la última que transforma datos.
+/// Copia `appgym.sqlite` a `appgym.bak-vN.sqlite` si le queda por delante
+/// alguna migración de las que transforman datos.
 ///
-/// Es idempotente: si la copia ya existe no se rehace, de modo que un segundo
-/// arranque no pisa el respaldo bueno con uno ya migrado.
+/// Es idempotente, y el nombre lleva la versión de partida: si la copia ya
+/// existe no se rehace —un segundo arranque no pisa el respaldo bueno con uno ya
+/// migrado— y la de la v2 y la de la v8 no se estorban.
 Future<void> respaldarSiHaceFalta(File base) async {
   if (!base.existsSync()) return;
 
   final version = await versionDeEsquema(base);
-  if (version == null || version < 1 || version >= 2) return;
+  if (version == null || version < 1) return;
+  if (!versionesQueTransforman.any((v) => version < v)) return;
 
   final copia = File('${base.parent.path}/appgym.bak-v$version.sqlite');
   if (copia.existsSync()) return;

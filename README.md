@@ -136,6 +136,8 @@ lib/
 │   ├── copia.dart          exportar e importar la copia de seguridad
 │   ├── copia_automatica.dart  cuándo toca copiar, qué se rota y cuándo se avisa
 │   ├── nube/               la costura del destino y el adaptador de Google Drive
+│   ├── sincro/             la costura del transporte, el motor y el primer enlace
+│   ├── identidad.dart      el uuid de una fila y el sello de su versión
 │   ├── respaldo.dart       duplicado del fichero antes de migrarlo
 │   ├── borrador.dart       estado de la sesión en curso, en JSON
 │   ├── plantillas.dart     rutinas predefinidas
@@ -164,7 +166,8 @@ tool/instrucciones_en.py    baja los pasos en inglés del dataset original
 drift_schemas/              un JSON por versión del esquema
 test/                       tests de datos, de widget y de migración
 docs/especificaciones.md    primera iteración, completada (bloques A–D)
-docs/especificaciones-2.md  segunda iteración: idiomas y progresiones hechos, nube no
+docs/especificaciones-2.md  segunda iteración: idiomas, progresiones, copia automática y el
+                            motor de sincronización hechos; el servicio no
 ```
 
 ## Créditos y licencias

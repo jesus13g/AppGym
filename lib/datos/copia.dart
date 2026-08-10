@@ -37,10 +37,15 @@ const formatoCopia = 'appgym-backup';
 
 /// Versión del formato. Sube cuando cambie de forma incompatible.
 ///
-/// La 3 añade la configuración de progresión de cada ejercicio. Una copia de la
-/// 2 se sigue importando: lo que falta entra como `null`, que en esas columnas
-/// significa «como el global».
-const versionCopia = 3;
+/// La 3 añade la configuración de progresión de cada ejercicio. La 4 añade el
+/// `uuid` de rutinas, ejercicios y sesiones, para que restaurar una copia en un
+/// móvil nuevo y enlazarlo después con la cuenta **no duplique el histórico**:
+/// las filas se reconocen por su identidad y se funden con las que ya estaban.
+///
+/// Una copia de la 2 o de la 3 se sigue importando: lo que falta entra como
+/// `null` —que en la progresión significa «como el global»— y los `uuid` que no
+/// vengan se generan al restaurar, que es lo mismo que pasaba antes.
+const versionCopia = 4;
 
 /// Qué hacer con lo que ya hay al importar.
 enum ModoImportacion {
@@ -104,10 +109,12 @@ Future<Map<String, dynamic>> exportar(AppBD bd) async {
     salida.add({
       'nombre': rutina.nombre,
       'color': rutina.color,
+      'uuid': rutina.uuid,
       'ejercicios': [
         for (final e in ejercicios)
           {
             'nombre': e.nombre,
+            'uuid': e.ejercicio.uuid,
             'idCatalogo': e.ejercicio.idCatalogo,
             'descripcion': e.ejercicio.descripcion,
             'orden': e.ejercicio.orden,
@@ -122,6 +129,7 @@ Future<Map<String, dynamic>> exportar(AppBD bd) async {
         for (final entrenamiento in entrenamientos)
           {
             'fecha': entrenamiento.fecha.toIso8601String(),
+            'uuid': entrenamiento.uuid,
             'duracionSeg': entrenamiento.duracionSeg,
             'nota': entrenamiento.nota,
             'series': [
@@ -335,6 +343,9 @@ Future<InformeImportacion> importar(
       final idRutina = await bd.restaurarRutina(
         nombre,
         cruda['color'] as String?,
+        // La identidad viaja desde la versión 4 del formato. Si no viene —una
+        // copia vieja— o si ya está aquí, `restaurarRutina` genera otra.
+        uuid: cruda['uuid'] as String?,
       );
       nRutinas++;
 
@@ -364,6 +375,7 @@ Future<InformeImportacion> importar(
           repMax: _entero(e['repMax']),
           incrementoKg: _real(e['incrementoKg']),
           estrategia: _entero(e['estrategia']),
+          uuid: e['uuid'] as String?,
         );
         nEjercicios++;
       }
@@ -399,6 +411,7 @@ Future<InformeImportacion> importar(
           fecha,
           nota: s['nota'] as String?,
           duracionSeg: _entero(s['duracionSeg']),
+          uuid: s['uuid'] as String?,
         );
         await bd.restaurarSeries(idEntrenamiento, porEjercicio);
         nEntrenamientos++;
