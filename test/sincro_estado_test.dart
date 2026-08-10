@@ -317,7 +317,10 @@ void main() {
       await motor.intentar(DisparadorSincro.manual);
       final vista = contenedor.read(sincronizacionProvider);
 
-      expect(vista.avisar(ahora: ahora.add(const Duration(hours: 20))), isFalse);
+      expect(
+        vista.avisar(ahora: ahora.add(const Duration(hours: 20))),
+        isFalse,
+      );
       expect(vista.avisar(ahora: ahora.add(const Duration(hours: 30))), isTrue);
     });
 
@@ -393,17 +396,20 @@ void main() {
       expect(nombres, containsAll(['Empuje', 'Tirón']));
     });
 
-    test('«este dispositivo manda» vacía la cuenta y sube lo de aquí', () async {
-      await sembrarLaCuenta();
-      await bd.insertarRutina('Empuje');
-      await motor.entrar('yo@ejemplo.com', servidor.codigo);
+    test(
+      '«este dispositivo manda» vacía la cuenta y sube lo de aquí',
+      () async {
+        await sembrarLaCuenta();
+        await bd.insertarRutina('Empuje');
+        await motor.entrar('yo@ejemplo.com', servidor.codigo);
 
-      await motor.enlazar(estrategia: EstrategiaEnlace.esteDispositivo);
+        await motor.enlazar(estrategia: EstrategiaEnlace.esteDispositivo);
 
-      expect(servidor.vaciados, 1);
-      expect((await bd.todasLasRutinas()).single.nombre, 'Empuje');
-      expect(servidor.deTabla('rutinas').length, 1);
-    });
+        expect(servidor.vaciados, 1);
+        expect((await bd.todasLasRutinas()).single.nombre, 'Empuje');
+        expect(servidor.deTabla('rutinas').length, 1);
+      },
+    );
 
     test('«la cuenta manda» exige exportar una copia antes', () async {
       await sembrarLaCuenta();

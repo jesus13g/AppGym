@@ -102,7 +102,10 @@ void main() {
   test('la costura no sabe de Flutter, ni de drift, ni de la base', () {
     // `transporte.dart` son datos y una interfaz, y nada más. Es lo que permite
     // que el motor se pruebe entero sin red, sin cuenta y sin proveedor.
-    expect(_importaciones(fuentes['lib/datos/sincro/transporte.dart']!), isEmpty);
+    expect(
+      _importaciones(fuentes['lib/datos/sincro/transporte.dart']!),
+      isEmpty,
+    );
   });
 
   test('el adaptador no sabe de Flutter, ni de drift, ni de la base', () {
@@ -139,7 +142,12 @@ void main() {
     // Este es el criterio de K12 tal cual, adaptado a que no hay SDK: la URL,
     // la clave y las rutas REST son suyas. `providers.dart` lo instancia —
     // alguien tiene que hacerlo— pero no conoce ni un endpoint.
-    const marcas = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', '/auth/v1', '/rest/v1'];
+    const marcas = [
+      'SUPABASE_URL',
+      'SUPABASE_ANON_KEY',
+      '/auth/v1',
+      '/rest/v1',
+    ];
     for (final MapEntry(key: ruta, value: fuente) in fuentes.entries) {
       if (ruta == 'lib/datos/sincro/supabase.dart') continue;
       for (final marca in marcas) {

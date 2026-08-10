@@ -217,8 +217,7 @@ class Sincronizador extends Notifier<VistaSincro> {
       if (lista is! List) return const [];
       return [
         for (final entrada in lista)
-          if (entrada is Map<String, Object?>)
-            if (AvisoSincro.deJson(entrada) case final aviso?) aviso,
+          if (entrada is Map<String, Object?>) ?AvisoSincro.deJson(entrada),
       ];
     } on Object {
       return const [];
@@ -264,10 +263,10 @@ class Sincronizador extends Notifier<VistaSincro> {
 
     _marcar(enMarcha: true);
     try {
-      await Enlace(_bd, transporte).enlazar(
-        estrategia: estrategia,
-        respaldoPrevio: respaldoPrevio,
-      );
+      await Enlace(
+        _bd,
+        transporte,
+      ).enlazar(estrategia: estrategia, respaldoPrevio: respaldoPrevio);
       _fallos = 0;
       await refrescar();
       _marcar(enMarcha: false, enlacePendiente: false, masCambios: true);
@@ -412,8 +411,16 @@ class Sincronizador extends Notifier<VistaSincro> {
     _reintento = null;
   }
 
-  void _marcar({bool? enMarcha, bool masCambios = false}) {
+  void _marcar({
+    bool? enMarcha,
+    bool? enlacePendiente,
+    bool masCambios = false,
+  }) {
     if (!ref.mounted) return;
-    state = state.copiar(enMarcha: enMarcha, masCambios: masCambios);
+    state = state.copiar(
+      enMarcha: enMarcha,
+      enlacePendiente: enlacePendiente,
+      masCambios: masCambios,
+    );
   }
 }

@@ -93,7 +93,9 @@ class _Sesion {
       final id = json['id'];
       final correo = json['correo'];
       final refresco = json['refresco'];
-      if (id is! String || correo is! String || refresco is! String) return null;
+      if (id is! String || correo is! String || refresco is! String) {
+        return null;
+      }
       return _Sesion(id: id, correo: correo, refresco: refresco);
     } on Object {
       return null;
@@ -227,14 +229,11 @@ class SincroSupabase implements SincroTransporte {
   Future<Paquete> bajar(int cursor) async {
     final datos = await _rpc('appgym_bajar', {'p_cursor': cursor});
     final filas = datos['filas'];
-    return Paquete(
-      [
-        if (filas is List)
-          for (final fila in filas)
-            if (fila is Map) _fila(fila),
-      ],
-      cursor: (datos['cursor'] as num?)?.toInt() ?? cursor,
-    );
+    return Paquete([
+      if (filas is List)
+        for (final fila in filas)
+          if (fila is Map) _fila(fila),
+    ], cursor: (datos['cursor'] as num?)?.toInt() ?? cursor);
   }
 
   @override
@@ -278,6 +277,9 @@ class SincroSupabase implements SincroTransporte {
     // ha sellado nada y no hay cursor que mover.
     return RespuestaSubida(sellos, cursor: cursor, cursorPrevio: previo ?? 0);
   }
+
+  @override
+  Future<void> vaciar() => _rpc('appgym_vaciar');
 
   @override
   Future<Cifras> resumen() async {

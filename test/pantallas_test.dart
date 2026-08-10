@@ -2615,16 +2615,31 @@ void main() {
           overrides: [sincroProvider.overrideWithValue(servidor)],
         );
 
+    /// El campo del diálogo que esté abierto.
+    ///
+    /// Acotado al diálogo a propósito: la pantalla de Ajustes tiene campos
+    /// propios y `enterText` exige que el buscador encuentre **uno**.
+    final campo = find.descendant(
+      of: find.byType(CupertinoAlertDialog),
+      matching: find.byType(CupertinoTextField),
+    );
+
     /// Entra tecleando el correo y luego el código, que es el flujo entero.
     Future<void> entrar(WidgetTester tester, {String codigo = '123456'}) async {
       await tester.tap(find.text('Crear cuenta o entrar'));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(CupertinoTextField), 'yo@ejemplo.com');
+      await tester.enterText(campo, 'yo@ejemplo.com');
       await tester.tap(find.text('Continuar'));
-      await _asentar(tester, veces: 20);
+      // `pumpAndSettle` y no fotogramas sueltos: mientras el primer diálogo se
+      // va y el segundo llega, los dos están en el árbol y `campo` encontraría
+      // dos. Aquí no hay nada girando, así que asienta.
+      await tester.pumpAndSettle();
 
-      await tester.enterText(find.byType(CupertinoTextField), codigo);
+      await tester.enterText(campo, codigo);
       await tester.tap(find.text('Continuar'));
+      // Al final sí van fotogramas sueltos: si algo falló, `ui.aviso` deja un
+      // mensaje en pantalla que se retira solo a los 1,8 s, y asentar aquí lo
+      // borraría antes de que ningún test pudiera comprobarlo.
       await _asentar(tester, veces: 20);
     }
 
@@ -2682,6 +2697,11 @@ void main() {
       // El mensaje del servidor se enseña tal cual.
       expect(find.text('El código no vale o ha caducado.'), findsOneWidget);
       expect(find.text('Crear cuenta o entrar'), findsOneWidget);
+
+      // `ui.aviso` se retira solo con un `Future.delayed`, y el test no puede
+      // acabar con ese `Timer` vivo. No es un fallo de la app: es la contra de
+      // haber comprobado el mensaje mientras estaba en pantalla.
+      await tester.pump(const Duration(seconds: 2));
     });
 
     testWidgets('con datos a los dos lados se pregunta, con las cifras', (
@@ -2716,6 +2736,9 @@ void main() {
       await tester.scrollUntilVisible(find.text('Crear cuenta o entrar'), 300);
       await tester.pumpAndSettle();
       await entrar(tester);
+      // Que el diálogo del código termine de irse: si no, al abrir el de borrar
+      // habría dos en el árbol y `campo` encontraría dos.
+      await tester.pumpAndSettle();
 
       final borrar = find.text('Borrar la cuenta');
       await tester.scrollUntilVisible(borrar, 300);
@@ -2724,13 +2747,19 @@ void main() {
       await tester.pumpAndSettle();
 
       // Escrito mal, no se borra nada.
-      await tester.enterText(find.byType(CupertinoTextField), 'otro@sitio.com');
+      await tester.enterText(campo, 'otro@sitio.com');
       await tester.tap(find.text('Borrar la cuenta').last);
       await _asentar(tester, veces: 20);
 
-      expect(find.text('El correo no coincide. No se ha borrado nada.'),
-          findsOneWidget);
+      expect(
+        find.text('El correo no coincide. No se ha borrado nada.'),
+        findsOneWidget,
+      );
       expect(find.text('yo@ejemplo.com'), findsWidgets);
+
+      // El aviso se retira solo con un `Future.delayed`, y el test no puede
+      // acabar con ese `Timer` vivo.
+      await tester.pump(const Duration(seconds: 2));
     });
 
     testWidgets('el detalle lista los avisos con su frase', (tester) async {
@@ -2749,9 +2778,7 @@ void main() {
         ),
       );
 
-      await tester.pumpWidget(
-        conCuenta(const PantallaSincroDetalle()),
-      );
+      await tester.pumpWidget(conCuenta(const PantallaSincroDetalle()));
       await tester.pumpAndSettle();
 
       expect(find.text('3 cambios'), findsOneWidget);
@@ -2788,5 +2815,4 @@ void main() {
       expect(find.text('Ajustes'), findsWidgets);
     });
   });
-
 }

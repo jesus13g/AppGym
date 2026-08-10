@@ -176,10 +176,7 @@ void main() {
 
     test('el interruptor de la sincronización tampoco sale', () async {
       await _poblar(bd);
-      await bd.fijarAjustes({
-        Claves.sincroActiva: '1',
-        Claves.unidad: 'lb',
-      });
+      await bd.fijarAjustes({Claves.sincroActiva: '1', Claves.unidad: 'lb'});
 
       final json = jsonEncode(await exportar(bd));
 

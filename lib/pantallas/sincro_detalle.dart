@@ -16,8 +16,9 @@ import '../tema/tokens.dart';
 import '../tema/tokens.dart' as t;
 import '../tema/ui.dart' as ui;
 
-Future<void> abrirSincroDetalle(BuildContext context) => Navigator.of(context)
-    .push(CupertinoPageRoute<void>(builder: (_) => const PantallaSincroDetalle()));
+Future<void> abrirSincroDetalle(BuildContext context) => Navigator.of(
+  context,
+).push(CupertinoPageRoute<void>(builder: (_) => const PantallaSincroDetalle()));
 
 /// La frase de cada aviso.
 ///

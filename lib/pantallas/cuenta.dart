@@ -75,7 +75,9 @@ class GrupoCuenta extends ConsumerWidget {
 
     return ui.Grupo(
       cabecera: context.t.cuentaCabecera,
-      pie: error != null ? context.t.cuentaErrorPie(error) : context.t.cuentaPie,
+      pie: error != null
+          ? context.t.cuentaErrorPie(error)
+          : context.t.cuentaPie,
       filas: [
         _valor(
           context,

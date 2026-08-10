@@ -50,7 +50,11 @@ http.Response _tokens({String refresco = 'refresco-1'}) => _json({
 ///
 /// [responder] recibe cada petición y decide qué contesta; [peticiones] las
 /// guarda todas para poder mirarlas después.
-({SincroSupabase sincro, List<http.Request> peticiones, AlmacenEnMemoria almacen})
+({
+  SincroSupabase sincro,
+  List<http.Request> peticiones,
+  AlmacenEnMemoria almacen,
+})
 _montar(
   Future<http.Response> Function(http.Request) responder, {
   String? sesion,
@@ -79,25 +83,29 @@ Future<http.Response> Function(http.Request) _servidor(
   Object? respuesta, {
   int codigo = 200,
   String refrescoNuevo = 'refresco-2',
-}) => (peticion) async => peticion.url.path.endsWith('/token')
+}) =>
+    (peticion) async => peticion.url.path.endsWith('/token')
     ? _tokens(refresco: refrescoNuevo)
     : _json(respuesta, codigo);
 
 void main() {
   group('entrar', () {
-    test('pedir el código manda un OTP que crea la cuenta si hace falta', () async {
-      final m = _montar((_) async => _json({}));
+    test(
+      'pedir el código manda un OTP que crea la cuenta si hace falta',
+      () async {
+        final m = _montar((_) async => _json({}));
 
-      await m.sincro.pedirCodigo('yo@ejemplo.com');
+        await m.sincro.pedirCodigo('yo@ejemplo.com');
 
-      final peticion = m.peticiones.single;
-      expect(peticion.url.toString(), '$_url/auth/v1/otp');
-      expect(peticion.headers['apikey'], 'clave-publica');
-      final cuerpo = jsonDecode(peticion.body) as Map<String, dynamic>;
-      expect(cuerpo['email'], 'yo@ejemplo.com');
-      // «Crear cuenta» y «entrar» son el mismo botón, como pide K3.
-      expect(cuerpo['create_user'], isTrue);
-    });
+        final peticion = m.peticiones.single;
+        expect(peticion.url.toString(), '$_url/auth/v1/otp');
+        expect(peticion.headers['apikey'], 'clave-publica');
+        final cuerpo = jsonDecode(peticion.body) as Map<String, dynamic>;
+        expect(cuerpo['email'], 'yo@ejemplo.com');
+        // «Crear cuenta» y «entrar» son el mismo botón, como pide K3.
+        expect(cuerpo['create_user'], isTrue);
+      },
+    );
 
     test('el código canjea una sesión y la guarda', () async {
       final m = _montar((_) async => _tokens());
@@ -120,14 +128,18 @@ void main() {
       expect(guardado['refresco'], 'refresco-1');
     });
 
-    test('un código en blanco por los lados se limpia antes de enviarlo', () async {
-      final m = _montar((_) async => _tokens());
+    test(
+      'un código en blanco por los lados se limpia antes de enviarlo',
+      () async {
+        final m = _montar((_) async => _tokens());
 
-      await m.sincro.entrar('yo@ejemplo.com', ' 123456 ');
+        await m.sincro.entrar('yo@ejemplo.com', ' 123456 ');
 
-      final cuerpo = jsonDecode(m.peticiones.single.body) as Map<String, dynamic>;
-      expect(cuerpo['token'], '123456');
-    });
+        final cuerpo =
+            jsonDecode(m.peticiones.single.body) as Map<String, dynamic>;
+        expect(cuerpo['token'], '123456');
+      },
+    );
 
     test('un código caducado se rechaza con el mensaje del servidor', () async {
       final m = _montar(
@@ -348,8 +360,7 @@ void main() {
       expect(paquete.filas.first.datos!['nombre'], 'Empuje');
       expect(paquete.filas.last.borrada, isTrue);
 
-      final cuerpo =
-          jsonDecode(m.peticiones.last.body) as Map<String, dynamic>;
+      final cuerpo = jsonDecode(m.peticiones.last.body) as Map<String, dynamic>;
       expect(cuerpo['p_cursor'], 100);
     });
 
@@ -388,8 +399,7 @@ void main() {
         ]),
       );
 
-      final cuerpo =
-          jsonDecode(m.peticiones.last.body) as Map<String, dynamic>;
+      final cuerpo = jsonDecode(m.peticiones.last.body) as Map<String, dynamic>;
       final enviada = (cuerpo['p_filas'] as List).single as Map;
       expect(enviada['tabla'], 'rutinas');
       expect(enviada['clave'], 'r-1');
@@ -405,15 +415,19 @@ void main() {
 
     test('un paquete grande va en lotes y se funde en una respuesta', () async {
       var lote = 0;
-      final m = _montar((peticion) async {
-        if (peticion.url.path.endsWith('/token')) return _tokens();
-        lote++;
-        return _json({
-          'sellos': {'rutinas/r-$lote': 1000 + lote},
-          'cursor': 1000 + lote,
-          'cursorPrevio': 999 + lote,
-        });
-      }, sesion: _sesionGuardada(), filasPorLote: 200);
+      final m = _montar(
+        (peticion) async {
+          if (peticion.url.path.endsWith('/token')) return _tokens();
+          lote++;
+          return _json({
+            'sellos': {'rutinas/r-$lote': 1000 + lote},
+            'cursor': 1000 + lote,
+            'cursorPrevio': 999 + lote,
+          });
+        },
+        sesion: _sesionGuardada(),
+        filasPorLote: 200,
+      );
 
       final respuesta = await m.sincro.subir(
         Paquete([
@@ -475,10 +489,7 @@ void main() {
 
       await m.sincro.borrarCuenta();
 
-      expect(
-        m.peticiones.last.url.path,
-        '/rest/v1/rpc/appgym_borrar_cuenta',
-      );
+      expect(m.peticiones.last.url.path, '/rest/v1/rpc/appgym_borrar_cuenta');
       expect(await m.almacen.leer(), isNull);
     });
 
@@ -511,7 +522,9 @@ void main() {
 
     test('429 y 5xx se reintentan solos', () async {
       expect(
-        (await falloDe(_servidor({'message': 'slow down'}, codigo: 429))).motivo,
+        (await falloDe(
+          _servidor({'message': 'slow down'}, codigo: 429),
+        )).motivo,
         MotivoSincro.temporal,
       );
       expect(
@@ -538,7 +551,9 @@ void main() {
 
     test('un 403 de la RLS pide volver a entrar', () async {
       expect(
-        (await falloDe(_servidor({'message': 'sin sesión'}, codigo: 403))).motivo,
+        (await falloDe(
+          _servidor({'message': 'sin sesión'}, codigo: 403),
+        )).motivo,
         MotivoSincro.reconectar,
       );
     });
