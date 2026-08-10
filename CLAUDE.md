@@ -13,12 +13,11 @@ dart run build_runner build     # genera bd.g.dart; obligatorio tras clonar
 flutter gen-l10n                # genera lib/l10n/generado/; obligatorio tras clonar
 flutter run                     # app en un dispositivo o emulador
 flutter analyze                 # objetivo permanente: 0 issues
-flutter test                    # 506 tests: datos, pantallas, migraciones, copia, copia
-                                #            automática y su adaptador de Drive, el motor de
-                                #            sincronización con su primer enlace y sus
-                                #            sellos, ajustes, métricas, músculos, geometría,
-                                #            progresiones, formatos, traducciones y
-                                #            vocabulario
+flutter test                    # datos, pantallas, migraciones, copia, copia automática y su
+                                # adaptador de Drive, la sincronización entera —motor, primer
+                                # enlace, sellos, adaptador de Supabase y disparadores—,
+                                # ajustes, métricas, músculos, geometría, progresiones,
+                                # formatos, importaciones, traducciones y vocabulario
 dart format lib test
 flutter build apk --release     # APK local (necesita SDK de Android y Java 17)
 ```
@@ -64,7 +63,7 @@ lib/
 │   ├── copia_automatica.dart  cuándo toca copiar, qué se rota y cuándo se avisa (puro)
 │   ├── nube/          nube.dart (la costura) · drive.dart (Google) · token.dart
 │   ├── sincro/        transporte.dart (la costura) · motor.dart (la reconciliación) ·
-│   │                  enlace.dart (el primer enlace)
+│   │                  enlace.dart (el primer enlace) · supabase.dart (el adaptador)
 │   ├── identidad.dart el uuid de una fila y el sello de su versión
 │   ├── respaldo.dart  duplicado del fichero .sqlite antes de migrarlo
 │   ├── borrador.dart  estado de la sesión en curso, serializado a JSON
@@ -86,25 +85,30 @@ lib/
 │   ├── textos.dart    `context.t`, `idiomasSoportados` y el reexport de lo generado
 │   └── generado/      `Textos` y sus delegates  ← NO se versiona
 ├── estado/            providers.dart · descanso.dart (el temporizador) ·
-│                      copia_automatica.dart (el motor de la copia a la nube)
+│                      copia_automatica.dart (el motor de la copia a la nube) ·
+│                      sincro.dart (el motor de la sincronización)
 ├── tema/              tokens.dart · ui.dart
 └── pantallas/         quince pantallas + cinco piezas compartidas
 assets/                ejercicios.es.json (el catálogo) · instrucciones.en.json (sus pasos en
                        inglés) · plantillas.json (por idioma) · musculatura.json
 drift_schemas/         un JSON por versión del esquema, para los tests de migración
+supabase/              esquema.sql: las dos tablas, la RLS y las cinco funciones del servidor
 tool/                  musculatura.py (el modelo anatómico) · instrucciones_en.py (los pasos
                        en inglés, desde el dataset original)
 test/                  datos · pantallas · migraciones · copia · ajustes · plantillas · metricas
                        musculos · geometria · progresion · formato · i18n · traducciones ·
-                       sincro · sincro_sellos · enlace · esquemas/ (generado)
-docs/                  especificaciones.md (hecho) · especificaciones-2.md (I, J y las fases
-                       8a y 8b de K hechas; 8c no) · privacidad.md
+                       sincro · sincro_sellos · enlace · sincro_supabase · sincro_estado ·
+                       importaciones · esquemas/ (generado)
+docs/                  especificaciones.md (hecho) · especificaciones-2.md (I, J y K enteros,
+                       hechos) · privacidad.md · sincronizacion.md (montar el servidor)
 ```
 
-Cinco ficheros de `pantallas/` no son pantallas, sino piezas que comparten varias:
+Seis ficheros de `pantallas/` no son pantallas, sino piezas que comparten varias:
 `anadir_a_rutina.dart` (el `anadirARutina` que usan la lista del catálogo y la ficha, más el
 `BotonFavorito`), `copia_seguridad.dart` (el grupo «Datos» de Ajustes, aparte porque es lo único
-de esa pantalla que escribe ficheros y restaura la base entera), `musculatura.dart` (el mapa
+de esa pantalla que escribe ficheros y restaura la base entera, y de donde sale
+`escribirCopiaLocal`), `copia_nube.dart` y `cuenta.dart` (los grupos «Copia automática» y «Cuenta»,
+aparte por lo mismo, más sus avisos en la cabecera de Rutinas), `musculatura.dart` (el mapa
 muscular, que se incrusta en la sección «Cuerpo» de Progreso y no monta scaffold propio),
 `sugerencia.dart` (la línea de progresión que pintan la tarjeta de entrenar y la de resultados, con
 la frase de cada motivo) y `opciones_ejercicio.dart` (la hoja de descanso y progresión de un
@@ -125,8 +129,8 @@ sus récords, resumen semanal con racha, días de calendario pulsables y el mapa
 consulta como el **porqué** de lo que hay: incluye el esquema de datos hasta la v6, el orden de las
 migraciones y las desviaciones de lo que se implementó, que en D son largas y razonadas.
 
-**`docs/especificaciones-2.md` es el trabajo previsto, y de él están hechos I y J.** Recoge los
-tres puntos que el anterior dejó fuera de alcance a propósito:
+**`docs/especificaciones-2.md` está entero hecho.** Recoge los tres puntos que el anterior dejó
+fuera de alcance a propósito:
 
 - **I — internacionalización de la interfaz** (ARB + `flutter gen-l10n`, español e inglés, el
   catálogo con índice de búsqueda multilingüe). **Hecho**, con sus seis desviaciones documentadas
@@ -134,11 +138,10 @@ tres puntos que el anterior dejó fuera de alcance a propósito:
 - **J — recomendación automática de progresiones** (`datos/progresion.dart`, doble progresión,
   esquema v7). **Hecho**, con sus nueve desviaciones documentadas en J6.
 - **K — sincronización en la nube, cuentas y multidispositivo** (`uuid` + `actualizado` +
-  lápidas, esquema v8, último en escribir gana). **Su fase 8a está hecha; 8b y 8c no.** El plan de
-  entrega parte K en tres, y la primera —la **copia automática** a la nube del propio usuario— es
-  publicable por sí sola y ya está: sin cuentas propias, sin backend y sin conflictos. Lo que sigue
-  pendiente es la sincronización de verdad, que es el bloque grande. **8a no es sincronización y no
-  debe llamarse así en ningún sitio.**
+  lápidas, esquema v8, último en escribir gana). **Hecho entero**, en tres fases: 8a la copia
+  automática, 8b el motor y 8c el servicio, con sus once y diez desviaciones documentadas. **8a no
+  es sincronización y no debe llamarse así en ningún sitio**: es una copia con fecha que se sube
+  sola, y dos móviles que copien el mismo día se pisan.
 
 Antes de proponer una funcionalidad nueva, mira si ya está especificada en uno de los dos.
 
@@ -453,10 +456,9 @@ URL, y «Acerca de» la enlaza. Si cambias qué datos salen del móvil, ese fich
 
 ### Sincronización: identidad, versión y lápidas
 
-La fase 8b es **el motor y nada más**: no hay pantalla, no hay cuenta, no hay red y **el APK no
-cambia para el usuario**. Lo que sí cambia es que cada fila que se sincroniza lleva desde ahora su
-identidad y su versión, y que todo borrado deja constancia. El adaptador de un proveedor real es la
-fase 8c y todavía no existe.
+La fase 8b fue **el motor y nada más**: sin pantalla, sin cuenta y sin red. Cada fila que se
+sincroniza lleva su identidad y su versión, y todo borrado deja constancia. La **8c** es lo que la
+convierte en una funcionalidad: el adaptador de Supabase, las cuentas y la pantalla.
 
 - `datos/identidad.dart` da las dos marcas: `uuidV4()` (v4 escrito a mano, sin el paquete `uuid`) y
   `selloLocal()`, un contador **monótono** en milisegundos.
@@ -505,6 +507,54 @@ Lo que **sí** cambió de la copia de seguridad: `versionCopia` pasa a **4** y l
 ejercicios y las sesiones exportan su `uuid`. Es lo que hace que restaurar en un móvil nuevo y
 enlazarlo después funda el histórico en vez de duplicarlo. Si al restaurar ese `uuid` ya está en la
 base, se genera otro: dos filas con la misma identidad no son dos filas.
+
+### Sincronización: el servicio
+
+La fase 8c es el adaptador, la cuenta y la pantalla. **No toca el esquema**: `schemaVersion` se
+queda en 8 y `versionCopia` en 4. Lo único nuevo que había que persistir era el interruptor de este
+dispositivo, y para eso ya estaba `Claves.locales`.
+
+- `datos/sincro/supabase.dart` es **el único fichero que sabe que Supabase existe**, y
+  `test/importaciones_test.dart` lo fija. Cambiar de proveedor es escribir otro como él.
+- `estado/sincro.dart` es el motor: los disparadores, la espera creciente y la cuenta.
+- `pantallas/cuenta.dart` es el grupo de Ajustes, la entrada y el primer enlace.
+- `supabase/esquema.sql` es el servidor; `docs/sincronizacion.md`, cómo montarlo.
+
+Diez cosas que conviene no volver a decidir:
+
+- **Ningún SDK.** Supabase se habla REST con el `http` que ya estaba, y la fase **no añadió ni una
+  dependencia**. `supabase_flutter` arrastraría realtime, storage y deep links para ocho llamadas
+  HTTP, y pondría en riesgo el techo de `win32` que fija `file_picker`. Es el mismo razonamiento que
+  ya está escrito en `drive.dart` para no usar el SDK de Google.
+- **El reloj es del servidor y se siembra en milisegundos de época.** `selloLocal()` sella así, de
+  modo que un servidor que empezara en cero dejaría el cursor de subida por debajo de todos los
+  sellos locales y **cada pasada resubiría el histórico entero**. Está escrito en el SQL y hay que
+  respetarlo en cualquier servidor que lo sustituya. Por lo mismo, `subir` **no** mira la hora de
+  pared: si adelantara el reloj, el `cursorPrevio` no casaría nunca con el `cursorBajada` del
+  cliente y cada móvil se descargaría su propio eco.
+- **`appgym_bajar` lee el reloj antes que las filas y las acota con él.** Al revés, una subida que
+  se colara en medio adelantaría el cursor por encima de filas no entregadas. Es la única forma de
+  perder datos que hay en el servidor.
+- **Se entra con un código de seis cifras, no con un enlace mágico.** Un enlace exige deep links,
+  un *intent-filter* y un dominio, y aquí el APK se instala a mano. Requiere que la plantilla de
+  correo del proveedor incluya `{{ .Token }}`: es el paso de montaje que más se olvida.
+- **La sesión entera —id, correo y refresco— va al almacén seguro**, bajo `claveSincro`. El correo
+  también, y no por la exportación: `sesionActual()` tiene que contestarse **sin red**, o un móvil
+  sin cobertura diría «sin cuenta» y el usuario volvería a entrar, cayendo otra vez por el primer
+  enlace.
+- **GoTrue rota el *refresh token*.** Cada renovación invalida el anterior, así que hay que
+  reescribir el almacén cada vez, y solo puede haber **una renovación en vuelo**: dos canjearían el
+  mismo token y la segunda mataría la sesión. `drive.dart` no hace ninguna de las dos cosas porque
+  Google no rota; copiarlo tal cual dejaría al usuario fuera a las pocas horas.
+- **Dos mapeadores de error, no uno.** Un 400 en un RPC es un rechazo del servidor; en `/verify` es
+  «te has equivocado de código», y esa frase la tiene que leer el usuario.
+- **`DisparadorSincro` es otro enumerado a propósito**, no el `Disparador` de la copia automática:
+  son dos costuras independientes y `raiz.dart` importa las dos.
+- **La app se repinta por el contador `cambios` de `VistaSincro`**, que `raiz.dart` escucha para
+  llamar a `invalidarTodo`. El motor tiene un `Ref` y no un `WidgetRef`, así que no puede invalidar
+  por su cuenta. **Si añades un provider de datos, sigue yendo en `invalidarTodo`.**
+- **Con la pregunta del primer enlace sin contestar no se sincroniza.** Una pasada normal aplicaría
+  «fusionar» sin haberlo preguntado, y ese es el único punto del bloque donde K7 exige preguntar.
 
 ### Catálogo de ejercicios
 
@@ -637,7 +687,9 @@ mismo. Solo afecta al escritorio de Windows, que aquí no se compila, pero rompe
 sin resolver. `flutter_secure_storage` es la **única** dependencia nueva de verdad de la fase 8a, y
 está para el *refresh token*: la alternativa era la tabla `ajustes`, que se exporta.
 
-**Ningún SDK de Google.** Drive se habla por REST v3 con el `http` de siempre. Ver el porqué en la
+**Ningún SDK de proveedor, de nadie.** Drive se habla por REST v3 y Supabase por PostgREST y
+GoTrue, los dos con el `http` de siempre: la fase 8c **no añadió ni una dependencia**. Ver el
+porqué en la
 cabecera de `lib/datos/nube/drive.dart`.
 
 El permiso de **INTERNET va en

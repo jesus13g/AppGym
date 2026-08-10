@@ -116,17 +116,25 @@ jobs:
       # --dart-define pasa la misma versión al código: es lo que lee
       # `versionApp` para el «Acerca de» de Ajustes, sin necesidad de
       # package_info_plus solo para una cadena.
-      # Las credenciales de la copia automática entran igual que la versión, por
-      # --dart-define, desde secretos del repositorio. NO se escriben aquí.
+      # Las credenciales de la copia automática (8a) y de la sincronización (8c)
+      # entran igual que la versión, por --dart-define, desde secretos del
+      # repositorio. NO se escriben aquí.
       #
-      # Si no están configuradas, las variables llegan vacías y la copia
-      # automática queda desactivada y no visible: la app se comporta como antes
-      # de la fase 8a y el APK se construye igual. Es lo que hace que un fork
-      # compile sin tener que tocar nada.
+      # Si no están configuradas, las variables llegan vacías y las dos
+      # funcionalidades quedan desactivadas y no visibles: la app se comporta
+      # como antes de la fase 8a y el APK se construye igual. Es lo que hace que
+      # un fork compile sin tener que tocar nada.
       #
       # El «secreto» de un cliente OAuth de aplicación instalada no es
       # confidencial (RFC 8252): lo que protege el canje es PKCE. Se guarda como
       # secreto de todas formas para no regalar la cuota del proyecto.
+      #
+      # La clave anónima de Supabase también es pública por diseño —lo que
+      # protege los datos es la RLS del servidor, ver `supabase/esquema.sql`—, y
+      # va como secreto por el mismo motivo: no regalar la cuota. La
+      # `service_role` NO aparece por aquí y no debe hacerlo nunca: con ella
+      # dentro del APK, cualquiera que lo descargue podría leer y borrar los
+      # datos de todos los usuarios.
       - name: Construir APK
         run: |
           flutter build apk --release \
@@ -134,10 +142,14 @@ jobs:
             --build-number "$GITHUB_RUN_NUMBER" \
             --dart-define "VERSION=${{ steps.version.outputs.nombre }}" \
             --dart-define "GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" \
-            --dart-define "GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET"
+            --dart-define "GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET" \
+            --dart-define "SUPABASE_URL=$SUPABASE_URL" \
+            --dart-define "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"
         env:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
 
       - name: Renombrar el APK
         run: |

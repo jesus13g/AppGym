@@ -41,6 +41,11 @@ aquella versión.
   apagada; se enciende en *Ajustes → Copia automática*. No es sincronización: es la copia
   de arriba, hecha sin que te acuerdes, para poder recuperarlo todo en un móvil nuevo.
   Qué sale del móvil y cómo se revoca está en [docs/privacidad.md](docs/privacidad.md).
+- **Sincronización.** Y si de verdad usas dos aparatos —el móvil en el gimnasio, la tableta
+  en casa—, una cuenta con tu correo mantiene el mismo histórico en los dos. Se entra con un
+  código de seis cifras, sin contraseña, desde *Ajustes → Cuenta*. También viene apagada, la
+  app funciona entera sin ella y cerrar sesión o borrar la cuenta **deja intactos los datos
+  de tu móvil**. Esto sí es sincronización de verdad, no una copia con fecha.
 
 Por defecto la interfaz sigue el tema y el idioma del sistema, y en Ajustes se puede
 forzar cualquiera de los dos. El idioma se cambia sin reiniciar; los nombres de las
@@ -124,6 +129,23 @@ flutter build apk --release \
 
 En CI son los secretos `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` del repositorio.
 
+**Sobre la sincronización en las releases oficiales.** Igual: apunta a un proyecto de
+Supabase personal, sin ninguna garantía de disponibilidad, y **cualquiera que instale el APK
+puede crear una cuenta en él**. Una compilación local o un fork la traen **desactivada y no
+visible**, y la app funciona exactamente igual sin ella. Para apuntarla a un proyecto propio
+—que se monta en media hora— está el paso a paso de
+[`docs/sincronizacion.md`](docs/sincronizacion.md); en corto, se crea el proyecto, se ejecuta
+`supabase/esquema.sql` y se compila con:
+
+```bash
+flutter build apk --release \
+  --dart-define SUPABASE_URL=https://xxxxxxxx.supabase.co \
+  --dart-define SUPABASE_ANON_KEY=...
+```
+
+En CI son los secretos `SUPABASE_URL` y `SUPABASE_ANON_KEY`. La `service_role` key **no se
+usa nunca** y no debe salir del panel de Supabase.
+
 ## Estructura
 
 ```
@@ -136,7 +158,8 @@ lib/
 │   ├── copia.dart          exportar e importar la copia de seguridad
 │   ├── copia_automatica.dart  cuándo toca copiar, qué se rota y cuándo se avisa
 │   ├── nube/               la costura del destino y el adaptador de Google Drive
-│   ├── sincro/             la costura del transporte, el motor y el primer enlace
+│   ├── sincro/             la costura del transporte, el motor, el primer enlace y el
+│                           adaptador de Supabase
 │   ├── identidad.dart      el uuid de una fila y el sello de su versión
 │   ├── respaldo.dart       duplicado del fichero antes de migrarlo
 │   ├── borrador.dart       estado de la sesión en curso, en JSON
@@ -151,6 +174,8 @@ lib/
 ├── l10n/                   los textos de la interfaz, un ARB por idioma
 ├── estado/
 │   ├── providers.dart      providers de Riverpod
+│   ├── copia_automatica.dart  el motor de la copia a la nube
+│   ├── sincro.dart         el motor de la sincronización: disparadores y cuenta
 │   └── descanso.dart       temporizador de descanso
 ├── tema/
 │   ├── tokens.dart         colores, espaciados, radios y tipografía
@@ -164,10 +189,12 @@ assets/musculatura.json     el modelo anatómico del mapa muscular
 tool/musculatura.py         genera el modelo anatómico y una previa para verlo
 tool/instrucciones_en.py    baja los pasos en inglés del dataset original
 drift_schemas/              un JSON por versión del esquema
+supabase/esquema.sql        el esquema, la RLS y las funciones del servidor de sincronización
 test/                       tests de datos, de widget y de migración
 docs/especificaciones.md    primera iteración, completada (bloques A–D)
-docs/especificaciones-2.md  segunda iteración: idiomas, progresiones, copia automática y el
-                            motor de sincronización hechos; el servicio no
+docs/especificaciones-2.md  segunda iteración: idiomas, progresiones, copia automática y
+                            sincronización, completada
+docs/sincronizacion.md      cómo montar el servidor de sincronización en un fork
 ```
 
 ## Créditos y licencias
