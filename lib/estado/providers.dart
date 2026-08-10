@@ -26,8 +26,11 @@ import '../datos/nube/nube.dart';
 import '../datos/progresion.dart';
 import '../datos/reloj.dart' as reloj;
 import '../datos/semilla.dart';
+import '../datos/sincro/supabase.dart';
+import '../datos/sincro/transporte.dart';
 import '../l10n/textos.dart';
 import 'copia_automatica.dart';
+import 'sincro.dart';
 
 /// La base de datos, viva mientras viva la app.
 final bdProvider = Provider<AppBD>((ref) {
@@ -304,6 +307,26 @@ final nubeProvider = Provider<DestinoNube?>(
   (ref) => driveDisponible ? DriveNube() : null,
 );
 
+// ── Sincronización ───────────────────────────────────────────────────────────
+
+/// Con quién se sincroniza, o `null` si esta compilación no lleva servicio.
+///
+/// Mismo trato que [nubeProvider], y por el mismo motivo: sin las
+/// `--dart-define` del proveedor **la funcionalidad no existe**, el grupo de
+/// Cuenta no se pinta y no hay disparador que haga nada. Un fork compila y
+/// funciona sin tocar nada.
+///
+/// Los tests lo sobrescriben con `SincroFalso`, que es lo que permite probar el
+/// motor entero sin red y sin cuenta.
+final sincroProvider = Provider<SincroTransporte?>(
+  (ref) => sincroDisponible ? SincroSupabase() : null,
+);
+
+/// El motor: los disparadores, la espera creciente y el estado de la cuenta.
+final sincronizacionProvider = NotifierProvider<Sincronizador, VistaSincro>(
+  Sincronizador.new,
+);
+
 /// Fechas, números y unidades listos para pintar.
 ///
 /// Reúne las dos cosas que casi siempre viajan juntas —el idioma y las
@@ -439,6 +462,13 @@ void invalidarAjustes(WidgetRef ref) => ref.invalidate(ajustesProvider);
 void invalidarCopiaAutomatica(WidgetRef ref) =>
     ref.read(motorCopiaProvider.notifier).refrescar();
 
+/// Vuelve a leer la cuenta y la contabilidad de la sincronización.
+///
+/// Tampoco es un `invalidate`, por lo mismo: tirar el `Notifier` entero
+/// perdería la pasada que pudiera estar en curso.
+void invalidarSincro(WidgetRef ref) =>
+    ref.read(sincronizacionProvider.notifier).refrescar();
+
 /// Refresca los favoritos y los vistos recientemente.
 void invalidarCatalogoDelUsuario(WidgetRef ref) {
   ref.invalidate(favoritosProvider);
@@ -463,6 +493,7 @@ void invalidarTodo(WidgetRef ref) {
   invalidarMedidas(ref);
   invalidarAjustes(ref);
   invalidarCopiaAutomatica(ref);
+  invalidarSincro(ref);
   ref.invalidate(ejerciciosRutinaProvider);
   ref.invalidate(ejercicioProvider);
   ref.invalidate(estadisticasRutinaProvider);
