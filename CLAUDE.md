@@ -195,7 +195,7 @@ volver. Dos reglas que ya han costado un fallo cada una:
 
 ### Datos
 
-`datos/bd.dart` tiene las diez tablas y todas las consultas. drift devuelve clases de datos planas,
+`datos/bd.dart` tiene las doce tablas y todas las consultas. drift devuelve clases de datos planas,
 así que —a diferencia de SQLAlchemy— una fila leída se puede pasar a la interfaz sin más.
 
 ```
