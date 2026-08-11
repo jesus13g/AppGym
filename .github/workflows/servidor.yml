@@ -27,7 +27,10 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  verificar:
+  # `servidor` y no `verificar`: el workflow del APK ya tiene un job con ese
+  # nombre, y en la lista de comprobaciones de un PR salían los dos llamados
+  # igual, sin forma de saber cuál era cuál.
+  servidor:
     runs-on: ubuntu-latest
     defaults:
       run:
