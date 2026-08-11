@@ -82,6 +82,9 @@ Es lo único de esta app que usa un servidor, y por eso se explica entero.
   corporales y tus preferencias.** Es lo mismo que exporta la copia manual.
 - **Tu correo**, que es la cuenta. Sirve para entrar y para poder avisarte si
   algún día hubiera que hacerlo.
+- **El hash de tu contraseña**, no la contraseña. Se guarda pasada por Argon2id,
+  que es una operación que no se puede deshacer: ni quien administre el servidor
+  puede leerla.
 
 **Y nada más.** Ni contactos, ni localización, ni identificadores de publicidad,
 ni analítica, ni la lista de apps que tienes instaladas. Tampoco viaja el
@@ -94,11 +97,16 @@ borrarla entera cuando quieras.
 
 ### Dónde y con qué aislamiento
 
-En un proyecto de [Supabase](https://supabase.com) (PostgreSQL alojado). Cada
-fila lleva tu identificador de usuario y el acceso está restringido en el propio
-servidor con *row level security*: **una cuenta solo puede leer y escribir sus
-filas**, y eso lo comprueba la base de datos, no la app. Todo el tráfico va por
-TLS.
+En un servidor propio del proyecto (`servidor/`: FastAPI y PostgreSQL), en la
+máquina de quien lo despliegue. No hay ningún intermediario: ni un proveedor de
+*backend*, ni analítica, ni terceros.
+
+Cada fila lleva tu identificador de usuario, y **toda** consulta del servidor
+filtra por el usuario que viene firmado en tu credencial: una cuenta solo puede
+leer y escribir sus filas, y nunca se acepta un identificador de usuario que
+venga de fuera. Hay tests que lo comprueban. Todo el tráfico va por TLS, y la app
+puede además llevar anclado el certificado del servidor, de modo que no se cree a
+ninguna otra autoridad.
 
 ### Dónde se guarda tu sesión
 
@@ -113,16 +121,16 @@ copia: es estado de ese dispositivo.
 Cifrar en tu dispositivo con una clave que el servidor no tenga es lo más
 protector, y tiene dos costes que aquí pesan más: el servidor no podría resolver
 nada sobre los datos (ni un borrado selectivo, ni una migración de formato), y
-**perder la clave sería perder los datos** sin recuperación posible — en una app
-sin contraseña, donde la recuperación es precisamente el correo, eso abre un
+**perder la clave sería perder los datos** sin recuperación posible, que es un
 agujero peor que el que tapa. Se documenta como camino futuro.
 
 ### Sin garantía, y cómo tener el tuyo
 
-Las *releases* oficiales apuntan a un proyecto personal, sin ninguna garantía de
+Las *releases* oficiales apuntan a un servidor personal, sin ninguna garantía de
 disponibilidad: puede dejar de funcionar en cualquier momento. Si prefieres no
-depender de eso, [`sincronizacion.md`](sincronizacion.md) explica cómo montar tu
-propio proyecto en media hora. Una compilación local o un *fork* traen la
+depender de eso, [`sincronizacion.md`](sincronizacion.md) explica cómo montar el
+tuyo: el servidor está en este mismo repositorio y se levanta con un
+`docker compose`. Una compilación local o un *fork* traen la
 sincronización **desactivada y no visible**.
 
 ## Tus derechos
@@ -149,10 +157,9 @@ ningún identificador tuyo. Puedes no descargarlas y la app funciona igual.
 ## Sin garantía de servicio
 
 Este es un proyecto personal, distribuido como APK desde las *releases* de
-GitHub. La copia automática depende de Google Drive y la sincronización de un
-proyecto de Supabase personal; las dos dependen de que las credenciales de la
-compilación sigan activas, y cualquiera de las dos puede dejar de funcionar en
-cualquier momento. Si eso pasa, la app avisa una vez y **sigue funcionando en
+GitHub. La copia automática depende de Google Drive y la sincronización de un servidor
+personal; las dos dependen de que la configuración de la compilación siga activa,
+y cualquiera de las dos puede dejar de funcionar en cualquier momento. Si eso pasa, la app avisa una vez y **sigue funcionando en
 local**. **La exportación manual no depende de nada de eso y seguirá estando.**
 
 ## Contacto

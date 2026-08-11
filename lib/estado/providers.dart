@@ -26,7 +26,7 @@ import '../datos/nube/nube.dart';
 import '../datos/progresion.dart';
 import '../datos/reloj.dart' as reloj;
 import '../datos/semilla.dart';
-import '../datos/sincro/supabase.dart';
+import '../datos/sincro/servidor.dart';
 import '../datos/sincro/transporte.dart';
 import '../l10n/textos.dart';
 import 'copia_automatica.dart';
@@ -311,15 +311,15 @@ final nubeProvider = Provider<DestinoNube?>(
 
 /// Con quién se sincroniza, o `null` si esta compilación no lleva servicio.
 ///
-/// Mismo trato que [nubeProvider], y por el mismo motivo: sin las
-/// `--dart-define` del proveedor **la funcionalidad no existe**, el grupo de
-/// Cuenta no se pinta y no hay disparador que haga nada. Un fork compila y
-/// funciona sin tocar nada.
+/// Mismo trato que [nubeProvider], y por el mismo motivo: sin la `--dart-define`
+/// con la URL del servidor **la funcionalidad no existe**, el grupo de Cuenta no
+/// se pinta y no hay disparador que haga nada. Un fork compila y funciona sin
+/// tocar nada.
 ///
 /// Los tests lo sobrescriben con `SincroFalso`, que es lo que permite probar el
 /// motor entero sin red y sin cuenta.
 final sincroProvider = Provider<SincroTransporte?>(
-  (ref) => sincroDisponible ? SincroSupabase() : null,
+  (ref) => sincroDisponible ? SincroServidor() : null,
 );
 
 /// El motor: los disparadores, la espera creciente y el estado de la cuenta.

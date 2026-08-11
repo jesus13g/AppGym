@@ -1,0 +1,56 @@
+[project]
+name = "appgym-servidor"
+version = "1.0.0"
+description = "El backend de AppGym: cuentas con JWT y el buzón con reloj de la sincronización"
+requires-python = ">=3.11"
+
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30",
+    "alembic>=1.14",
+    "pydantic[email]>=2.10",
+    "pydantic-settings>=2.7",
+    "pyjwt>=2.10",
+    "argon2-cffi>=23.1",
+]
+
+[project.optional-dependencies]
+# Lo que hace falta para `pytest`, y nada más. `psycopg2-binary` es para Alembic,
+# que va en síncrono.
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "httpx>=0.28",
+    "ruff>=0.9",
+    "psycopg2-binary>=2.9",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["appgym*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "S", "ASYNC"]
+# B008 es el `Depends(...)` en el valor por defecto, que es **la** forma de
+# declarar una dependencia en FastAPI. La regla está pensada para otra cosa.
+ignore = ["B008"]
+# S101: `assert` es lo que usa pytest.
+per-file-ignores = { "tests/*" = ["S101", "S105", "S106"] }
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+# Un solo bucle para toda la sesión: el pool de asyncpg se ata al bucle en el que
+# se creó, así que con un bucle por test las conexiones del motor compartido
+# reventarían a partir del segundo.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]

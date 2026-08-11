@@ -2165,9 +2165,9 @@ dispositivo, y para eso ya estaba `Claves.locales`; la contabilidad vive en `sin
 
 | Fichero | Qué es |
 |---|---|
-| `supabase/esquema.sql` | el servidor: dos tablas, la RLS y cinco funciones |
+| `supabase/esquema.sql` | el servidor: dos tablas, la RLS y cinco funciones — **sustituido en la 8d**, ya no existe |
 | `datos/sincro/transporte.dart` | la costura, que pasa de ocho métodos a nueve |
-| `datos/sincro/supabase.dart` | el adaptador: el único fichero que sabe que Supabase existe |
+| `datos/sincro/supabase.dart` | el adaptador: el único fichero que sabe que Supabase existe — **hoy es `servidor.dart`** |
 | `datos/nube/token.dart` | el almacén seguro, ahora parametrizado por clave |
 | `estado/sincro.dart` | el motor: los disparadores, la espera creciente y la cuenta |
 | `pantallas/cuenta.dart` | el grupo de Ajustes, la entrada, el primer enlace y el aviso |
@@ -2249,6 +2249,65 @@ tampoco los resucita, porque no están pendientes. La alternativa —enterrarlo 
 el borrado a los datos locales de ese tercer móvil, que es peor. Con dos dispositivos, que es
 el caso de uso de K, no se da.
 
+### Fase 8d — el backend propio ✅
+
+**La decisión [O2](#o-decisiones-pendientes) se reabrió y se ha cerrado en la opción C de
+[K2](#k2-elección-de-backend): servidor propio.** No es un cambio de alcance —lo que la app
+hace es exactamente lo mismo— sino de dónde vive el otro lado. Está en `servidor/`: FastAPI,
+PostgreSQL y `docker compose`.
+
+**Por qué se reabrió.** Tres cosas que solo se vieron al ir a desplegar:
+
+1. **El correo de fábrica del proveedor solo entrega a direcciones del equipo del proyecto**,
+   y está limitado a dos mensajes por hora. Con el código de seis cifras de la 8c, eso
+   significa que **nadie más que el dueño del proyecto podía entrar** sin montar un SMTP
+   propio. La infraestructura de correo que se quería evitar aparecía igual.
+2. **Ni una línea del servidor se podía probar.** `supabase/esquema.sql` era la única parte
+   del proyecto sin tests, y `docs/sincronizacion.md` llevaba un guion para verificarlo a
+   mano pegándolo en un panel. Eso contradice la frase con la que empieza `CLAUDE.md`.
+3. **El plan gratuito pausa el proyecto a los siete días de inactividad y no trae copias.**
+
+**Lo que costó, medido.** El motor de reconciliación, el primer enlace, los sellos, las
+lápidas y sus tests **no se tocaron**: era lo que K2 prometió por escrito —«cambiar de B a C
+es escribir otro adaptador, no reescribir el bloque»— y se ha cobrado. Cambió el adaptador
+(`supabase.dart` → `servidor.dart`), dos de los nueve métodos de la costura, la pantalla de
+entrada y sus textos. Sin migración: `schemaVersion` sigue en 8 y `versionCopia` en 4, y no
+había ni un usuario que migrar porque el servicio nunca llegó a desplegarse.
+
+#### Las cinco desviaciones de la fase 8d
+
+1. **Se entra con contraseña, no con un código por correo.** Es la tercera vuelta de
+   [K3](#k3-cuentas-e-identidad), que pedía enlace mágico y en la 8c se quedó en código. Con
+   servidor propio, el correo saliente es infraestructura que hay que montar, pagar y vigilar
+   **antes** de que nadie pueda entrar; con contraseña, el día que el servidor está en pie ya
+   se puede usar. Argon2id en el servidor, y el mismo mensaje para «ese correo no existe» y
+   «esa contraseña no es», que es lo que evita que se pueda averiguar quién tiene cuenta.
+2. **Crear cuenta y entrar dejan de ser el mismo botón.** K3 los quería juntos y con un
+   código se podía; con contraseña, quien se equivoca al teclear su correo se crearía una
+   cuenta nueva y vacía en vez de leer «contraseña incorrecta». Son dos filas en Ajustes y
+   dos rutas en la API.
+3. **No hay «he olvidado mi contraseña», y se dice.** Hasta que el servidor tenga correo
+   saliente, una contraseña perdida es una cuenta perdida —los datos locales del móvil no,
+   que la app es local-primero—. Por eso el diálogo de crear cuenta la pide dos veces y lo
+   advierte en su texto.
+4. **El aislamiento ya no es *row level security*, y no hace falta que lo sea.** K9 lo
+   describía como RLS porque el cliente hablaba directamente con la base del proveedor. Aquí
+   el cliente **solo** habla con la API, y toda consulta filtra por el usuario que viene
+   firmado en el JWT; ningún identificador de usuario entra por el cuerpo ni por la URL. La
+   diferencia práctica es que ese aislamiento **se prueba en la suite del servidor**, y antes
+   era el único test que necesitaba red.
+5. **La app puede anclar el certificado del servidor** (`datos/sincro/anclaje.dart`,
+   `--dart-define API_ANCLAS`). Se ancla a la autoridad y no al certificado hoja: anclar la
+   hoja obligaría a publicar un APK en cada renovación, y un APK que se instala a mano tarda
+   semanas en llegar a todos los móviles. Sin esa variable, la app funciona igual con TLS
+   normal.
+
+**El job de CI que K11 pedía ya existe**, aunque no como lo describía: no es un job de red
+contra el proyecto real, es `.github/workflows/servidor.yml`, que corre `ruff` y `pytest`
+contra un PostgreSQL de verdad. No bloquea ni produce el APK, como K11 exigía. El contrato
+entre las dos mitades se comprueba además de extremo a extremo con `flutter test --tags red`,
+que necesita el compose levantado y por eso está fuera de la suite por defecto.
+
 **Dependencias entre bloques.** Solo una, y es blanda: J y K escriben texto que el usuario
 lee, así que se benefician de que I esté hecho. Si por lo que fuera hubiera que alterar el
 orden, J y K son independientes entre sí y de I; lo único que pasaría es que habría que
@@ -2323,7 +2382,10 @@ las demás se pueden cerrar durante.
    hablan [K9](#k9-seguridad-y-privacidad) y `docs/privacidad.md`.
 
 2. **¿Qué proveedor, si se hace K completo?** ([K2](#k2-elección-de-backend))
-   **Cerrada: Supabase, pero hablado por REST y sin su SDK.** La RLS es lo que aísla las
+   **Reabierta y cerrada de nuevo en la opción C: servidor propio** (fase 8d, arriba). El
+   motivo y lo que costó están ahí; lo que sigue es la decisión anterior, que se conserva
+   porque explica por qué el cambio salió barato.
+   **Cerrada en su día: Supabase, pero hablado por REST y sin su SDK.** La RLS es lo que aísla las
    cuentas y es del servidor, no del cliente; y el cliente son ocho llamadas HTTP, para las
    que `supabase_flutter` no aporta nada a cambio de ser la dependencia más grande del
    proyecto. Sigue todo detrás de `SincroTransporte`, así que la decisión sigue siendo

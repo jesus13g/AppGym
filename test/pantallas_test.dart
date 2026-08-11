@@ -2615,32 +2615,40 @@ void main() {
           overrides: [sincroProvider.overrideWithValue(servidor)],
         );
 
-    /// El campo del diálogo que esté abierto.
+    /// Los campos del diálogo que esté abierto.
     ///
-    /// Acotado al diálogo a propósito: la pantalla de Ajustes tiene campos
-    /// propios y `enterText` exige que el buscador encuentre **uno**.
+    /// Acotados al diálogo a propósito: la pantalla de Ajustes tiene campos
+    /// propios. Son varios —correo y contraseña, y la repetida al crear la
+    /// cuenta—, así que se piden por posición.
     final campo = find.descendant(
       of: find.byType(CupertinoAlertDialog),
       matching: find.byType(CupertinoTextField),
     );
 
-    /// Entra tecleando el correo y luego el código, que es el flujo entero.
-    Future<void> entrar(WidgetTester tester, {String codigo = '123456'}) async {
-      await tester.tap(find.text('Crear cuenta o entrar'));
-      await tester.pumpAndSettle();
-      await tester.enterText(campo, 'yo@ejemplo.com');
-      await tester.tap(find.text('Continuar'));
-      // `pumpAndSettle` y no fotogramas sueltos: mientras el primer diálogo se
-      // va y el segundo llega, los dos están en el árbol y `campo` encontraría
-      // dos. Aquí no hay nada girando, así que asienta.
+    /// Entra, o crea la cuenta, que es el flujo entero en un solo diálogo.
+    Future<void> entrar(
+      WidgetTester tester, {
+      bool creando = false,
+      String correo = 'yo@ejemplo.com',
+      String contrasena = 'unaContrasenaLarga1',
+    }) async {
+      await tester.tap(find.text(creando ? 'Crear una cuenta' : 'Entrar'));
       await tester.pumpAndSettle();
 
-      await tester.enterText(campo, codigo);
+      await tester.enterText(campo.at(0), correo);
+      await tester.enterText(campo.at(1), contrasena);
+      // Al crear, la contraseña va dos veces: sin «he olvidado mi contraseña»,
+      // un dedazo dejaría la cuenta inaccesible.
+      if (creando) await tester.enterText(campo.at(2), contrasena);
+
       await tester.tap(find.text('Continuar'));
-      // Al final sí van fotogramas sueltos: si algo falló, `ui.aviso` deja un
-      // mensaje en pantalla que se retira solo a los 1,8 s, y asentar aquí lo
-      // borraría antes de que ningún test pudiera comprobarlo.
-      await _asentar(tester, veces: 20);
+      // Fotogramas sueltos y no `pumpAndSettle`: si algo falló, `ui.aviso` deja
+      // un mensaje en pantalla que se retira solo a los 1,8 s, y asentar aquí lo
+      // borraría antes de que ningún test pudiera comprobarlo. Son 800 ms:
+      // bastante más que los 335 ms que tarda el diálogo en irse —si no, su
+      // título y su campo seguirían en el árbol y los buscadores encontrarían
+      // dos— y bastante menos que el aviso.
+      await _asentar(tester, veces: 40);
     }
 
     setUp(() async {
@@ -2667,36 +2675,41 @@ void main() {
       expect(find.text('CUENTA'), findsNothing);
     });
 
-    testWidgets('sin cuenta ofrece entrar, y entrar la conecta', (
+    testWidgets('sin cuenta ofrece las dos puertas, y crear una conecta', (
       tester,
     ) async {
       _comoUnMovil(tester);
       await tester.pumpWidget(conCuenta(const PantallaAjustes()));
       await tester.pumpAndSettle();
 
-      final entrarFila = find.text('Crear cuenta o entrar');
-      await tester.scrollUntilVisible(entrarFila, 300);
+      final crearFila = find.text('Crear una cuenta');
+      await tester.scrollUntilVisible(crearFila, 300);
       await tester.pumpAndSettle();
+      // Dos filas, no una: con contraseña, entrar y registrarse dejan de poder
+      // ser el mismo botón.
+      expect(find.text('Entrar'), findsOneWidget);
 
-      await entrar(tester);
+      await entrar(tester, creando: true);
 
-      expect(servidor.codigosPedidos, ['yo@ejemplo.com']);
+      expect(servidor.registrados, ['yo@ejemplo.com']);
       expect(find.text('yo@ejemplo.com'), findsOneWidget);
       expect(find.text('Sincronizar ahora'), findsOneWidget);
     });
 
-    testWidgets('un código que no vale se dice y no conecta', (tester) async {
+    testWidgets('una contraseña que no vale se dice y no conecta', (
+      tester,
+    ) async {
       _comoUnMovil(tester);
       await tester.pumpWidget(conCuenta(const PantallaAjustes()));
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('Crear cuenta o entrar'), 300);
+      await tester.scrollUntilVisible(find.text('Entrar'), 300);
       await tester.pumpAndSettle();
 
-      await entrar(tester, codigo: '000000');
+      await entrar(tester, contrasena: 'laQueNoEra1');
 
       // El mensaje del servidor se enseña tal cual.
-      expect(find.text('El código no vale o ha caducado.'), findsOneWidget);
-      expect(find.text('Crear cuenta o entrar'), findsOneWidget);
+      expect(find.text('Correo o contraseña incorrectos.'), findsOneWidget);
+      expect(find.text('Entrar'), findsOneWidget);
 
       // `ui.aviso` se retira solo con un `Future.delayed`, y el test no puede
       // acabar con ese `Timer` vivo. No es un fallo de la app: es la contra de
@@ -2719,7 +2732,7 @@ void main() {
 
       await tester.pumpWidget(conCuenta(const PantallaAjustes()));
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('Crear cuenta o entrar'), 300);
+      await tester.scrollUntilVisible(find.text('Entrar'), 300);
       await tester.pumpAndSettle();
 
       await entrar(tester);
@@ -2733,11 +2746,11 @@ void main() {
       _comoUnMovil(tester);
       await tester.pumpWidget(conCuenta(const PantallaAjustes()));
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('Crear cuenta o entrar'), 300);
+      await tester.scrollUntilVisible(find.text('Entrar'), 300);
       await tester.pumpAndSettle();
       await entrar(tester);
-      // Que el diálogo del código termine de irse: si no, al abrir el de borrar
-      // habría dos en el árbol y `campo` encontraría dos.
+      // Que el diálogo de credenciales termine de irse: si no, al abrir el de
+      // borrar habría dos en el árbol y `campo` encontraría más de uno.
       await tester.pumpAndSettle();
 
       final borrar = find.text('Borrar la cuenta');
@@ -2747,7 +2760,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Escrito mal, no se borra nada.
-      await tester.enterText(campo, 'otro@sitio.com');
+      await tester.enterText(campo.first, 'otro@sitio.com');
       await tester.tap(find.text('Borrar la cuenta').last);
       await _asentar(tester, veces: 20);
 
@@ -2799,13 +2812,14 @@ void main() {
 
       await tester.scrollUntilVisible(find.text('ACCOUNT'), 300);
       await tester.pumpAndSettle();
-      expect(find.text('Create account or sign in'), findsOneWidget);
+      expect(find.text('Sign in'), findsOneWidget);
+      expect(find.text('Create an account'), findsOneWidget);
     });
 
     testWidgets('el aviso de la cabecera lleva a Ajustes', (tester) async {
       await bd.fijarAjustes({Claves.sincroActiva: '1'});
       await bd.fijarEstadoSincro(ultimoError: const Value('sin cobertura'));
-      await servidor.entrar('yo@ejemplo.com', servidor.codigo);
+      await servidor.entrar('yo@ejemplo.com', servidor.contrasena);
 
       await tester.pumpWidget(conCuenta(const PantallaRutinas()));
       await tester.pumpAndSettle();

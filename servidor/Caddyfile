@@ -1,0 +1,36 @@
+# El único que habla con internet.
+#
+# Caddy resuelve el certificado con Let's Encrypt a partir del dominio y lo
+# renueva solo. Con APPGYM_DOMINIO=localhost usa su CA interna, que es lo que
+# permite levantar el compose entero en local con TLS de verdad.
+
+{
+	# Sin correo no hay avisos de caducidad de Let's Encrypt; con él, llegan.
+	email {$APPGYM_CORREO_ADMIN:admin@example.com}
+	# La API no es un sitio web: nadie tiene que ver la versión del servidor.
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+{$APPGYM_DOMINIO} {
+	encode gzip
+
+	header {
+		# Un año de HSTS. Esta API no se sirve nunca en claro.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		# Que no diga qué hay detrás.
+		-Server
+	}
+
+	# Un cuerpo de más de 2 MB no es una subida de AppGym: el cliente manda en
+	# lotes de 200 filas.
+	request_body {
+		max_size 2MB
+	}
+
+	reverse_proxy api:8000
+}

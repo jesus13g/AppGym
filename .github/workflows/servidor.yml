@@ -1,0 +1,84 @@
+name: Verificar el servidor
+
+# El backend de `servidor/` tiene su propio ciclo: se comprueba con `ruff` y
+# `pytest` contra un PostgreSQL de verdad, y **no bloquea ni produce el APK**.
+# Son dos proyectos en el mismo repositorio y cada uno se verifica solo.
+#
+# Por eso este workflow se dispara únicamente cuando cambia `servidor/`, y el de
+# la app lo excluye en su `paths-ignore`: tocar el servidor no publica una
+# release nueva de la app, que sería idéntica a la anterior.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "servidor/**"
+      - ".github/workflows/servidor.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "servidor/**"
+      - ".github/workflows/servidor.yml"
+
+concurrency:
+  group: servidor-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  # `servidor` y no `verificar`: el workflow del APK ya tiene un job con ese
+  # nombre, y en la lista de comprobaciones de un PR salían los dos llamados
+  # igual, sin forma de saber cuál era cuál.
+  servidor:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: servidor
+
+    # PostgreSQL de verdad y no SQLite: el servidor usa `jsonb`, `on conflict do
+    # update` y `select … for update`, que son las tres piezas donde puede estar
+    # el fallo. Contra un doble se probaría otra cosa.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: appgym
+          POSTGRES_PASSWORD: appgym
+          POSTGRES_DB: appgym_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U appgym"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      APPGYM_BD_TEST: postgresql+asyncpg://appgym:appgym@127.0.0.1:5432/appgym_test
+      APPGYM_JWT_SECRETO: un-secreto-de-pruebas-suficientemente-largo-123456
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: servidor/pyproject.toml
+
+      - name: Instalar dependencias
+        run: pip install -e ".[dev]"
+
+      - name: Analizar
+        run: ruff check .
+
+      - name: Comprobar el formato
+        run: ruff format --check .
+
+      # Incluye el test que compara el esquema que dejan las migraciones con el
+      # de los modelos, que es lo que caza la columna añadida al modelo y no a la
+      # migración. Necesita poder crear una base aparte, y el usuario del
+      # servicio es el dueño del clúster, así que puede.
+      - name: Tests
+        run: pytest -q

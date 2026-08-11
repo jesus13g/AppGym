@@ -34,15 +34,15 @@ class SincroFalso implements SincroTransporte {
   /// se enteró de nada.
   bool caerTrasEscribir = false;
 
-  /// El código que [entrar] da por bueno. Cualquier otro se rechaza, como haría
-  /// el servidor de verdad.
-  final String codigo = '123456';
+  /// La contraseña que [entrar] da por buena. Cualquier otra se rechaza, como
+  /// haría el servidor de verdad.
+  final String contrasena = 'unaContrasenaLarga1';
 
-  /// A qué correos se ha pedido un código, en orden.
-  final List<String> codigosPedidos = [];
+  /// Los correos que se han registrado, en orden.
+  final List<String> registrados = [];
 
-  /// Lo que lanzará [pedirCodigo], si se pone algo.
-  ErrorSincro? falloAlPedirCodigo;
+  /// Lo que lanzará [registrar], si se pone algo.
+  ErrorSincro? falloAlRegistrar;
 
   int bajadas = 0;
   int subidas = 0;
@@ -58,18 +58,22 @@ class SincroFalso implements SincroTransporte {
   Future<SesionRemota?> sesionActual() async => _sesion;
 
   @override
-  Future<void> pedirCodigo(String correo) async {
-    if (falloAlPedirCodigo case final e?) throw e;
-    codigosPedidos.add(correo);
+  Future<SesionRemota> registrar(String correo, String contrasena) async {
+    if (falloAlRegistrar case final e?) throw e;
+    if (registrados.contains(correo)) {
+      throw const ErrorSincro.rechazado('Ese correo ya tiene una cuenta.');
+    }
+    registrados.add(correo);
+    return _sesion = SesionRemota(id: 'usuario-1', correo: correo);
   }
 
   @override
-  Future<SesionRemota> entrar(String correo, String codigo) async {
-    // El código se comprueba de verdad: la pantalla tiene que poder enseñar el
-    // mensaje de «no vale», y un falso que aceptara cualquier cosa dejaría ese
+  Future<SesionRemota> entrar(String correo, String contrasena) async {
+    // La contraseña se comprueba de verdad: la pantalla tiene que poder enseñar
+    // el mensaje de «no vale», y un falso que aceptara cualquier cosa dejaría ese
     // camino sin probar.
-    if (codigo != this.codigo) {
-      throw const ErrorSincro.rechazado('El código no vale o ha caducado.');
+    if (contrasena != this.contrasena) {
+      throw const ErrorSincro.rechazado('Correo o contraseña incorrectos.');
     }
     return _sesion = SesionRemota(id: 'usuario-1', correo: correo);
   }

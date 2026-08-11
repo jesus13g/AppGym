@@ -19,6 +19,7 @@ on:
       - "README.md"
       - "CLAUDE.md"
       - "docs/**"
+      - "servidor/**"
   pull_request:
     branches:
       - main
@@ -26,6 +27,7 @@ on:
       - "README.md"
       - "CLAUDE.md"
       - "docs/**"
+      - "servidor/**"
 
 permissions:
   contents: write
@@ -129,12 +131,13 @@ jobs:
       # confidencial (RFC 8252): lo que protege el canje es PKCE. Se guarda como
       # secreto de todas formas para no regalar la cuota del proyecto.
       #
-      # La clave anónima de Supabase también es pública por diseño —lo que
-      # protege los datos es la RLS del servidor, ver `supabase/esquema.sql`—, y
-      # va como secreto por el mismo motivo: no regalar la cuota. La
-      # `service_role` NO aparece por aquí y no debe hacerlo nunca: con ella
-      # dentro del APK, cualquiera que lo descargue podría leer y borrar los
-      # datos de todos los usuarios.
+      # De la sincronización entran dos cosas y ninguna es un secreto de verdad:
+      # API_URL es la dirección del servidor y API_ANCLAS son certificados
+      # públicos. Van como secretos igualmente para no publicar a qué máquina
+      # apuntan las releases oficiales. Lo que protege los datos ahí es la
+      # autenticación del servidor, no que la URL sea difícil de encontrar; y la
+      # llave con la que se firman los accesos vive **solo** en el .env del
+      # servidor y no debe aparecer por aquí jamás.
       - name: Construir APK
         run: |
           flutter build apk --release \
@@ -143,13 +146,13 @@ jobs:
             --dart-define "VERSION=${{ steps.version.outputs.nombre }}" \
             --dart-define "GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" \
             --dart-define "GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET" \
-            --dart-define "SUPABASE_URL=$SUPABASE_URL" \
-            --dart-define "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"
+            --dart-define "API_URL=$API_URL" \
+            --dart-define "API_ANCLAS=$API_ANCLAS"
         env:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          API_URL: ${{ secrets.API_URL }}
+          API_ANCLAS: ${{ secrets.API_ANCLAS }}
 
       - name: Renombrar el APK
         run: |

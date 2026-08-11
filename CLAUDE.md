@@ -15,11 +15,22 @@ flutter run                     # app en un dispositivo o emulador
 flutter analyze                 # objetivo permanente: 0 issues
 flutter test                    # datos, pantallas, migraciones, copia, copia automática y su
                                 # adaptador de Drive, la sincronización entera —motor, primer
-                                # enlace, sellos, adaptador de Supabase y disparadores—,
+                                # enlace, sellos, adaptador del servidor y disparadores—,
                                 # ajustes, métricas, músculos, geometría, progresiones,
                                 # formatos, importaciones, traducciones y vocabulario
 dart format lib test
 flutter build apk --release     # APK local (necesita SDK de Android y Java 17)
+```
+
+El backend vive en `servidor/` y **va por su cuenta**: otro lenguaje, otra suite y otro workflow.
+
+```bash
+cd servidor
+pip install -e ".[dev]"
+createdb appgym_test            # una vez; los tests van contra PostgreSQL de verdad
+pytest                          # reloj, aislamiento, cuenta, concurrencia y migraciones
+ruff check . && ruff format --check .
+docker compose up -d --build    # la API, la base y Caddy con TLS
 ```
 
 Se desarrolla con **Flutter 3.44.8 / Dart 3.12.2**. La versión está fijada en
@@ -63,7 +74,8 @@ lib/
 │   ├── copia_automatica.dart  cuándo toca copiar, qué se rota y cuándo se avisa (puro)
 │   ├── nube/          nube.dart (la costura) · drive.dart (Google) · token.dart
 │   ├── sincro/        transporte.dart (la costura) · motor.dart (la reconciliación) ·
-│   │                  enlace.dart (el primer enlace) · supabase.dart (el adaptador)
+│   │                  enlace.dart (el primer enlace) · servidor.dart (el adaptador) ·
+│   │                  anclaje.dart (de qué certificados se fía)
 │   ├── identidad.dart el uuid de una fila y el sello de su versión
 │   ├── respaldo.dart  duplicado del fichero .sqlite antes de migrarlo
 │   ├── borrador.dart  estado de la sesión en curso, serializado a JSON
@@ -92,15 +104,16 @@ lib/
 assets/                ejercicios.es.json (el catálogo) · instrucciones.en.json (sus pasos en
                        inglés) · plantillas.json (por idioma) · musculatura.json
 drift_schemas/         un JSON por versión del esquema, para los tests de migración
-supabase/              esquema.sql: las dos tablas, la RLS y las cinco funciones del servidor
+servidor/              el backend propio: FastAPI, PostgreSQL, JWT, sus tests y su compose
 tool/                  musculatura.py (el modelo anatómico) · instrucciones_en.py (los pasos
                        en inglés, desde el dataset original)
 test/                  datos · pantallas · migraciones · copia · ajustes · plantillas · metricas
                        musculos · geometria · progresion · formato · i18n · traducciones ·
-                       sincro · sincro_sellos · enlace · sincro_supabase · sincro_estado ·
+                       sincro · sincro_sellos · enlace · sincro_servidor · sincro_estado ·
                        importaciones · esquemas/ (generado)
 docs/                  especificaciones.md (hecho) · especificaciones-2.md (I, J y K enteros,
-                       hechos) · privacidad.md · sincronizacion.md (montar el servidor)
+                       hechos) · privacidad.md · sincronizacion.md (montar el servidor) ·
+                       conectar-backend.md (lo que falta para desplegarlo y verificarlo)
 ```
 
 Seis ficheros de `pantallas/` no son pantallas, sino piezas que comparten varias:
@@ -138,8 +151,9 @@ fuera de alcance a propósito:
 - **J — recomendación automática de progresiones** (`datos/progresion.dart`, doble progresión,
   esquema v7). **Hecho**, con sus nueve desviaciones documentadas en J6.
 - **K — sincronización en la nube, cuentas y multidispositivo** (`uuid` + `actualizado` +
-  lápidas, esquema v8, último en escribir gana). **Hecho entero**, en tres fases: 8a la copia
-  automática, 8b el motor y 8c el servicio, con sus once y diez desviaciones documentadas. **8a no
+  lápidas, esquema v8, último en escribir gana). **Hecho entero**, en cuatro fases: 8a la copia
+  automática, 8b el motor, 8c el servicio y 8d el backend propio —que reabrió la decisión O2 y la
+  cerró en la opción C de K2—, con sus once, diez y cinco desviaciones documentadas. **8a no
   es sincronización y no debe llamarse así en ningún sitio**: es una copia con fecha que se sube
   sola, y dos móviles que copien el mismo día se pisan.
 
@@ -458,7 +472,8 @@ URL, y «Acerca de» la enlaza. Si cambias qué datos salen del móvil, ese fich
 
 La fase 8b fue **el motor y nada más**: sin pantalla, sin cuenta y sin red. Cada fila que se
 sincroniza lleva su identidad y su versión, y todo borrado deja constancia. La **8c** es lo que la
-convierte en una funcionalidad: el adaptador de Supabase, las cuentas y la pantalla.
+convierte en una funcionalidad: el adaptador, las cuentas y la pantalla. La **8d** cambió el otro
+lado —de Supabase a un servidor propio— sin tocar nada de esto.
 
 - `datos/identidad.dart` da las dos marcas: `uuidV4()` (v4 escrito a mano, sin el paquete `uuid`) y
   `selloLocal()`, un contador **monótono** en milisegundos.
@@ -508,46 +523,62 @@ ejercicios y las sesiones exportan su `uuid`. Es lo que hace que restaurar en un
 enlazarlo después funda el histórico en vez de duplicarlo. Si al restaurar ese `uuid` ya está en la
 base, se genera otro: dos filas con la misma identidad no son dos filas.
 
-### Sincronización: el servicio
+### Sincronización: el servicio y el servidor
 
-La fase 8c es el adaptador, la cuenta y la pantalla. **No toca el esquema**: `schemaVersion` se
-queda en 8 y `versionCopia` en 4. Lo único nuevo que había que persistir era el interruptor de este
-dispositivo, y para eso ya estaba `Claves.locales`.
+La fase 8c fue el adaptador, la cuenta y la pantalla; la **8d** sustituyó el otro lado por un
+**backend propio** (`servidor/`: FastAPI y PostgreSQL). **Ninguna de las dos toca el esquema**:
+`schemaVersion` sigue en 8 y `versionCopia` en 4, y el motor de reconciliación no cambió ni una
+línea al cambiar de proveedor — que era exactamente lo que la costura prometía.
 
-- `datos/sincro/supabase.dart` es **el único fichero que sabe que Supabase existe**, y
+- `datos/sincro/servidor.dart` es **el único fichero que sabe cómo se habla con el servidor**, y
   `test/importaciones_test.dart` lo fija. Cambiar de proveedor es escribir otro como él.
+- `datos/sincro/anclaje.dart` decide de qué certificados se fía la app. Solo importa `dart:io`.
 - `estado/sincro.dart` es el motor: los disparadores, la espera creciente y la cuenta.
 - `pantallas/cuenta.dart` es el grupo de Ajustes, la entrada y el primer enlace.
-- `supabase/esquema.sql` es el servidor; `docs/sincronizacion.md`, cómo montarlo.
+- `servidor/` es el servidor, con su propia suite y su propio workflow;
+  `docs/sincronizacion.md`, cómo montarlo.
 
-Diez cosas que conviene no volver a decidir:
+**El servidor se prueba.** `cd servidor && pytest` levanta 41 casos contra PostgreSQL de verdad: el
+reloj y sus tres invariantes, el aislamiento entre cuentas, la rotación del refresco y la
+concurrencia. Antes esto era SQL en un panel y la única parte del proyecto sin tests.
 
-- **Ningún SDK.** Supabase se habla REST con el `http` que ya estaba, y la fase **no añadió ni una
-  dependencia**. `supabase_flutter` arrastraría realtime, storage y deep links para ocho llamadas
-  HTTP, y pondría en riesgo el techo de `win32` que fija `file_picker`. Es el mismo razonamiento que
-  ya está escrito en `drive.dart` para no usar el SDK de Google.
+Once cosas que conviene no volver a decidir:
+
+- **Ningún SDK, tampoco ahora.** El servidor se habla REST con el `http` que ya estaba, igual que
+  Drive. Con backend propio la tentación ni existe: la API son nueve rutas escritas para este
+  cliente.
+- **Se entra con correo y contraseña, y crear cuenta es otra ruta.** Un código por correo exigiría
+  correo saliente —infraestructura que montar, pagar y vigilar— **antes** de que nadie pudiera
+  entrar. Y con contraseña, «entrar» y «crear cuenta» no pueden ser el mismo botón: un correo mal
+  tecleado crearía una cuenta vacía en vez de decir «contraseña incorrecta».
+- **El acceso es un JWT de quince minutos y el refresco dura sesenta días y es revocable.** El
+  refresco **rota** en cada canje y se guarda solo como hash; si uno ya usado reaparece, el servidor
+  revoca la familia entera, porque eso significa que hay dos poseedores.
+- **Lo que hay que escribir antes de levantar un error va en `bd.aparte()`**, su propia
+  transacción: la de la petición se deshace al levantar, así que un intento fallido anotado ahí no
+  se guardaría nunca y el bloqueo por intentos no existiría.
 - **El reloj es del servidor y se siembra en milisegundos de época.** `selloLocal()` sella así, de
   modo que un servidor que empezara en cero dejaría el cursor de subida por debajo de todos los
-  sellos locales y **cada pasada resubiría el histórico entero**. Está escrito en el SQL y hay que
-  respetarlo en cualquier servidor que lo sustituya. Por lo mismo, `subir` **no** mira la hora de
+  sellos locales y **cada pasada resubiría el histórico entero**. Está escrito y probado en
+  `servidor/appgym/sincro.py` y hay que respetarlo en cualquier servidor que lo sustituya. Por lo mismo, `subir` **no** mira la hora de
   pared: si adelantara el reloj, el `cursorPrevio` no casaría nunca con el `cursorBajada` del
   cliente y cada móvil se descargaría su propio eco.
-- **`appgym_bajar` lee el reloj antes que las filas y las acota con él.** Al revés, una subida que
+- **`bajar` lee el reloj antes que las filas y las acota con él.** Al revés, una subida que
   se colara en medio adelantaría el cursor por encima de filas no entregadas. Es la única forma de
   perder datos que hay en el servidor.
-- **Se entra con un código de seis cifras, no con un enlace mágico.** Un enlace exige deep links,
-  un *intent-filter* y un dominio, y aquí el APK se instala a mano. Requiere que la plantilla de
-  correo del proveedor incluya `{{ .Token }}`: es el paso de montaje que más se olvida.
 - **La sesión entera —id, correo y refresco— va al almacén seguro**, bajo `claveSincro`. El correo
   también, y no por la exportación: `sesionActual()` tiene que contestarse **sin red**, o un móvil
   sin cobertura diría «sin cuenta» y el usuario volvería a entrar, cayendo otra vez por el primer
   enlace.
-- **GoTrue rota el *refresh token*.** Cada renovación invalida el anterior, así que hay que
-  reescribir el almacén cada vez, y solo puede haber **una renovación en vuelo**: dos canjearían el
-  mismo token y la segunda mataría la sesión. `drive.dart` no hace ninguna de las dos cosas porque
+- **El servidor rota el refresco.** Cada renovación invalida el anterior, así que hay que reescribir
+  el almacén cada vez, y solo puede haber **una renovación en vuelo**: dos canjearían el mismo token
+  y el servidor tomaría la segunda por un robo. `drive.dart` no hace ninguna de las dos cosas porque
   Google no rota; copiarlo tal cual dejaría al usuario fuera a las pocas horas.
-- **Dos mapeadores de error, no uno.** Un 400 en un RPC es un rechazo del servidor; en `/verify` es
-  «te has equivocado de código», y esa frase la tiene que leer el usuario.
+- **Dos mapeadores de error, no uno.** Un 400 en los datos es un rechazo del servidor; al entrar es
+  «esa contraseña no es», y esa frase la tiene que leer el usuario.
+- **El anclaje va a la autoridad, no al certificado hoja.** Anclar la hoja obligaría a publicar un
+  APK en cada renovación de Let's Encrypt, y un APK que se instala a mano tarda semanas en llegar.
+  Sin `API_ANCLAS` la app funciona igual, con TLS normal.
 - **`DisparadorSincro` es otro enumerado a propósito**, no el `Disparador` de la copia automática:
   son dos costuras independientes y `raiz.dart` importa las dos.
 - **La app se repinta por el contador `cambios` de `VistaSincro`**, que `raiz.dart` escucha para
@@ -687,10 +718,9 @@ mismo. Solo afecta al escritorio de Windows, que aquí no se compila, pero rompe
 sin resolver. `flutter_secure_storage` es la **única** dependencia nueva de verdad de la fase 8a, y
 está para el *refresh token*: la alternativa era la tabla `ajustes`, que se exporta.
 
-**Ningún SDK de proveedor, de nadie.** Drive se habla por REST v3 y Supabase por PostgREST y
-GoTrue, los dos con el `http` de siempre: la fase 8c **no añadió ni una dependencia**. Ver el
-porqué en la
-cabecera de `lib/datos/nube/drive.dart`.
+**Ningún SDK de proveedor, de nadie.** Drive se habla por REST v3 y el servidor de AppGym por su
+propia API, los dos con el `http` de siempre: ni la fase 8c ni la 8d añadieron una sola
+dependencia. Ver el porqué en la cabecera de `lib/datos/nube/drive.dart`.
 
 El permiso de **INTERNET va en
 `android/app/src/main/AndroidManifest.xml`**: Flutter solo lo declara en los manifiestos de debug y

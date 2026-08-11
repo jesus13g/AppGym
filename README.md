@@ -129,22 +129,27 @@ flutter build apk --release \
 
 En CI son los secretos `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` del repositorio.
 
-**Sobre la sincronización en las releases oficiales.** Igual: apunta a un proyecto de
-Supabase personal, sin ninguna garantía de disponibilidad, y **cualquiera que instale el APK
-puede crear una cuenta en él**. Una compilación local o un fork la traen **desactivada y no
-visible**, y la app funciona exactamente igual sin ella. Para apuntarla a un proyecto propio
-—que se monta en media hora— está el paso a paso de
-[`docs/sincronizacion.md`](docs/sincronizacion.md); en corto, se crea el proyecto, se ejecuta
-`supabase/esquema.sql` y se compila con:
+**Sobre la sincronización en las releases oficiales.** Igual: apunta a un servidor personal,
+sin ninguna garantía de disponibilidad. Una compilación local o un fork la traen
+**desactivada y no visible**, y la app funciona exactamente igual sin ella.
+
+El servidor es de este repositorio: [`servidor/`](servidor/), FastAPI y PostgreSQL, con
+cuentas por correo y contraseña y JWT. Se levanta con `docker compose` en cualquier VPS —el
+paso a paso está en [`docs/sincronizacion.md`](docs/sincronizacion.md)— y la app se compila
+apuntando ahí:
 
 ```bash
 flutter build apk --release \
-  --dart-define SUPABASE_URL=https://xxxxxxxx.supabase.co \
-  --dart-define SUPABASE_ANON_KEY=...
+  --dart-define API_URL=https://appgym.tudominio.com \
+  --dart-define API_ANCLAS=$(base64 -w0 anclas.pem)
 ```
 
-En CI son los secretos `SUPABASE_URL` y `SUPABASE_ANON_KEY`. La `service_role` key **no se
-usa nunca** y no debe salir del panel de Supabase.
+En CI son los secretos `API_URL` y `API_ANCLAS`. El segundo es el anclaje de certificado: con
+él, la app **solo** se cree la autoridad de tu servidor, así que un proxy interpuesto no puede
+leer el tráfico. Es opcional; sin él hay TLS normal.
+
+La llave con la que el servidor firma los accesos (`APPGYM_JWT_SECRETO`) vive **solo** en su
+`.env` y no aparece ni en CI ni en el APK.
 
 ## Estructura
 
@@ -158,8 +163,8 @@ lib/
 │   ├── copia.dart          exportar e importar la copia de seguridad
 │   ├── copia_automatica.dart  cuándo toca copiar, qué se rota y cuándo se avisa
 │   ├── nube/               la costura del destino y el adaptador de Google Drive
-│   ├── sincro/             la costura del transporte, el motor, el primer enlace y el
-│                           adaptador de Supabase
+│   ├── sincro/             la costura del transporte, el motor, el primer enlace, el
+│                           adaptador del servidor y el anclaje de certificado
 │   ├── identidad.dart      el uuid de una fila y el sello de su versión
 │   ├── respaldo.dart       duplicado del fichero antes de migrarlo
 │   ├── borrador.dart       estado de la sesión en curso, en JSON
@@ -189,12 +194,13 @@ assets/musculatura.json     el modelo anatómico del mapa muscular
 tool/musculatura.py         genera el modelo anatómico y una previa para verlo
 tool/instrucciones_en.py    baja los pasos en inglés del dataset original
 drift_schemas/              un JSON por versión del esquema
-supabase/esquema.sql        el esquema, la RLS y las funciones del servidor de sincronización
+servidor/                   el backend: FastAPI, PostgreSQL, JWT y su docker compose
 test/                       tests de datos, de widget y de migración
 docs/especificaciones.md    primera iteración, completada (bloques A–D)
 docs/especificaciones-2.md  segunda iteración: idiomas, progresiones, copia automática y
                             sincronización, completada
 docs/sincronizacion.md      cómo montar el servidor de sincronización en un fork
+docs/conectar-backend.md    qué falta para desplegarlo y darlo por bueno
 ```
 
 ## Créditos y licencias
