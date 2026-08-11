@@ -2308,6 +2308,33 @@ contra un PostgreSQL de verdad. No bloquea ni produce el APK, como K11 exigía. 
 entre las dos mitades se comprueba además de extremo a extremo con `flutter test --tags red`,
 que necesita el compose levantado y por eso está fuera de la suite por defecto.
 
+#### Corrección posterior: la cuenta se ve
+
+Un informe de uso real —«me he descargado la app y no encuentro dónde registrarme»— dejó al
+descubierto que **[K8](#k8-interfaz) se había llevado demasiado lejos** en dos sitios, y los
+dos se han corregido sin tocar el motor ni el esquema:
+
+1. **El grupo «Cuenta» ya no se esconde cuando falta `API_URL`.** La regla de la 8a —sin
+   `--dart-define`, la funcionalidad no existe y no se pinta nada— se copió tal cual a la
+   sincronización, y ahí no vale igual: la copia automática es una comodidad que nadie echa
+   de menos, mientras que las cuentas son lo que alguien **va a buscar** a Ajustes. Hoy, si
+   la compilación no lleva servidor, el grupo se pinta con una fila apagada que dice «No
+   disponible en esta versión» y un pie que explica que los datos se quedan en el móvil y
+   que para llevárselos está la copia de seguridad. Un *fork* sigue compilando sin tocar
+   nada; lo único que cambia es que ahora se entera de por qué.
+2. **El grupo va el primero de Ajustes**, encima de las unidades, como el Apple ID en los
+   ajustes del sistema. Estaba el quinto, debajo de cuatro grupos de preferencias: en un
+   móvil hay que bajar cuatro pantallas para dar con él, y quien busca «iniciar sesión» se
+   rinde antes.
+
+Lo que **no** cambia: sigue sin haber pestaña nueva, ni pantalla de bienvenida obligatoria,
+ni indicador permanente. «Verse lo menos posible» no es lo mismo que «no verse».
+
+**Y lo que sigue faltando no es código.** Con `API_URL` sin configurar, la fila apagada es
+todo lo que puede enseñar la app: para que haya cuentas de verdad hay que desplegar el
+servidor y poner los dos secretos del repositorio. El paso a paso está en
+[`conectar-backend.md`](conectar-backend.md).
+
 **Dependencias entre bloques.** Solo una, y es blanda: J y K escriben texto que el usuario
 lee, así que se benefician de que I esté hecho. Si por lo que fuera hubiera que alterar el
 orden, J y K son independientes entre sí y de I; lo único que pasaría es que habría que

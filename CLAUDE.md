@@ -579,6 +579,13 @@ Once cosas que conviene no volver a decidir:
 - **El anclaje va a la autoridad, no al certificado hoja.** Anclar la hoja obligaría a publicar un
   APK en cada renovación de Let's Encrypt, y un APK que se instala a mano tarda semanas en llegar.
   Sin `API_ANCLAS` la app funciona igual, con TLS normal.
+- **El grupo «Cuenta» se pinta siempre, y va el primero de Ajustes.** Sin `API_URL` la
+  funcionalidad no existe —`sincroProvider` da `null` y ningún disparador hace nada—, pero el
+  grupo enseña igualmente una fila apagada que dice que esta versión no lleva servidor. **No es
+  lo mismo que `nubeProvider`**, que sí se esconde entero: la copia automática es una comodidad
+  y las cuentas son lo que alguien va a buscar a Ajustes. Esconderlo costó un informe real de
+  «no encuentro dónde registrarme», y por eso el grupo va también encima de las preferencias,
+  como el Apple ID en los ajustes del sistema.
 - **`DisparadorSincro` es otro enumerado a propósito**, no el `Disparador` de la copia automática:
   son dos costuras independientes y `raiz.dart` importa las dos.
 - **La app se repinta por el contador `cambios` de `VistaSincro`**, que `raiz.dart` escucha para
