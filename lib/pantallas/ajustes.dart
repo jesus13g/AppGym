@@ -80,16 +80,21 @@ class PantallaAjustes extends ConsumerWidget {
       child: SafeArea(
         child: ListView(
           children: [
+            // La cuenta, arriba del todo y antes que cualquier preferencia,
+            // como el Apple ID en los ajustes del sistema. Estaba debajo de los
+            // cuatro grupos de preferencias y ahí no se encontraba: quien
+            // instalaba el APK buscando dónde registrarse se rendía antes de
+            // llegar. Es la única fila de esta pantalla que da acceso a algo en
+            // vez de cambiar un número.
+            const GrupoCuenta(),
             _unidades(context, ref, ajustes),
             _entrenamiento(context, ref, ajustes),
             _objetivos(context, ref, ajustes),
             _apariencia(context, ref, ajustes),
-            // Los tres son vecinos temáticos: hablan de sacar los datos del
-            // móvil. La cuenta va primero, que es donde K8 la pide y lo que
-            // hace más —los otros dos son copias; esta trae datos de vuelta—;
-            // y la copia automática encima de «Datos», que es la misma copia
-            // hecha sola.
-            const GrupoCuenta(),
+            // Los dos son vecinos temáticos de la cuenta —hablan de sacar los
+            // datos del móvil—, pero hacen menos que ella: son copias, y esta
+            // trae datos de vuelta. La copia automática va encima de «Datos»,
+            // que es la misma copia hecha sola.
             const GrupoCopiaNube(),
             const GrupoDatos(),
             _acercaDe(context, ref),

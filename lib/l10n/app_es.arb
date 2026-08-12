@@ -2337,6 +2337,14 @@
   "@cuentaSinCuentaPie": {
     "description": "Pie del grupo cuando no hay cuenta"
   },
+  "cuentaNoDisponible": "No disponible en esta versión",
+  "@cuentaNoDisponible": {
+    "description": "Fila del grupo cuando la app se compiló sin servidor configurado"
+  },
+  "cuentaNoDisponiblePie": "Esta versión de la app se compiló sin servidor, así que no hay cuentas ni sincronización. Todo lo demás funciona igual y tus datos se guardan en este dispositivo; para llevártelos a otro, usa la copia de seguridad del grupo «Datos».",
+  "@cuentaNoDisponiblePie": {
+    "description": "Pie del grupo cuando la app se compiló sin servidor configurado"
+  },
   "cuentaEntrar": "Entrar",
   "@cuentaEntrar": {
     "description": "Acción que abre el diálogo de entrada con una cuenta que ya existe"

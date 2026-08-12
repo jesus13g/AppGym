@@ -2658,33 +2658,35 @@ void main() {
 
     tearDown(() async => bd.close());
 
-    testWidgets('sin credenciales el grupo no aparece siquiera', (
+    testWidgets('sin credenciales el grupo lo dice, y no ofrece entrar', (
       tester,
     ) async {
       _comoUnMovil(tester);
       // `_app` no sobrescribe `sincroProvider`, así que vale el de verdad, que
-      // sin `--dart-define` es null. Es el criterio de K12.
+      // sin `--dart-define` es null: es exactamente el APK que se descarga hoy.
       await tester.pumpWidget(_app(bd, const PantallaAjustes()));
       await tester.pumpAndSettle();
 
-      // Y el grupo «Datos», que es su vecino de más abajo, sigue estando: si el
-      // de la cuenta se pintara, se toparía con él al bajar.
-      await tester.scrollUntilVisible(find.text('DATOS'), 300);
-      await tester.pumpAndSettle();
-      expect(find.text('DATOS'), findsOneWidget);
-      expect(find.text('CUENTA'), findsNothing);
+      // El grupo se pinta igualmente y contesta a la pregunta. Esconderlo
+      // entero dejaba al usuario buscando dónde registrarse sin nada que leer.
+      expect(find.text('CUENTA'), findsOneWidget);
+      expect(find.text('No disponible en esta versión'), findsOneWidget);
+      // Y no hay puerta que no lleve a ninguna parte.
+      expect(find.text('Entrar'), findsNothing);
+      expect(find.text('Crear una cuenta'), findsNothing);
     });
 
-    testWidgets('sin cuenta ofrece las dos puertas, y crear una conecta', (
+    testWidgets('sin cuenta ofrece las dos puertas nada más abrir Ajustes', (
       tester,
     ) async {
       _comoUnMovil(tester);
       await tester.pumpWidget(conCuenta(const PantallaAjustes()));
       await tester.pumpAndSettle();
 
+      // Sin bajar: la cuenta es el primer grupo de la pantalla. Cuando iba la
+      // quinta, había que recorrer cuatro grupos de preferencias para verla.
       final crearFila = find.text('Crear una cuenta');
-      await tester.scrollUntilVisible(crearFila, 300);
-      await tester.pumpAndSettle();
+      expect(crearFila, findsOneWidget);
       // Dos filas, no una: con contraseña, entrar y registrarse dejan de poder
       // ser el mismo botón.
       expect(find.text('Entrar'), findsOneWidget);

@@ -441,6 +441,8 @@
   "nubeAviso": "Automatic backup is not up to date",
   "cuentaCabecera": "Account",
   "cuentaSinCuentaPie": "Your data is only on this device. With an account, your routines and history show up on your tablet too.",
+  "cuentaNoDisponible": "Not available in this build",
+  "cuentaNoDisponiblePie": "This build of the app was compiled without a server, so there are no accounts and no sync. Everything else works the same and your data is kept on this device; to move it to another one, use the backup in the 'Data' group.",
   "cuentaEntrar": "Sign in",
   "cuentaCrear": "Create an account",
   "cuentaEntrarMensaje": "With your account's email and password.",

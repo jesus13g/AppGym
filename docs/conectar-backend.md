@@ -39,9 +39,15 @@ pruebas con la app instalada.
 | El paso de la URL y el anclaje por `--dart-define` | `.github/workflows/build-apk.yml` | hecho, **secretos por poner** |
 
 El interruptor de todo esto es `sincroDisponible` (`servidor.dart:59`): si `API_URL`
-llega vacía, `sincroProvider` da `null`, el grupo «Cuenta» de Ajustes **no se
-pinta** y no hay disparador que haga nada. Es decir: hoy, en cualquier compilación
-sin esa variable, **la funcionalidad de usuarios no existe** aunque el código esté.
+llega vacía, `sincroProvider` da `null` y no hay disparador que haga nada. Es decir:
+hoy, en cualquier compilación sin esa variable, **la funcionalidad de usuarios no
+existe** aunque el código esté.
+
+Lo que sí se ve en ese caso es el grupo «Cuenta» de Ajustes con una sola fila
+apagada, *No disponible en esta versión*, y el porqué en el pie. Antes no se pintaba
+nada en absoluto, y el resultado previsible fue el que hubo: alguien se instaló el
+APK, buscó dónde registrarse y no encontró ni la funcionalidad ni una explicación.
+Esa fila es, por tanto, **el diagnóstico**: si la ves, esta guía está sin terminar.
 
 ---
 
@@ -75,8 +81,10 @@ El anclaje —qué PEM poner y cómo sacarlo— está en
 [`sincronizacion.md`](sincronizacion.md) §4. **Sin él la app funciona igual**, con
 TLS normal y sin anclaje.
 
-**Cómo comprobar que han entrado**: instala el APK y abre *Ajustes*. Si aparece el
-grupo «Cuenta», la URL llegó.
+**Cómo comprobar que han entrado**: instala el APK y abre *Ajustes*. El grupo
+«Cuenta» es el primero de la pantalla y siempre está: si sus filas son *Entrar* y
+*Crear una cuenta*, la URL llegó; si es la fila apagada *No disponible en esta
+versión*, el secreto no está puesto o llegó vacío.
 
 ### Paso 4 — Cerrar el registro
 

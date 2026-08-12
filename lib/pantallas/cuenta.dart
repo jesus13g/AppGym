@@ -12,6 +12,18 @@
 /// y no hay indicador permanente. Sin cuenta, la app es exactamente la de antes
 /// de esta fase.
 ///
+/// «Lo menos posible» **no es «invisible»**, y esa es la corrección de K12 que
+/// costó un informe real: con el grupo entero escondido en las compilaciones sin
+/// `API_URL`, quien instalaba el APK no encontraba dónde registrarse y no tenía
+/// forma de saber por qué. Ahora el grupo se pinta siempre y, cuando esta
+/// compilación no lleva servidor, dice justo eso en una fila que no hace nada.
+/// Es una línea de texto para el fork que compila sin tocar nada, y la
+/// diferencia entre «no está» y «no lo encuentro» para todos los demás.
+///
+/// Va **el primero** de la pantalla, como el Apple ID en los ajustes del
+/// sistema: era el quinto grupo y había que bajar cuatro pantallas de
+/// preferencias para dar con él.
+///
 /// **No hay fila «Dispositivos».** K8 la pedía y se deja fuera a propósito:
 /// exigiría una tabla más en el servidor, registrarse en cada pasada y un
 /// «revocar» que, sin introspección de tokens, no echa de verdad al otro móvil.
@@ -40,15 +52,40 @@ class GrupoCuenta extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final vista = ref.watch(sincronizacionProvider);
-    // Sin servicio configurado en la compilación, la funcionalidad no existe:
-    // ni se pinta el grupo ni hay nada que explicar. Es lo mismo que hace la
-    // versión, que en una compilación local pone «local».
-    if (!vista.disponible) return const SizedBox.shrink();
+    // Sin servicio configurado en la compilación la funcionalidad no existe,
+    // pero sigue habiendo algo que explicar: ver la nota de la cabecera.
+    if (!vista.disponible) return _sinServidor(context);
 
     return vista.conectado
         ? _conCuenta(context, ref, vista)
         : _sinCuenta(context, ref, vista);
   }
+
+  // ── Sin servidor en esta compilación ───────────────────────────────────────
+
+  /// Lo que se ve cuando se compiló sin `--dart-define API_URL`.
+  ///
+  /// Una fila apagada y sin `onTap`: no hay nada que pulsar porque no hay
+  /// servidor con el que hablar. Lo que aporta es el pie, que contesta a la
+  /// única pregunta que se hace quien busca dónde entrar y no lo encuentra.
+  Widget _sinServidor(BuildContext context) => ui.Grupo(
+    cabecera: context.t.cuentaCabecera,
+    pie: context.t.cuentaNoDisponiblePie,
+    filas: [
+      CupertinoListTile(
+        backgroundColor: context.tarjeta,
+        leading: Icon(
+          CupertinoIcons.person_crop_circle_badge_xmark,
+          color: context.textoSec,
+          size: 24,
+        ),
+        title: Text(
+          context.t.cuentaNoDisponible,
+          style: ui.estilo(context, color: context.textoSec),
+        ),
+      ),
+    ],
+  );
 
   // ── Sin cuenta ─────────────────────────────────────────────────────────────
 
